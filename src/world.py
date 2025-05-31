@@ -188,9 +188,9 @@ class World:
         # We need to make a copy of the list because we'll be modifying it
         for creature in list(self.creatures):
             if creature.should_split():
-                # Split the creature and add the child to the world
-                creature.split(self)
-                print(f"Creature split! Parent energy: {creature.energy}, size: {creature.size}")
+                # Split the creature into 4 (1 parent + 3 children)
+                children = creature.split(self)
+                print(f"Creature split into 4! Parent energy: {creature.energy}, size: {creature.size}, Children: {len(children)}")
 
         # 5) Decay all Food objects and remove expired ones
         new_foods = []

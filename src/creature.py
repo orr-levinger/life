@@ -1,11 +1,13 @@
 from typing import Any, TYPE_CHECKING, Dict, Tuple, Optional, List, Union
 import random
 import math
+import numpy as np
 
 if TYPE_CHECKING:
     from .world import World
     from .sensors import Sensor, VisionSensor, ProximitySensor
     from .food import Food
+    from .neural_network import NeuralNetwork
 
 class Creature:
     # Constants for continuous space interaction
@@ -14,18 +16,26 @@ class Creature:
     ATTACK_RANGE_FACTOR = 3.0  # Attack range = (self.radius + target.radius) * ATTACK_RANGE_FACTOR
     EAT_RANGE_FACTOR = 3.0     # Eat range = (self.radius + food.radius) * EAT_RANGE_FACTOR
 
+    # Constants for neural network
+    INPUT_SIZE = 12      # Number of sensory inputs
+    HIDDEN_SIZES = [8, 8]  # Two hidden layers with 8 neurons each
+    OUTPUT_SIZE = 8      # 6 action types + 2 for movement parameters
+
     def __init__(self, x: float, y: float, size: float, energy: float, velocity: float = None, 
-                 eat_bonus: float = 5.0, radius: float = None):
+                 eat_bonus: float = 5.0, radius: float = None, brain: Optional['NeuralNetwork'] = None,
+                 create_brain: bool = False):
         """
         x, y: initial continuous coordinates (floats).
         size: determines relative strength, attack_damage, attack_cost, and max_energy.
               Also relates inversely to velocity.
         energy: when ≤ 0, the creature "dies" and is removed by World.step().
-               when ≥ max_energy, the creature splits into two identical creatures.
+               when ≥ max_energy, the creature splits into four creatures (1 identical, 3 with mutations).
         velocity: maximum speed; bigger creatures → smaller velocity (by convention).
                  If None, computed as 1.0 / size.
         eat_bonus: how much energy a creature gains when it consumes one food item.
         radius: physical size for collision detection. If None, computed as size * RADIUS_FACTOR.
+        brain: neural network for decision making. If None and create_brain=True, a new one is created.
+        create_brain: whether to create a new neural network if brain is None. Default is False for backward compatibility with tests.
         """
         self.x = float(x)
         self.y = float(y)
@@ -65,8 +75,18 @@ class Creature:
         # Store the current intent (ATTACK, GO_TO_FOOD, RUN_AWAY, WANDER, REST)
         self.intent = "REST"
 
-        # Placeholder for a future NeuralNetwork model; remains None this stage
-        self.brain = None
+        # Initialize neural network for decision making
+        if brain is not None:
+            self.brain = brain
+        elif create_brain:
+            from .neural_network import NeuralNetwork
+            self.brain = NeuralNetwork(
+                input_size=self.INPUT_SIZE,
+                hidden_sizes=self.HIDDEN_SIZES,
+                output_size=self.OUTPUT_SIZE
+            )
+        else:
+            self.brain = None
 
         # Add sensors - use ProximitySensor for continuous space
         from .sensors import ProximitySensor
@@ -74,7 +94,7 @@ class Creature:
 
     def decide(self, vision: List[Tuple[str, Any, float, float]], on_food: bool = False) -> Tuple[str, Any]:
         """
-        Decide movement based on sensor input. Return:
+        Decide movement based on sensor input using the neural network. Return:
           - ("MOVE", (dx, dy)) where sqrt(dx^2 + dy^2) ≤ self.velocity,
           - ("REST", None) for resting,
           - ("EAT", food_id) to take one bite from a nearby food,
@@ -82,13 +102,89 @@ class Creature:
           - ("ATTACK", target_id) to attack a nearby creature,
           - ("FLEE", (dx, dy)) to move away from a threat at max speed.
 
-        Logic:
-        1. If any creature is within attack range, return ("ATTACK", target_id).
-        2. If any food is within eat range, return ("EAT", food_id).
-        3. If on_food=True, return ("EAT_AT_CURRENT", None).
-        4. Else (nothing sensed), randomly choose either:
-           - Move in random angle at variable speed, OR
-           - Rest (cost is lower). Use 50/50 split.
+        The neural network takes sensory inputs and outputs action probabilities.
+        """
+        # If brain is None (for backward compatibility with tests), use the old decision logic
+        if self.brain is None:
+            return self._decide_without_brain(vision, on_food)
+
+        # Prepare sensory inputs for the neural network
+        sensory_inputs = {
+            'vision': vision,
+            'on_food': on_food,
+            'creature_state': {
+                'energy': self.energy,
+                'size': self.size,
+                'velocity': self.velocity,
+                'max_energy': self.max_energy
+            }
+        }
+
+        # Use the neural network to decide
+        action_type, action_params = self.brain.decide(sensory_inputs)
+
+        # Set intent and intended vector based on the action
+        self._set_intent_and_vector(action_type, action_params, vision)
+
+        return action_type, action_params
+
+    def _set_intent_and_vector(self, action_type: str, action_params: Any, vision: List[Tuple[str, Any, float, float]]) -> None:
+        """
+        Set the intent and intended vector based on the action type and parameters.
+        This is used for visualization and tracking the creature's behavior.
+        """
+        if action_type == "MOVE":
+            dx, dy = action_params
+            self.current_speed = min(math.hypot(dx, dy), self.velocity)
+            self.intent = "WANDER"
+            self.intended_vector = (dx, dy)
+
+        elif action_type == "REST":
+            self.current_speed = 0.0
+            self.intent = "REST"
+            self.intended_vector = (0.0, 0.0)
+
+        elif action_type == "EAT":
+            food = action_params
+            # Calculate direction vector toward the food (for visualization)
+            dx = food.x - self.x
+            dy = food.y - self.y
+            dist = math.hypot(dx, dy)
+            if dist > 0:
+                dx = dx / dist * self.velocity * 0.75
+                dy = dy / dist * self.velocity * 0.75
+            self.current_speed = self.velocity * 0.75
+            self.intent = "GO_TO_FOOD"
+            self.intended_vector = (dx, dy)
+
+        elif action_type == "EAT_AT_CURRENT":
+            self.current_speed = 0.0
+            self.intent = "GO_TO_FOOD"
+            self.intended_vector = (0.0, 0.0)
+
+        elif action_type == "ATTACK":
+            target = action_params
+            # Calculate direction vector toward the target (for visualization)
+            dx = target.x - self.x
+            dy = target.y - self.y
+            dist = math.hypot(dx, dy)
+            if dist > 0:
+                dx = dx / dist * self.velocity
+                dy = dy / dist * self.velocity
+            self.current_speed = self.velocity
+            self.intent = "ATTACK"
+            self.intended_vector = (dx, dy)
+
+        elif action_type == "FLEE":
+            dx, dy = action_params
+            self.current_speed = min(math.hypot(dx, dy), self.velocity)
+            self.intent = "RUN_AWAY"
+            self.intended_vector = (dx, dy)
+
+    def _decide_without_brain(self, vision: List[Tuple[str, Any, float, float]], on_food: bool = False) -> Tuple[str, Any]:
+        """
+        Legacy decision method for backward compatibility with tests.
+        This is the original decision logic without using the neural network.
         """
         # ProximitySensor format
         if vision is None or len(vision) == 0:
@@ -238,9 +334,14 @@ class Creature:
           - ("EAT_AT_CURRENT", None): eat food at current position; energy += 1
           - ("ATTACK", target_obj): attack the specified creature if within range; energy -= attack_cost
           - ("FLEE", (dx, dy)): move away from a threat at max speed; energy -= distance
+
+        After executing the action, apply rewards/penalties to the neural network based on the outcome.
         """
         act_type, param = action
         self.last_action = f"{act_type}"
+
+        # Store initial energy to calculate energy change
+        initial_energy = self.energy
 
         # Use the intended_vector for visualization
         # This will be set by the decide() method
@@ -407,6 +508,15 @@ class Creature:
             self.energy -= 0.1
             self.last_action = "REST"
 
+        # Apply rewards/penalties to the neural network based on energy change
+        if self.brain is not None:
+            # Calculate energy change
+            energy_change = self.energy - initial_energy
+
+            # Apply reward/penalty based on energy change
+            # Positive energy change = reward, negative energy change = penalty
+            self.brain.apply_reward(energy_change)
+
     def should_split(self) -> bool:
         """
         Check if the creature has enough energy to split.
@@ -416,35 +526,68 @@ class Creature:
         """
         return self.energy >= self.max_energy
 
-    def split(self, world: 'World') -> 'Creature':
+    def split(self, world: 'World') -> List['Creature']:
         """
-        Split the creature into two identical creatures.
-        The parent creature keeps half of its energy, and the child gets the other half.
+        Split the creature into four creatures:
+        1. One identical to the parent (clone)
+        2. Three with mutations in the neural network weights
+
+        The parent creature keeps 1/4 of its energy, and each child gets 1/4.
 
         Args:
             world: The world in which the creature lives.
 
         Returns:
-            The new child creature.
+            List of the new child creatures.
         """
-        # Create a new creature with the same attributes but half the energy
-        child = Creature(
+        # Calculate energy for each creature (parent and 3 children)
+        energy_per_creature = self.energy / 4.0
+
+        # Reduce the parent's energy
+        self.energy = energy_per_creature
+
+        # Create children
+        children = []
+
+        # Create one identical clone (same brain)
+        clone = Creature(
             x=self.x + random.uniform(-1.0, 1.0),  # Slightly offset position
             y=self.y + random.uniform(-1.0, 1.0),
             size=self.size,
-            energy=self.energy / 2.0,
+            energy=energy_per_creature,
             velocity=self.velocity,
             eat_bonus=self.eat_bonus,
-            radius=self.radius
+            radius=self.radius,
+            brain=self.brain.clone() if self.brain else None
         )
+        world.add_creature(clone)
+        children.append(clone)
 
-        # Reduce the parent's energy by half
-        self.energy /= 2.0
+        # Create three mutated children
+        for i in range(3):
+            # Create a mutated brain
+            mutated_brain = None
+            if self.brain:
+                # Different mutation rates for each child
+                mutation_rate = 0.1 * (i + 1)  # 0.1, 0.2, 0.3
+                mutation_scale = 0.2
+                mutated_brain = self.brain.mutate(mutation_rate, mutation_scale)
 
-        # Add the child to the world
-        world.add_creature(child)
+            # Create the mutated child
+            mutated_child = Creature(
+                x=self.x + random.uniform(-1.0, 1.0),  # Slightly offset position
+                y=self.y + random.uniform(-1.0, 1.0),
+                size=self.size,
+                energy=energy_per_creature,
+                velocity=self.velocity,
+                eat_bonus=self.eat_bonus,
+                radius=self.radius,
+                brain=mutated_brain
+            )
+            world.add_creature(mutated_child)
+            children.append(mutated_child)
 
-        return child
+        return children
 
     def __repr__(self) -> str:
         """

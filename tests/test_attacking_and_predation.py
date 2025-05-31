@@ -38,8 +38,20 @@ class TestAttackingAndPredation(unittest.TestCase):
         world.add_creature(target)
         world.add_creature(attacker)
 
+        # Print initial state
+        print(f"Initial state:")
+        print(f"  Attacker: x={attacker.x}, y={attacker.y}, energy={attacker.energy}, attack_damage={attacker.attack_damage}")
+        print(f"  Target: x={target.x}, y={target.y}, energy={target.energy}")
+        print(f"  Distance: {math.sqrt((attacker.x - target.x)**2 + (attacker.y - target.y)**2)}")
+        print(f"  Attack range: {(attacker.radius + target.radius) * attacker.ATTACK_RANGE_FACTOR}")
+
         # Monkey-patch decide methods
         def always_attack_target(vision, on_food=False):
+            # Print vision
+            print(f"Vision for attacker:")
+            for type_tag, obj, dist, angle in vision:
+                print(f"  {type_tag}: dist={dist}, angle={angle}")
+
             # Find nearby creatures
             nearby_creatures = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "creature"]
 
@@ -53,9 +65,11 @@ class TestAttackingAndPredation(unittest.TestCase):
                 attacker.intended_vector = (math.cos(angle) * attacker.velocity, 
                                            math.sin(angle) * attacker.velocity)
 
+                print(f"Attacker decides to attack: {closest_creature}")
                 return ("ATTACK", closest_creature)
 
             # If no creatures nearby, rest
+            print("No creatures nearby, attacker decides to rest")
             return ("REST", None)
 
         def always_rest(vision, on_food=False):
@@ -70,6 +84,15 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         # Call world.step()
         world.step()
+
+        # Print state after step
+        print(f"State after step:")
+        print(f"  Attacker: x={attacker.x}, y={attacker.y}, energy={attacker.energy}")
+        print(f"  Target: x={target.x}, y={target.y}, energy={target.energy}")
+        print(f"  Target in world.creatures: {target in world.creatures}")
+        print(f"  Number of foods: {len(world.foods)}")
+        if world.foods:
+            print(f"  Food: x={world.foods[0].x}, y={world.foods[0].y}, energy_value={world.foods[0].energy_value}")
 
         # Verify target is dead and removed from world.creatures
         self.assertNotIn(target, world.creatures)

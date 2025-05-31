@@ -11,8 +11,8 @@ class Creature:
     # Constants for continuous space interaction
     RADIUS_FACTOR = 0.2  # Radius = size * RADIUS_FACTOR
     SENSE_RANGE = 3.0    # How far the creature can sense other objects
-    ATTACK_RANGE_FACTOR = 1.2  # Attack range = (self.radius + target.radius) * ATTACK_RANGE_FACTOR
-    EAT_RANGE_FACTOR = 1.2     # Eat range = (self.radius + food.radius) * EAT_RANGE_FACTOR
+    ATTACK_RANGE_FACTOR = 3.0  # Attack range = (self.radius + target.radius) * ATTACK_RANGE_FACTOR
+    EAT_RANGE_FACTOR = 3.0     # Eat range = (self.radius + food.radius) * EAT_RANGE_FACTOR
 
     def __init__(self, x: float, y: float, size: float, energy: float, velocity: float = None, 
                  eat_bonus: float = 5.0, attack_damage: float = 5.0, attack_cost: float = 1.0, 
@@ -293,16 +293,24 @@ class Creature:
             # Calculate attack range based on radii
             attack_range = (self.radius + target.radius) * self.ATTACK_RANGE_FACTOR
 
+            # Debug prints
+            print(f"ATTACK: distance={distance}, attack_range={attack_range}")
+            print(f"ATTACK: target_initial_energy={target.energy}, attack_damage={self.attack_damage}")
+
             # If not within attack range, it's a miss
             if distance > attack_range:
                 self.energy -= self.attack_cost
                 self.last_action = "ATTACK_MISS"
+                print(f"ATTACK_MISS: distance > attack_range")
                 return
 
             # Calculate damage and apply it
             target_initial_energy = target.energy
             damage_dealt = min(target_initial_energy, self.attack_damage)
             target.energy -= damage_dealt
+
+            # Debug prints
+            print(f"ATTACK: damage_dealt={damage_dealt}, target_energy_after={target.energy}")
 
             # Apply costs and bonuses to attacker
             self.energy -= self.attack_cost
@@ -337,7 +345,12 @@ class Creature:
                 world.foods.append(corpse_food)
 
                 # Remove the dead creature immediately
-                world.creatures.remove(target)
+                try:
+                    world.creatures.remove(target)
+                except ValueError:
+                    # Target might have already been removed or might not be in the list
+                    # This can happen if the target is not the same object as the one in world.creatures
+                    pass
 
         elif act_type == "EAT" and param is not None:
             # Continuous space eating of object

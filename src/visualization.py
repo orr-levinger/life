@@ -138,22 +138,24 @@ class Visualizer:
                 # Get the creature's position (center of the circle)
                 cx, cy = c.x + 0.5, c.y + 0.5
 
-                # Get the movement vector
-                dx, dy = c.movement_vector
+                # Get the intended vector
+                dx, dy = c.intended_vector
 
-                # Skip if no movement
-                if dx == 0 and dy == 0:
+                # Skip if no movement or resting
+                if (dx == 0 and dy == 0) or c.intent == "REST":
                     continue
 
-                # Determine arrow color based on action
-                arrow_color = 'blue'  # Default color for movement
+                # Determine arrow color based on intent
+                arrow_color = 'gray'  # Default color for wandering
 
-                if c.last_action.startswith("ATTACK"):
+                if c.intent == "ATTACK":
                     arrow_color = 'red'  # Red for attack
-                elif c.last_action.startswith("EAT"):
+                elif c.intent == "GO_TO_FOOD":
                     arrow_color = 'green'  # Green for going to food
-                elif c.last_action.startswith("FLEE"):
+                elif c.intent == "RUN_AWAY":
                     arrow_color = 'blue'  # Blue for fleeing
+                elif c.intent == "WANDER":
+                    arrow_color = 'gray'  # Gray for wandering
 
                 # Draw the arrow
                 # Scale the arrow length to be visible but not too large
@@ -161,7 +163,7 @@ class Visualizer:
                 arrow_scale = 2.0  # Adjust this value to make arrows more visible
                 self.ax.arrow(
                     cx, cy,  # Start at creature center
-                    dx * arrow_scale, dy * arrow_scale,  # End at scaled movement vector
+                    dx * arrow_scale, dy * arrow_scale,  # End at scaled intended vector
                     head_width=0.2,
                     head_length=0.3,
                     fc=arrow_color,

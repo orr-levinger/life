@@ -42,8 +42,12 @@ class Creature:
         # For tests, we'll start at max speed to maintain compatibility
         self.current_speed = self.velocity  # Start at max speed
 
-        # Store the last movement vector for visualization
+        # Store the intended vector (raw dx, dy) and actual movement vector for visualization
+        self.intended_vector = (0.0, 0.0)
         self.movement_vector = (0.0, 0.0)
+
+        # Store the current intent (ATTACK, GO_TO_FOOD, RUN_AWAY, WANDER, REST)
+        self.intent = "REST"
 
         # Placeholder for a future NeuralNetwork model; remains None this stage
         self.brain = None
@@ -95,6 +99,7 @@ class Creature:
 
                 # Set speed to maximum for fleeing
                 self.current_speed = self.velocity
+                self.intent = "RUN_AWAY"
 
                 if direction == "north":
                     dy = -1  # Flee south
@@ -109,39 +114,95 @@ class Creature:
                 dx *= self.current_speed
                 dy *= self.current_speed
 
+                # Store the intended vector
+                self.intended_vector = (dx, dy)
+
                 return ("FLEE", (dx, dy))
             else:
                 # Attack the first creature
-                return ("ATTACK", creature_directions[0])
+                direction = creature_directions[0]
+
+                # Set intent and intended vector for attack
+                self.intent = "ATTACK"
+
+                # Determine direction vector
+                dx, dy = 0, 0
+                if direction == "north":
+                    dy = 1
+                elif direction == "south":
+                    dy = -1
+                elif direction == "east":
+                    dx = 1
+                elif direction == "west":
+                    dx = -1
+
+                # Scale by current speed
+                dx *= self.current_speed
+                dy *= self.current_speed
+
+                # Store the intended vector
+                self.intended_vector = (dx, dy)
+
+                return ("ATTACK", direction)
 
         # 2) Food adjacent? Return EAT action with direction (without moving)
         # Set speed to 75% of maximum for going to food
         self.current_speed = self.velocity * 0.75
+        self.intent = "GO_TO_FOOD"
+
         for direction, content in vision.items():
             if content == "food":
+                # Set intended vector based on direction
+                dx, dy = 0, 0
                 if direction == "north":
-                    return ("EAT", "north")
-                if direction == "south":
-                    return ("EAT", "south")
-                if direction == "east":
-                    return ("EAT", "east")
-                if direction == "west":
-                    return ("EAT", "west")
+                    dy = 1
+                    direction_str = "north"
+                elif direction == "south":
+                    dy = -1
+                    direction_str = "south"
+                elif direction == "east":
+                    dx = 1
+                    direction_str = "east"
+                elif direction == "west":
+                    dx = -1
+                    direction_str = "west"
+
+                # Scale by current speed
+                dx *= self.current_speed
+                dy *= self.current_speed
+
+                # Store the intended vector
+                self.intended_vector = (dx, dy)
+
+                return ("EAT", direction_str)
 
         # 3) Check if there's food in the current cell
         if on_food:
+            # For eating at current position, no movement vector
+            self.intent = "GO_TO_FOOD"
+            self.intended_vector = (0.0, 0.0)
             return ("EAT_AT_CURRENT", None)
 
         # 4) Nothing sensed: random movement with continuous angles
         # Set speed to 50% of maximum for wandering (to conserve energy)
         self.current_speed = self.velocity * 0.5
+
         if random.random() < 0.5:
             # Random angle in [0, 2π) for truly continuous movement
             angle = random.random() * 2 * math.pi
             dx = math.cos(angle) * self.current_speed
             dy = math.sin(angle) * self.current_speed
+
+            # Set intent and intended vector for wandering
+            self.intent = "WANDER"
+            self.intended_vector = (dx, dy)
+
             return ("MOVE", (dx, dy))
         else:
+            # Set intent and intended vector for resting
+            self.intent = "REST"
+            self.intended_vector = (0.0, 0.0)
+
             return ("REST", None)
 
     def apply_action(self, action: Tuple[str, Any], world: 'World') -> None:
@@ -157,8 +218,9 @@ class Creature:
         act_type, param = action
         self.last_action = f"{act_type}"
 
-        # Reset movement vector by default
-        self.movement_vector = (0.0, 0.0)
+        # Use the intended_vector for visualization
+        # This will be set by the decide() method
+        self.movement_vector = self.intended_vector
 
         if (act_type == "MOVE" or act_type == "FLEE") and param is not None:
             dx, dy = param
@@ -173,8 +235,8 @@ class Creature:
             else:
                 actual_dist = requested_dist
 
-            # Store the movement vector for visualization
-            self.movement_vector = (dx, dy)
+            # Note: We're not overwriting self.movement_vector here
+            # It's already set to self.intended_vector at the beginning of this method
 
             # Compute new coordinates, then clamp to [0, width], [0, height]
             new_x = self.x + dx
@@ -214,8 +276,8 @@ class Creature:
                 tx -= 1
                 dx = -1
 
-            # Set movement vector for visualization (scaled by current speed)
-            self.movement_vector = (dx * self.current_speed, dy * self.current_speed)
+            # Note: We're not setting self.movement_vector here
+            # It's already set to self.intended_vector at the beginning of this method
 
             # Find target creature in that cell
             target = None
@@ -296,8 +358,8 @@ class Creature:
                 tx -= 1
                 dx = -1
 
-            # Set movement vector for visualization (scaled by current speed)
-            self.movement_vector = (dx * self.current_speed, dy * self.current_speed)
+            # Note: We're not setting self.movement_vector here
+            # It's already set to self.intended_vector at the beginning of this method
 
             # Look up in world.foods for any Food at those coordinates
             target_food = None

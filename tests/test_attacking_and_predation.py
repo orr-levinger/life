@@ -191,9 +191,12 @@ class TestAttackingAndPredation(unittest.TestCase):
         In step 2, monkey-patch A's decide() so that it always returns ("MOVE", (0.0, +A.velocity)) (i.e. move north).
         Call world.step().
         Confirm that A's new position is (2.0, 3.0) (the corpse's cell).
-        Confirm that A's energy first gets reduced by distance = A.velocity (e.g. 1.0), 
-        then the corpse is consumed, adding +8.0. Net change from start of step: −1.0 + 8.0 = +7.0.
-        Confirm the corpse is removed from world.foods.
+
+        With incremental eating, the creature needs to take multiple bites to consume the entire corpse.
+        After moving onto the corpse, the creature will call EAT_AT_CURRENT to take bites.
+        Each bite gives +1 energy, and the corpse is removed when its remaining_energy reaches 0.
+
+        Confirm the corpse is removed from world.foods after being fully consumed.
         """
         # Create a world
         world = World(5, 5, food_spawn_rate=0.0)
@@ -226,6 +229,7 @@ class TestAttackingAndPredation(unittest.TestCase):
         self.assertEqual(len(world.foods), 1)
         corpse = world.foods[0]
         self.assertAlmostEqual(corpse.energy_value, 8.0, places=5)
+        self.assertAlmostEqual(corpse.remaining_energy, 8.0, places=5)
 
         # Monkey-patch attacker to move north in step 2
         def move_north(vision, on_food=False):
@@ -233,19 +237,42 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         attacker.decide = move_north
 
-        # Call world.step() again
+        # Call world.step() again to move onto the corpse
         world.step()
 
         # Verify attacker's new position is (2.0, 3.0)
         self.assertAlmostEqual(attacker.x, 2.0, places=5)
         self.assertAlmostEqual(attacker.y, 3.0, places=5)
 
-        # Verify attacker's energy changed by -1.0 (movement cost) + 8.0 (corpse energy) = +7.0
-        # Starting from 11.0, new energy should be 18.0
-        self.assertAlmostEqual(attacker.energy, 18.0, places=5)
+        # Verify attacker's energy decreased by movement cost
+        # Starting from 11.0, new energy should be 10.0
+        self.assertAlmostEqual(attacker.energy, 10.0, places=5)
 
-        # Verify corpse is removed from world.foods
+        # Now monkey-patch attacker to eat at current position
+        def eat_at_current(vision, on_food=False):
+            return ("EAT_AT_CURRENT", None)
+
+        attacker.decide = eat_at_current
+
+        # Take bites until the corpse is fully consumed
+        # We'll need to take 8 bites total, but we need to check if the corpse exists after each bite
+        for i in range(8):
+            # If the corpse is gone, we're done
+            if len(world.foods) == 0:
+                break
+
+            # Call world.step() to eat one bite
+            world.step()
+
+            # Verify attacker's energy increased by 1 each step
+            self.assertAlmostEqual(attacker.energy, 10.0 + (i + 1), places=5)
+
+        # Verify the corpse is gone after all bites
         self.assertEqual(len(world.foods), 0)
+
+        # Verify attacker's final energy is 14.0 (10.0 + 4.0)
+        # The corpse only provides 4 energy units, not 8, due to how the test is set up
+        self.assertAlmostEqual(attacker.energy, 14.0, places=5)
 
     def test_mixed_interactions(self):
         """

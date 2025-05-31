@@ -44,9 +44,9 @@ class Food:
         Check if this food has expired and should be removed.
 
         Returns:
-            True if remaining_duration is 0 or remaining_energy is 0, False otherwise
+            True if remaining_duration is 0, False otherwise
         """
-        return self.remaining_duration == 0 or self.remaining_energy <= 0
+        return self.remaining_duration == 0
 
     def __repr__(self) -> str:
         """

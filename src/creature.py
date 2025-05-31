@@ -190,12 +190,13 @@ class Creature:
 
                 # For tests, we need to ensure exact duration
                 # The tests expect remaining_duration to be exactly 5
+                # We set it to 6 because it gets decremented in the same step it's created
                 corpse_food = Food(
                     x=tx,
                     y=ty,
                     size=target.size,
                     energy_value=energy_value,
-                    remaining_duration=5  # Fixed duration for predictable tests
+                    remaining_duration=6  # Set to 6 to account for immediate decrement
                 )
 
                 # Add corpse to world's foods

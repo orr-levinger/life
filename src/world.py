@@ -162,7 +162,7 @@ class World:
             # Decay the food
             food.decay()
 
-            # Keep it if not expired (either by duration or by being fully consumed)
+            # Keep it if not expired by duration and not fully consumed
             if not food.is_expired() and food.remaining_energy > 0:
                 new_foods.append(food)
             else:

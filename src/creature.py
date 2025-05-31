@@ -1,22 +1,25 @@
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Dict, Tuple, Optional
+import random
+import math
 
 if TYPE_CHECKING:
     from .world import World
+    from .sensors import Sensor, VisionSensor
 
 class Creature:
-    def __init__(self, x: int, y: int, size: float, energy: float, velocity: float = None):
+    def __init__(self, x: float, y: float, size: float, energy: float, velocity: float = None):
         """
-        x, y: initial grid coordinates (integers).
-        size: determines relative strength (unused in Stage 1) and relates inversely to velocity.
+        x, y: initial continuous coordinates (floats).
+        size: determines relative strength and relates inversely to velocity.
         energy: when ≤ 0, the creature "dies" and is removed by World.step().
-        velocity: number of grid cells per step; bigger creatures → smaller velocity (by convention).
+        velocity: maximum speed; bigger creatures → smaller velocity (by convention).
                  If None, computed as 1.0 / size.
         """
-        self.x = x
-        self.y = y
+        self.x = float(x)
+        self.y = float(y)
         self.size = size
         self.energy = energy
-        # IMPLEMENT: compute velocity if not provided
+        # Compute velocity if not provided
         if velocity is None:
             self.velocity = 1.0 / size
         else:
@@ -24,24 +27,95 @@ class Creature:
         # Placeholder for a future NeuralNetwork model; remains None this stage
         self.brain = None
 
-    def decide(self, sensor_inputs: Any) -> str:
-        """
-        sensor_inputs: always None in Stage 1.
-        Return one of: 'MOVE', 'EAT', 'ATTACK', 'REST'. 
-        In Stage 1, we ignore sensors and always do 'REST'.
-        """
-        return 'REST'
+        # Add sensors
+        from .sensors import VisionSensor
+        self.sensors: Tuple['Sensor', ...] = (VisionSensor(),)
 
-    def apply_action(self, action: str, world: 'World') -> None:
+    def decide(self, vision: Dict[str, str]) -> Tuple[str, Optional[Tuple[float, float]]]:
         """
-        Execute the chosen action. In Stage 1:
-          - Regardless of action type ('MOVE', 'EAT', 'ATTACK', 'REST'),
-            we only deduct 1 energy as a minimal placeholder implementation.
-          - No actual movement, eating, or attacking is performed yet.
+        Decide movement based on VisionSensor. Return:
+          - ("MOVE", (dx, dy)) where sqrt(dx^2 + dy^2) ≤ self.velocity,
+          - ("REST", None) for resting.
+
+        Logic:
+        1. If any direction maps to "food", move toward that cell at max speed:
+           e.g. if vision["north"] == "food", set dx=0, dy=self.velocity.
+        2. Else if any direction maps to "creature", move directly away at max speed:
+           e.g. if vision["north"] == "creature", set dx=0, dy=-self.velocity.
+        3. Else (nothing sensed), randomly choose either:
+           - Move in random angle at max speed, OR
+           - Rest (cost is lower). Use 50/50 split.
         """
-        # Deduct fixed energy cost for any action:
-        self.energy -= 1
-        # TODO (future): implement movement, eating, attacking logic
+        if vision is None:
+            return ("REST", None)
+
+        # 1) Food adjacent?
+        for direction, content in vision.items():
+            if content == "food":
+                if direction == "north":
+                    return ("MOVE", (0.0, self.velocity))
+                if direction == "south":
+                    return ("MOVE", (0.0, -self.velocity))
+                if direction == "east":
+                    return ("MOVE", (self.velocity, 0.0))
+                if direction == "west":
+                    return ("MOVE", (-self.velocity, 0.0))
+
+        # 2) Creature adjacent: flee
+        for direction, content in vision.items():
+            if content == "creature":
+                if direction == "north":
+                    return ("MOVE", (0.0, -self.velocity))
+                if direction == "south":
+                    return ("MOVE", (0.0, self.velocity))
+                if direction == "east":
+                    return ("MOVE", (-self.velocity, 0.0))
+                if direction == "west":
+                    return ("MOVE", (self.velocity, 0.0))
+
+        # 3) Nothing sensed: random
+        if random.random() < 0.5:
+            # Random angle in [0, 2π)
+            angle = random.random() * 2 * math.pi
+            dx = math.cos(angle) * self.velocity
+            dy = math.sin(angle) * self.velocity
+            return ("MOVE", (dx, dy))
+        else:
+            return ("REST", None)
+
+    def apply_action(self, action: Tuple[str, Any], world: 'World') -> None:
+        """
+        Execute the chosen action:
+          - ("MOVE", (dx, dy)): clamp (dx,dy) to max speed; update (x, y) by (dx, dy) clamped to world bounds; energy -= distance
+          - ("REST", None): energy -= 0.1
+        """
+        act_type, param = action
+
+        if act_type == "MOVE" and param is not None:
+            dx, dy = param
+            # Compute requested distance
+            requested_dist = math.hypot(dx, dy)
+            # If more than max, scale down to max:
+            if requested_dist > self.velocity:
+                scale = self.velocity / requested_dist
+                dx *= scale
+                dy *= scale
+                actual_dist = self.velocity
+            else:
+                actual_dist = requested_dist
+
+            # Compute new coordinates, then clamp to [0, width], [0, height]
+            new_x = self.x + dx
+            new_y = self.y + dy
+            # Clamp within world bounds:
+            self.x = min(max(new_x, 0.0), world.width)
+            self.y = min(max(new_y, 0.0), world.height)
+
+            # Deduct energy equal to distance moved
+            self.energy -= actual_dist
+
+        else:  # "REST"
+            self.energy -= 0.1
 
 # Import at the end to avoid circular imports
 from .world import World

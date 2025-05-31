@@ -32,14 +32,20 @@ class World:
         Advance the simulation by one time step:
         1. Call spawn_food()  (currently does nothing in Stage 1).
         2. For each creature in a copy of self.creatures:
-           a. action = creature.decide(sensor_inputs=None)
-           b. creature.apply_action(action, self)
-           c. If creature.energy ≤ 0: remove creature from self.creatures
+           a. Get vision = creature.sensors[0].get_reading(creature, self)
+           b. action = creature.decide(vision)
+           c. creature.apply_action(action, self)
+           d. If creature.energy ≤ 0: remove creature from self.creatures
         """
         self.spawn_food()
         for creature in list(self.creatures):
-            action = creature.decide(None)
+            # Get vision reading
+            vision = creature.sensors[0].get_reading(creature, self)
+            # Decide continuous action
+            action = creature.decide(vision)
+            # Apply the action
             creature.apply_action(action, self)
+            # Remove if dead
             if creature.energy <= 0:
                 self.creatures.remove(creature)
 

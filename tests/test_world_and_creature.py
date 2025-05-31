@@ -24,9 +24,15 @@ class TestWorldAndCreature(unittest.TestCase):
 
     def test_world_step_reduces_energy_and_removes_dead(self):
         world = World(10, 10, food_spawn_rate=0.0)
-        # Create a creature with energy=1 so it will die after one step
-        c = Creature(5, 5, size=1.0, energy=1.0, velocity=1.0)
+        # Create a creature with energy=0.1 so it will die after one REST step
+        c = Creature(5, 5, size=1.0, energy=0.1, velocity=1.0)
         world.add_creature(c)
+
+        # Override decide to always return REST
+        def always_rest(vision):
+            return ("REST", None)
+        c.decide = always_rest
+
         world.step()
         # After one step: energy = 0 → removed from "creatures"
         self.assertEqual(len(world.creatures), 0)
@@ -35,11 +41,17 @@ class TestWorldAndCreature(unittest.TestCase):
         world = World(10, 10, food_spawn_rate=0.0)
         c = Creature(5, 5, size=1.0, energy=5.0, velocity=1.0)
         world.add_creature(c)
-        # Run 3 steps: each step deducts 1 energy → final energy = 5 - 3 = 2
+
+        # Override decide to always return REST
+        def always_rest(vision):
+            return ("REST", None)
+        c.decide = always_rest
+
+        # Run 3 steps: each step deducts 0.1 energy for REST → final energy = 5 - 0.3 = 4.7
         for _ in range(3):
             world.step()
         self.assertEqual(len(world.creatures), 1)
-        self.assertEqual(world.creatures[0].energy, 2.0)
+        self.assertAlmostEqual(world.creatures[0].energy, 4.7, places=5)
 
 if __name__ == "__main__":
     unittest.main()

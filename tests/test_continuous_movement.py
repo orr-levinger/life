@@ -39,6 +39,9 @@ class TestContinuousMovement(unittest.TestCase):
         """
         Two creatures at (2,2) and (2,3). Prey at (2,2) sees predator north,
         so should move directly south by velocity (which is 1.0).
+
+        Note: In the new predation system, creatures attack by default when they see other creatures.
+        For this test, we override the prey's decide method to flee instead of attack.
         """
         w = World(10, 10, food_spawn_rate=0.0)
         predator = Creature(2.0, 3.0, size=1.0, energy=5.0)
@@ -50,6 +53,25 @@ class TestContinuousMovement(unittest.TestCase):
         def always_rest(vision, on_food=False):
             return ("REST", None)
         predator.decide = always_rest
+
+        # Override prey's decide method to flee instead of attack
+        def flee_from_creatures(vision, on_food=False):
+            # If creature to the north, flee south
+            if vision.get("north") == "creature":
+                return ("MOVE", (0.0, -prey.velocity))
+            # If creature to the south, flee north
+            elif vision.get("south") == "creature":
+                return ("MOVE", (0.0, prey.velocity))
+            # If creature to the east, flee west
+            elif vision.get("east") == "creature":
+                return ("MOVE", (-prey.velocity, 0.0))
+            # If creature to the west, flee east
+            elif vision.get("west") == "creature":
+                return ("MOVE", (prey.velocity, 0.0))
+            # Otherwise, rest
+            return ("REST", None)
+
+        prey.decide = flee_from_creatures
 
         # First, verify that the sensor reading and decision are correct
         vs = VisionSensor()

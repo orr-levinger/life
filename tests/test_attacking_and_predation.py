@@ -1,0 +1,312 @@
+# tests/test_attacking_and_predation.py
+
+import sys, os
+import unittest
+import random
+
+# Add the parent directory to the path so we can import the modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.world import World
+from src.creature import Creature
+from src.food import Food
+from src.sensors import VisionSensor
+
+class TestAttackingAndPredation(unittest.TestCase):
+    def test_successful_attack_leaves_corpse(self):
+        """
+        Test that a successful attack that kills a creature leaves a corpse with correct energy_value.
+
+        Create two creatures: A at (2,2) with enough energy to strike, and B at (2,3) with energy 4.0.
+        Set A.attack_damage = 5.0, A.attack_cost = 1.0, A.attack_bonus = 2.0.
+        Monkey-patch A.decide() to always return ("ATTACK","north").
+        Monkey-patch B.decide() to always rest.
+        Call world.step().
+        Verify that B's energy goes from 4.0 → 4.0 − 5.0 = −1.0 (dead).
+        Confirm that a new Food object appears at (2,3) with energy_value = 2 × 4.0 = 8.0.
+        Confirm that A.energy changed by −1.0 (attack cost) + 2.0 (attack bonus) = +1.0 net.
+        Confirm that B is removed from world.creatures.
+        """
+        # Create a world
+        world = World(5, 5, food_spawn_rate=0.0)
+
+        # Create attacker (A) and target (B)
+        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+        target = Creature(2.0, 3.0, size=1.0, energy=4.0)
+
+        # Add creatures to the world (target first so attacker moves after it in the step)
+        world.add_creature(target)
+        world.add_creature(attacker)
+
+        # Monkey-patch decide methods
+        def always_attack_north(vision, on_food=False):
+            return ("ATTACK", "north")
+
+        def always_rest(vision, on_food=False):
+            return ("REST", None)
+
+        attacker.decide = always_attack_north
+        target.decide = always_rest
+
+        # Initial energy values
+        attacker_initial_energy = attacker.energy
+        target_initial_energy = target.energy
+
+        # Call world.step()
+        world.step()
+
+        # Verify target is dead and removed from world.creatures
+        self.assertNotIn(target, world.creatures)
+
+        # Verify attacker's energy changed correctly
+        # -1.0 (attack cost) + 2.0 (attack bonus) = +1.0 net
+        self.assertAlmostEqual(attacker.energy, attacker_initial_energy + 1.0, places=5)
+
+        # Verify a corpse was created at target's position
+        self.assertEqual(len(world.foods), 1)
+        corpse = world.foods[0]
+        self.assertEqual(corpse.x, 2)
+        self.assertEqual(corpse.y, 3)
+
+        # Verify corpse has correct energy_value (2 * damage_dealt)
+        # damage_dealt = min(target_initial_energy, attacker.attack_damage) = min(4.0, 5.0) = 4.0
+        # energy_value = 2 * 4.0 = 8.0
+        self.assertAlmostEqual(corpse.energy_value, 8.0, places=5)
+
+        # Verify corpse has correct remaining_duration
+        # The corpse duration should be 5 as set in Creature.apply_action
+        self.assertEqual(corpse.remaining_duration, 5)
+
+    def test_missed_attack(self):
+        """
+        Test that a missed attack costs the attacker energy but produces no corpse.
+
+        Place a single creature A at (2,2) with energy 10.0. No one at (2,3).
+        Monkey-patch A.decide() to ("ATTACK","north").
+        Call world.step().
+        Confirm that A.energy decreases by attack_cost (e.g. 1.0).
+        Confirm that no new Food object is created.
+        Confirm that A remains in world.creatures.
+        """
+        # Create a world
+        world = World(5, 5, food_spawn_rate=0.0)
+
+        # Create attacker
+        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+
+        # Add creature to the world
+        world.add_creature(attacker)
+
+        # Monkey-patch decide method
+        def always_attack_north(vision, on_food=False):
+            return ("ATTACK", "north")
+
+        attacker.decide = always_attack_north
+
+        # Initial energy value
+        attacker_initial_energy = attacker.energy
+
+        # Call world.step()
+        world.step()
+
+        # Verify attacker's energy decreased by attack_cost
+        self.assertAlmostEqual(attacker.energy, attacker_initial_energy - attacker.attack_cost, places=5)
+
+        # Verify no corpse was created
+        self.assertEqual(len(world.foods), 0)
+
+        # Verify attacker remains in world.creatures
+        self.assertIn(attacker, world.creatures)
+
+    def test_corpse_decay(self):
+        """
+        Test that a corpse decays after X steps.
+
+        Create world 5×5, two creatures A and B adjacent. Let B have energy small enough to die in one hit.
+        Let A kill B in step 1.
+        Confirm a corpse Food appears at (2,3) with remaining_duration = D (e.g. D = int(B.size * FACTOR)).
+        Advance D additional steps by calling world.step() in a loop without any creatures attacking that corpse.
+        After exactly D calls to world.step(), assert that the corpse no longer exists in world.foods.
+        If you call one more world.step(), confirm the corpse is still gone and does not re-appear.
+        """
+        # Create a world
+        world = World(5, 5, food_spawn_rate=0.0)
+
+        # Create attacker (A) and target (B)
+        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+        target = Creature(2.0, 3.0, size=1.0, energy=4.0)
+
+        # Add creatures to the world (target first so attacker moves after it in the step)
+        world.add_creature(target)
+        world.add_creature(attacker)
+
+        # Monkey-patch decide methods
+        def always_attack_north(vision, on_food=False):
+            return ("ATTACK", "north")
+
+        def always_rest(vision, on_food=False):
+            return ("REST", None)
+
+        attacker.decide = always_attack_north
+        target.decide = always_rest
+
+        # Call world.step() to kill the target
+        world.step()
+
+        # Verify a corpse was created
+        self.assertEqual(len(world.foods), 1)
+        corpse = world.foods[0]
+
+        # Get the corpse's remaining_duration
+        # The corpse duration should be 5 as set in Creature.apply_action
+        corpse_duration = corpse.remaining_duration
+        self.assertEqual(corpse_duration, 5)
+
+        # Monkey-patch attacker to rest so it doesn't attack the corpse
+        attacker.decide = always_rest
+
+        # Advance corpse_duration - 1 steps
+        for _ in range(corpse_duration - 1):
+            world.step()
+            # Corpse should still exist
+            self.assertEqual(len(world.foods), 1)
+
+        # Advance one more step (total = corpse_duration)
+        world.step()
+
+        # Verify corpse no longer exists
+        self.assertEqual(len(world.foods), 0)
+
+        # Advance one more step
+        world.step()
+
+        # Verify corpse is still gone
+        self.assertEqual(len(world.foods), 0)
+
+    def test_creature_can_eat_corpse(self):
+        """
+        Test that a creature can eat a corpse and gain correct energy.
+
+        Create a world and two creatures A (at (2,2), energy 10.0) and B (at (2,3), energy 4.0).
+        A attacks and kills B in step 1; corpse appears with energy_value = 8.0. A's energy is now 11.0.
+        In step 2, monkey-patch A's decide() so that it always returns ("MOVE", (0.0, +A.velocity)) (i.e. move north).
+        Call world.step().
+        Confirm that A's new position is (2.0, 3.0) (the corpse's cell).
+        Confirm that A's energy first gets reduced by distance = A.velocity (e.g. 1.0), 
+        then the corpse is consumed, adding +8.0. Net change from start of step: −1.0 + 8.0 = +7.0.
+        Confirm the corpse is removed from world.foods.
+        """
+        # Create a world
+        world = World(5, 5, food_spawn_rate=0.0)
+
+        # Create attacker (A) and target (B)
+        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+        target = Creature(2.0, 3.0, size=1.0, energy=4.0)
+
+        # Add creatures to the world (target first so attacker moves after it in the step)
+        world.add_creature(target)
+        world.add_creature(attacker)
+
+        # Monkey-patch decide methods for step 1
+        def always_attack_north(vision, on_food=False):
+            return ("ATTACK", "north")
+
+        def always_rest(vision, on_food=False):
+            return ("REST", None)
+
+        attacker.decide = always_attack_north
+        target.decide = always_rest
+
+        # Call world.step() to kill the target
+        world.step()
+
+        # Verify attacker's energy is now 11.0 (10.0 - 1.0 + 2.0)
+        self.assertAlmostEqual(attacker.energy, 11.0, places=5)
+
+        # Verify a corpse was created with energy_value = 8.0
+        self.assertEqual(len(world.foods), 1)
+        corpse = world.foods[0]
+        self.assertAlmostEqual(corpse.energy_value, 8.0, places=5)
+
+        # Monkey-patch attacker to move north in step 2
+        def move_north(vision, on_food=False):
+            return ("MOVE", (0.0, attacker.velocity))
+
+        attacker.decide = move_north
+
+        # Call world.step() again
+        world.step()
+
+        # Verify attacker's new position is (2.0, 3.0)
+        self.assertAlmostEqual(attacker.x, 2.0, places=5)
+        self.assertAlmostEqual(attacker.y, 3.0, places=5)
+
+        # Verify attacker's energy changed by -1.0 (movement cost) + 8.0 (corpse energy) = +7.0
+        # Starting from 11.0, new energy should be 18.0
+        self.assertAlmostEqual(attacker.energy, 18.0, places=5)
+
+        # Verify corpse is removed from world.foods
+        self.assertEqual(len(world.foods), 0)
+
+    def test_mixed_interactions(self):
+        """
+        Test mixed interactions between food and predators.
+
+        Create a world with one spawned food at (4,4) (set food_spawn_rate=0 and manually add a Food object).
+        Place predator A at (2,2), herbivore B at (3,2) with some food nearby.
+        In step N, check that B will either go for the spawned food or get attacked by A 
+        based on the decision logic's priority ("ATTACK" supersedes "EAT").
+        Confirm that if B is adjacent to A, it never "eats" the spawned food—instead it gets attacked first.
+        """
+        # Create a world
+        world = World(5, 5, food_spawn_rate=0.0)
+
+        # Create a spawned food at (4,4)
+        spawned_food = Food(x=4, y=4, size=1.0, energy_value=2.0, remaining_duration=-1)
+        world.foods.append(spawned_food)
+        world.food_positions.add((4, 4))  # For backward compatibility
+
+        # Create predator (A) and herbivore (B)
+        predator = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+        herbivore = Creature(3.0, 2.0, size=1.0, energy=4.0)  # Reduced energy so it dies in one hit
+
+        # Add creatures to the world (target first so attacker moves after it in the step)
+        world.add_creature(herbivore)
+        world.add_creature(predator)
+
+        # Monkey-patch predator to always attack east
+        def always_attack_east(vision, on_food=False):
+            return ("ATTACK", "east")
+
+        predator.decide = always_attack_east
+
+        # Monkey-patch herbivore to always rest
+        def always_rest(vision, on_food=False):
+            return ("REST", None)
+
+        herbivore.decide = always_rest
+
+        # Call world.step()
+        world.step()
+
+        # Verify herbivore is dead (attacked by predator)
+        self.assertNotIn(herbivore, world.creatures)
+
+        # Verify a corpse was created at herbivore's position
+        self.assertEqual(len(world.foods), 2)  # Original food + corpse
+
+        # Find the corpse (the one at (3,2))
+        corpse = None
+        for food in world.foods:
+            if food.x == 3 and food.y == 2:
+                corpse = food
+                break
+
+        self.assertIsNotNone(corpse)
+
+        # Verify corpse has correct energy_value
+        expected_energy = 2.0 * min(4.0, predator.attack_damage)  # 2 * min(4.0, 5.0) = 8.0
+        expected_energy = round(expected_energy, 1)  # Round to match the implementation
+        self.assertAlmostEqual(corpse.energy_value, expected_energy, places=5)
+
+if __name__ == "__main__":
+    unittest.main()

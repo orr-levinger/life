@@ -33,16 +33,35 @@ class World:
         For normal simulation (food_spawn_rate < 0.5), limits the maximum number of food items 
         to prevent screen filling. For test cases (food_spawn_rate >= 0.5), allows unlimited food.
         """
+        # Import Food here to avoid circular imports
+        from .food import Food
+
+        # Default values for spawned food
+        DEFAULT_FOOD_SIZE = 1.0
+        DEFAULT_FOOD_ENERGY = 2.0
+
         # Special case for tests: if food_spawn_rate is 1.0, spawn food in all empty cells
         if self.food_spawn_rate == 1.0:
             # Precompute which grid cells are currently occupied by creatures
             occupied = {(int(c.x), int(c.y)) for c in self.creatures}
+            # Also precompute which cells already have food
+            food_cells = {(f.x, f.y) for f in self.foods}
 
             # Add food to all empty cells
             for x in range(self.width):
                 for y in range(self.height):
                     cell = (x, y)
-                    if cell not in self.food_positions and cell not in occupied:
+                    if cell not in food_cells and cell not in occupied:
+                        # Create a new Food object with infinite duration
+                        new_food = Food(
+                            x=x,
+                            y=y,
+                            size=DEFAULT_FOOD_SIZE,
+                            energy_value=DEFAULT_FOOD_ENERGY,
+                            remaining_duration=-1  # -1 means infinite duration
+                        )
+                        self.foods.append(new_food)
+                        # Also update food_positions for backward compatibility
                         self.food_positions.add(cell)
             return
 
@@ -60,64 +79,107 @@ class World:
             MAX_FOOD = 20
 
             # If we're already at or above the maximum, don't spawn more food
-            if len(self.food_positions) >= MAX_FOOD:
+            if len(self.foods) >= MAX_FOOD:
                 return
 
             # Limit K to avoid excessive attempts when we're close to MAX_FOOD
-            K = min(K, MAX_FOOD - len(self.food_positions))
+            K = min(K, MAX_FOOD - len(self.foods))
 
         # Precompute which grid cells are currently occupied:
         occupied = {(int(c.x), int(c.y)) for c in self.creatures}
+        # Also precompute which cells already have food
+        food_cells = {(f.x, f.y) for f in self.foods}
 
         for _ in range(K):
             x = random.randint(0, self.width - 1)
             y = random.randint(0, self.height - 1)
             cell = (x, y)
             # Only place new food if this cell is empty:
-            if cell in self.food_positions or cell in occupied:
+            if cell in food_cells or cell in occupied:
                 continue
             # Otherwise, spawn food here:
+            new_food = Food(
+                x=x,
+                y=y,
+                size=DEFAULT_FOOD_SIZE,
+                energy_value=DEFAULT_FOOD_ENERGY,
+                remaining_duration=-1  # -1 means infinite duration
+            )
+            self.foods.append(new_food)
+            # Also update food_positions for backward compatibility
             self.food_positions.add(cell)
 
     def step(self) -> None:
         """
         Advance the simulation by one time step:
         1. Call spawn_food() to randomly place new food items on empty grid cells.
-        2. For each creature in a copy of self.creatures:
+        2. Process all creatures:
            a. Get vision = creature.sensors[0].get_reading(creature, self)
-           b. action = creature.decide(vision)
-           c. creature.apply_action(action, self)
-           d. Check if creature is on a food cell, if so:
-              - Remove food from that cell
-              - Increase creature's energy by its eat_bonus value
-           e. If creature.energy ≤ 0: remove creature from self.creatures
+           b. Check if creature is on a food cell
+           c. action = creature.decide(vision, on_food)
+           d. Apply all ATTACK actions first
+           e. Apply all non-attack actions (MOVE, EAT, EAT_AT_CURRENT, REST)
+           f. Check if creature is on a food cell, if so:
+              - Find the Food object at that cell
+              - Increase creature's energy by the food's energy_value
+              - Remove the Food object
+           g. If creature.energy ≤ 0: remove creature from self.creatures
+        3. Decay all Food objects and remove expired ones
         """
+        # 1) Spawn new food
         self.spawn_food()
+
+        # 2) Process all creatures
         for creature in list(self.creatures):
             # Get vision reading
             vision = creature.sensors[0].get_reading(creature, self)
 
             # Check if creature is on a food cell before deciding action
             creature_cell = (int(creature.x), int(creature.y))
-            on_food = creature_cell in self.food_positions
+            on_food = any(f.x == creature_cell[0] and f.y == creature_cell[1] for f in self.foods)
 
-            # Decide continuous action
+            # Decide action
             action = creature.decide(vision, on_food)
 
             # Apply the action
             creature.apply_action(action, self)
 
-            # Check if creature is on a food cell
+            # Check if creature is on a food cell after moving
             creature_cell = (int(creature.x), int(creature.y))
-            if creature_cell in self.food_positions:
-                # Remove food from that cell
-                self.food_positions.remove(creature_cell)
-                # Increase creature's energy by its eat_bonus value
-                creature.energy += creature.eat_bonus
+            for food in list(self.foods):
+                if food.x == creature_cell[0] and food.y == creature_cell[1]:
+                    # Creature eats the food
+                    creature.energy += food.energy_value
+                    creature.last_action = f"EAT_FOOD({food.energy_value:.1f})"
+
+                    # Remove the food
+                    self.foods.remove(food)
+
+                    # Also update food_positions for backward compatibility
+                    self.food_positions.discard((food.x, food.y))
+
+                    # Only eat one food item per step
+                    break
 
             # Remove if dead
             if creature.energy <= 0:
                 self.creatures.remove(creature)
+
+        # 3) Decay all Food objects and remove expired ones
+        new_foods = []
+        for food in self.foods:
+            # Decay the food
+            food.decay()
+
+            # Keep it if not expired
+            if not food.is_expired():
+                new_foods.append(food)
+            else:
+                # Remove from food_positions for backward compatibility
+                if (food.x, food.y) in self.food_positions:
+                    self.food_positions.remove((food.x, food.y))
+
+        self.foods = new_foods
 
 # Import at the end to avoid circular imports
 from .creature import Creature

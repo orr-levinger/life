@@ -67,20 +67,37 @@ class Visualizer:
         self.ax.set_yticks([])
         self.ax.set_facecolor('black')
 
-        # 1) Draw food (if any). Each food point is a small red square:
-        if len(world.food_positions) > 0:
-            food_xs = [pos[0] + 0.5 for pos in world.food_positions]
-            food_ys = [pos[1] + 0.5 for pos in world.food_positions]
-            # Use red squares; smaller size (25) to make food appear smaller
+        # 1) Draw food (if any). Each food point is a red square with size proportional to food.size:
+        if len(world.foods) > 0:
+            food_xs = [f.x + 0.5 for f in world.foods]
+            food_ys = [f.y + 0.5 for f in world.foods]
+            # Scale the food size (which might be any float)
+            # Matplotlib's 's' argument in scatter is area in points^2
+            food_sizes = [(f.size * 25) for f in world.foods]  # Smaller baseline than creatures
+
+            # Use red squares with size proportional to food.size
             self.ax.scatter(
                 food_xs,
                 food_ys,
                 marker='s',
                 color='red',
-                s=25,
+                s=food_sizes,
                 alpha=0.8,
                 label='Food'
             )
+
+            # Optionally, draw remaining duration for non-infinite food
+            for f in world.foods:
+                if f.remaining_duration > 0:
+                    self.ax.text(
+                        f.x + 0.5, 
+                        f.y + 0.3, 
+                        f"{f.remaining_duration}", 
+                        color='white',
+                        fontsize=8,
+                        ha='center',
+                        va='center'
+                    )
 
         # 2) Draw creatures as green circles, radius = creature.size:
         if len(world.creatures) > 0:
@@ -104,7 +121,7 @@ class Visualizer:
         # Optional: Add a legend or title
         # self.ax.legend(loc='upper right', fontsize='small', facecolor='black', labelcolor='white')
         self.ax.set_title(
-            f"World: {len(world.creatures)} creatures, {len(world.food_positions)} food",
+            f"World: {len(world.creatures)} creatures, {len(world.foods)} food",
             color='white',
             pad=10
         )

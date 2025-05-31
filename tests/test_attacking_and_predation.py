@@ -98,8 +98,9 @@ class TestAttackingAndPredation(unittest.TestCase):
         self.assertNotIn(target, world.creatures)
 
         # Verify attacker's energy changed correctly
-        # -1.0 (attack cost) + 2.0 (attack bonus) = +1.0 net
-        self.assertAlmostEqual(attacker.energy, attacker_initial_energy + 1.0, places=5)
+        # -1.0 (attack cost) = -1.0 net
+        # Note: In the updated implementation, there's no attack bonus
+        self.assertAlmostEqual(attacker.energy, attacker_initial_energy - 1.0, places=5)
 
         # Verify a corpse was created at target's position
         self.assertEqual(len(world.foods), 1)

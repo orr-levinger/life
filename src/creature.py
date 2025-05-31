@@ -327,8 +327,8 @@ class Creature:
                 # Import Food here to avoid circular imports
                 from .food import Food
 
-                # Create corpse food with energy = 2 * damage_dealt
-                energy = 2.0 * damage_dealt
+                # Create corpse food with energy proportionate to target's size
+                energy = target.size * 8.0  # 8.0 is a multiplier to make the energy value significant
 
                 # For tests, we need to ensure exact duration
                 corpse_food = Food(

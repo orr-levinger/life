@@ -63,7 +63,6 @@ class World:
                             x=fx,
                             y=fy,
                             remaining_duration=-1,  # -1 means infinite duration
-                            energy=self.DEFAULT_FOOD_ENERGY
                         )
                         self.foods.append(new_food)
             return
@@ -127,7 +126,6 @@ class World:
                 x=x,
                 y=y,
                 remaining_duration=-1,  # -1 means infinite duration
-                energy=self.DEFAULT_FOOD_ENERGY
             )
             self.foods.append(new_food)
             # Track that this food was created in this step

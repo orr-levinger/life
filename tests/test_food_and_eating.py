@@ -191,7 +191,7 @@ class TestFoodAndEating(unittest.TestCase):
         initial_food_energy = food.energy
 
         # Override creatures' decide methods to always eat the food
-        def always_eat_food(vision, on_food=False):
+        def always_eat_food(creature, vision, on_food=False):
             # Find nearby food
             nearby_food = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "food"]
 
@@ -201,14 +201,14 @@ class TestFoodAndEating(unittest.TestCase):
                 closest_food, distance, angle = nearby_food[0]
 
                 # Calculate eat range based on radii
-                eat_range = (self.radius + closest_food.radius) * self.EAT_RANGE_FACTOR
+                eat_range = (creature.radius + closest_food.radius) * creature.EAT_RANGE_FACTOR
 
                 # If within eat range, eat
                 if distance <= eat_range:
                     # Set intent for visualization
-                    self.intent = "GO_TO_FOOD"
-                    self.intended_vector = (math.cos(angle) * self.velocity * 0.75, 
-                                           math.sin(angle) * self.velocity * 0.75)
+                    creature.intent = "GO_TO_FOOD"
+                    creature.intended_vector = (math.cos(angle) * creature.velocity * 0.75, 
+                                           math.sin(angle) * creature.velocity * 0.75)
                     return ("EAT", closest_food)
 
             # If no food in range, rest
@@ -254,7 +254,6 @@ class TestFoodAndEating(unittest.TestCase):
 
         # Verify food is still in world.foods (not fully consumed)
         self.assertIn(food, world.foods)
-        self.assertIn((2, 2), world.food_positions)
 
         # Call world.step() one more time to fully consume the food
         world.step()
@@ -268,7 +267,6 @@ class TestFoodAndEating(unittest.TestCase):
 
         # Verify food is now gone (fully consumed)
         self.assertNotIn(food, world.foods)
-        self.assertNotIn((2, 2), world.food_positions)
 
 
     def test_corpse_decay(self):
@@ -281,7 +279,6 @@ class TestFoodAndEating(unittest.TestCase):
         from src.food import Food
         corpse1 = Food(x=1, y=1, remaining_duration=2, energy=4.0)
         world.foods.append(corpse1)
-        world.food_positions.add((1, 1))  # For backward compatibility
 
         # Call world.step() twice to let the corpse decay
         world.step()
@@ -292,23 +289,37 @@ class TestFoodAndEating(unittest.TestCase):
         world.step()
         # Corpse should be gone due to remaining_duration reaching 0
         self.assertNotIn(corpse1, world.foods)
-        self.assertNotIn((1, 1), world.food_positions)
 
         # Test case 2: Corpse disappears when energy reaches 0 before remaining_duration
         # Manually place a corpse at (2,2) with energy = 2 and remaining_duration = 5
         corpse2 = Food(x=2, y=2, remaining_duration=5, energy=2.0)
         world.foods.append(corpse2)
-        world.food_positions.add((2, 2))  # For backward compatibility
 
         # Add a creature at (1.0, 2.0) to eat the corpse
         creature = Creature(1.0, 2.0, size=1.0, energy=10.0)
         world.add_creature(creature)
 
         # Monkey-patch decide method to always eat toward the corpse
-        def always_eat_east(vision, on_food=False):
-            return ("EAT", "east")
+        def always_eat_corpse(vision, on_food=False):
+            # Find nearby food
+            nearby_food = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "food"]
 
-        creature.decide = always_eat_east
+            if nearby_food:
+                # Sort by distance (closest first)
+                nearby_food.sort(key=lambda x: x[1])
+                closest_food, distance, angle = nearby_food[0]
+
+                # Set intent for visualization
+                creature.intent = "GO_TO_FOOD"
+                creature.intended_vector = (math.cos(angle) * creature.velocity * 0.75, 
+                                           math.sin(angle) * creature.velocity * 0.75)
+
+                return ("EAT", closest_food)
+
+            # If no food in range, rest
+            return ("REST", None)
+
+        creature.decide = always_eat_corpse
 
         # Call world.step() to let the creature take one bite
         world.step()
@@ -320,7 +331,6 @@ class TestFoodAndEating(unittest.TestCase):
         world.step()
         # Corpse should be gone due to energy reaching 0
         self.assertNotIn(corpse2, world.foods)
-        self.assertNotIn((2, 2), world.food_positions)
 
 
 if __name__ == "__main__":

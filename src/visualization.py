@@ -56,8 +56,8 @@ class Visualizer:
     def render(self, world: World) -> None:
         """
         Draw the current state of `world`:
-         - Creatures as green circles, radius ∝ creature.size.
-         - Food as red squares/dots at each (x,y) in world.food_positions.
+         - Creatures as green circles with radius = creature.radius.
+         - Food as red circles with radius proportional to remaining_energy/initial_energy.
         After calling render(), call plt.pause() to let the figure update.
         """
         # Clear existing artists:
@@ -69,32 +69,27 @@ class Visualizer:
         self.ax.set_yticks([])
         self.ax.set_facecolor('black')
 
-        # 1) Draw food (if any). Each food point is a red square with size proportional to remaining_energy / size:
+        # 1) Draw food (if any) as red circles with radius proportional to remaining_energy/initial_energy
         if len(world.foods) > 0:
-            food_xs = [f.x + 0.5 for f in world.foods]
-            food_ys = [f.y + 0.5 for f in world.foods]
-            # Scale the food size based on remaining energy
-            # Matplotlib's 's' argument in scatter is area in points^2
-            food_sizes = [(f.size * 25 * (f.remaining_energy / f.energy_value)) for f in world.foods]  # Scale by remaining energy
-
-            # Use red squares with size proportional to remaining energy
-            self.ax.scatter(
-                food_xs,
-                food_ys,
-                marker='s',
-                color='red',
-                s=food_sizes,
-                alpha=0.8,
-                label='Food'
-            )
-
-            # Draw remaining duration and energy information
             for f in world.foods:
+                # Calculate the scaled radius based on remaining energy
+                energy_ratio = f.remaining_energy / f.initial_energy
+                scaled_radius = f.radius * energy_ratio
+
+                # Draw the food as a circle
+                food_circle = plt.Circle(
+                    (f.x, f.y),
+                    radius=scaled_radius,
+                    color='red',
+                    alpha=0.8
+                )
+                self.ax.add_patch(food_circle)
+
                 # Draw remaining duration for non-infinite food
                 if f.remaining_duration > 0:
                     self.ax.text(
-                        f.x + 0.5, 
-                        f.y + 0.3, 
+                        f.x, 
+                        f.y - scaled_radius * 0.5, 
                         f"{f.remaining_duration}", 
                         color='white',
                         fontsize=8,
@@ -105,8 +100,8 @@ class Visualizer:
                 # In debug mode, show remaining energy
                 if self.debug:
                     self.ax.text(
-                        f.x + 0.5,
-                        f.y + 0.7,
+                        f.x,
+                        f.y + scaled_radius * 0.5,
                         f"{f.remaining_energy:.1f}",
                         color='white',
                         fontsize=6,
@@ -114,29 +109,35 @@ class Visualizer:
                         va='center'
                     )
 
-        # 2) Draw creatures as green circles, radius = creature.size:
+        # 2) Draw creatures as green circles with radius = creature.radius
         if len(world.creatures) > 0:
-            creature_xs = [c.x + 0.5 for c in world.creatures]
-            creature_ys = [c.y + 0.5 for c in world.creatures]
-            # Scale the reported size (which might be any float). We want a visible marker size.
-            # Matplotlib's 's' argument in scatter is area in points^2, so we take size*size*50 as a baseline.
-            creature_sizes = [(c.size * 50) for c in world.creatures]
-            self.ax.scatter(
-                creature_xs,
-                creature_ys,
-                marker='o',
-                color='green',
-                s=creature_sizes,
-                edgecolors='white',
-                linewidths=0.5,
-                alpha=0.9,
-                label='Creatures'
-            )
+            for c in world.creatures:
+                # Draw the creature as a circle
+                creature_circle = plt.Circle(
+                    (c.x, c.y),
+                    radius=c.radius,
+                    color='green',
+                    alpha=0.9,
+                    ec='white',
+                    lw=0.5
+                )
+                self.ax.add_patch(creature_circle)
+
+                # Always show energy above the creature
+                self.ax.text(
+                    c.x,
+                    c.y + c.radius + 0.2,  # Position above the creature
+                    f"{c.energy:.1f}",
+                    color='white',
+                    fontsize=8,  # Slightly larger font for better visibility
+                    ha='center',
+                    va='bottom'
+                )
 
             # Draw arrows indicating movement direction for each creature
             for c in world.creatures:
                 # Get the creature's position (center of the circle)
-                cx, cy = c.x + 0.5, c.y + 0.5
+                cx, cy = c.x, c.y
 
                 # Get the intended vector
                 dx, dy = c.intended_vector

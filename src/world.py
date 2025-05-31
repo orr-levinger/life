@@ -1,15 +1,22 @@
 from typing import List, Set, Tuple, Dict, TYPE_CHECKING
 import random
+import math
 
 if TYPE_CHECKING:
     from .creature import Creature
     from .food import Food
 
 class World:
+    # Constants for continuous space
+    DEFAULT_FOOD_SIZE = 1.0
+    DEFAULT_FOOD_ENERGY = 2.0
+    DEFAULT_FOOD_RADIUS = 0.2  # Default radius for food items
+    MIN_SPAWN_DISTANCE = 0.5   # Minimum distance between spawned food and other objects
+
     def __init__(self, width: int, height: int, food_spawn_rate: float):
         """
-        width, height: dimensions of a discrete 2D grid (0 ≤ x < width, 0 ≤ y < height).
-        food_spawn_rate: probability (0.0–1.0) per empty cell per step to spawn food.
+        width, height: dimensions of the continuous space (0 ≤ x < width, 0 ≤ y < height).
+        food_spawn_rate: probability per unit area per step to spawn food.
         """
         self.width = width
         self.height = height
@@ -17,6 +24,7 @@ class World:
         self.creatures: List['Creature'] = []
         self.foods: List['Food'] = []
         # Keep food_positions for backward compatibility with existing code
+        # This will store the integer grid cell coordinates (int(x), int(y))
         self.food_positions: Set[Tuple[int, int]] = set()
 
     def add_creature(self, creature: 'Creature') -> None:
@@ -28,7 +36,7 @@ class World:
         Spawn food in the world based on food_spawn_rate.
 
         If food_spawn_rate is 1.0, spawn food in all empty cells (used in tests).
-        Otherwise, pick K random cells and attempt to place food there.
+        Otherwise, spawn food at random continuous coordinates.
 
         For normal simulation (food_spawn_rate < 0.5), limits the maximum number of food items 
         to prevent screen filling. For test cases (food_spawn_rate >= 0.5), allows unlimited food.
@@ -36,40 +44,41 @@ class World:
         # Import Food here to avoid circular imports
         from .food import Food
 
-        # Default values for spawned food
-        DEFAULT_FOOD_SIZE = 1.0
-        DEFAULT_FOOD_ENERGY = 2.0
-
-        # Special case for tests: if food_spawn_rate is 1.0, spawn food in all empty cells
+        # Special case for tests: if food_spawn_rate is 1.0, spawn food in all empty grid cells
         if self.food_spawn_rate == 1.0:
             # Precompute which grid cells are currently occupied by creatures
             occupied = {(int(c.x), int(c.y)) for c in self.creatures}
-            # Also precompute which cells already have food
-            food_cells = {(f.x, f.y) for f in self.foods}
+            # Also precompute which cells already have food (using integer coordinates)
+            food_cells = {(int(f.x), int(f.y)) for f in self.foods}
 
             # Add food to all empty cells
             for x in range(self.width):
                 for y in range(self.height):
                     cell = (x, y)
                     if cell not in food_cells and cell not in occupied:
-                        # Create a new Food object with infinite duration
+                        # Create a new Food object with random continuous coordinates within the cell
+                        # This ensures food is not exactly at grid points but has continuous position
+                        fx = x + random.random()  # Random position within [x, x+1)
+                        fy = y + random.random()  # Random position within [y, y+1)
+
                         new_food = Food(
-                            x=x,
-                            y=y,
-                            size=DEFAULT_FOOD_SIZE,
-                            energy_value=DEFAULT_FOOD_ENERGY,
-                            remaining_duration=-1  # -1 means infinite duration
+                            x=fx,
+                            y=fy,
+                            size=self.DEFAULT_FOOD_SIZE,
+                            energy_value=self.DEFAULT_FOOD_ENERGY,
+                            remaining_duration=-1,  # -1 means infinite duration
+                            radius=self.DEFAULT_FOOD_RADIUS
                         )
                         self.foods.append(new_food)
-                        # Also update food_positions for backward compatibility
-                        self.food_positions.add(cell)
+                        # Also update food_positions for backward compatibility (using integer coordinates)
+                        self.food_positions.add((int(fx), int(fy)))
             return
 
         # Normal case: calculate number of food items to try spawning
+        # For continuous space, we scale by area rather than cell count
         K = int(self.width * self.height * self.food_spawn_rate)
 
         # Ensure at least one food spawn attempt for very low rates
-        # This guarantees some food will spawn even with rates like 0.001
         if 0 < self.food_spawn_rate < 0.005 and K == 0:
             K = 1
 
@@ -85,34 +94,57 @@ class World:
             # Limit K to avoid excessive attempts when we're close to MAX_FOOD
             K = min(K, MAX_FOOD - len(self.foods))
 
-        # Precompute which grid cells are currently occupied:
-        occupied = {(int(c.x), int(c.y)) for c in self.creatures}
-        # Also precompute which cells already have food
-        food_cells = {(f.x, f.y) for f in self.foods}
+        # Helper function to check if a position is valid for new food
+        def is_valid_position(x, y, radius):
+            # Check if within world bounds
+            if x - radius < 0 or x + radius > self.width or y - radius < 0 or y + radius > self.height:
+                return False
 
+            # Check for overlap with creatures
+            for creature in self.creatures:
+                dx = x - creature.x
+                dy = y - creature.y
+                distance = math.sqrt(dx*dx + dy*dy)
+                if distance < (radius + creature.radius + self.MIN_SPAWN_DISTANCE):
+                    return False
+
+            # Check for overlap with existing food
+            for food in self.foods:
+                dx = x - food.x
+                dy = y - food.y
+                distance = math.sqrt(dx*dx + dy*dy)
+                if distance < (radius + food.radius + self.MIN_SPAWN_DISTANCE):
+                    return False
+
+            return True
+
+        # Try to spawn K food items at random continuous coordinates
         for _ in range(K):
-            x = random.randint(0, self.width - 1)
-            y = random.randint(0, self.height - 1)
-            cell = (x, y)
-            # Only place new food if this cell is empty:
-            if cell in food_cells or cell in occupied:
+            # Generate random continuous coordinates
+            x = random.uniform(self.DEFAULT_FOOD_RADIUS, self.width - self.DEFAULT_FOOD_RADIUS)
+            y = random.uniform(self.DEFAULT_FOOD_RADIUS, self.height - self.DEFAULT_FOOD_RADIUS)
+
+            # Check if position is valid (no overlap with creatures or other food)
+            if not is_valid_position(x, y, self.DEFAULT_FOOD_RADIUS):
                 continue
-            # Otherwise, spawn food here:
+
+            # Create new food at valid position
             new_food = Food(
                 x=x,
                 y=y,
-                size=DEFAULT_FOOD_SIZE,
-                energy_value=DEFAULT_FOOD_ENERGY,
-                remaining_duration=-1  # -1 means infinite duration
+                size=self.DEFAULT_FOOD_SIZE,
+                energy_value=self.DEFAULT_FOOD_ENERGY,
+                remaining_duration=-1,  # -1 means infinite duration
+                radius=self.DEFAULT_FOOD_RADIUS
             )
             self.foods.append(new_food)
             # Also update food_positions for backward compatibility
-            self.food_positions.add(cell)
+            self.food_positions.add((int(x), int(y)))
 
     def step(self) -> None:
         """
         Advance the simulation by one time step:
-        1. Call spawn_food() to randomly place new food items on empty grid cells.
+        1. Call spawn_food() to randomly place new food items in continuous space.
         2. Gather all creatures' decisions.
         3. Process all creatures in phases:
            a. Apply all ATTACK actions first (kills generate corpses → new Food objects)
@@ -127,12 +159,15 @@ class World:
         # 2) Gather all creatures' decisions
         decisions = []
         for creature in list(self.creatures):
-            # Get vision reading
+            # Get proximity reading
             vision = creature.sensors[0].get_reading(creature, self)
 
-            # Check if creature is on a food cell before deciding action
-            creature_cell = (int(creature.x), int(creature.y))
-            on_food = any(f.x == creature_cell[0] and f.y == creature_cell[1] for f in self.foods)
+            # Check if creature is overlapping with any food
+            on_food = False
+            for food in self.foods:
+                if food.is_overlapping(creature.x, creature.y, creature.radius):
+                    on_food = True
+                    break
 
             # Decide action
             action = creature.decide(vision, on_food)
@@ -158,6 +193,8 @@ class World:
 
         # 5) Decay all Food objects and remove expired ones
         new_foods = []
+        new_food_positions = set()
+
         for food in self.foods:
             # Decay the food
             food.decay()
@@ -165,12 +202,11 @@ class World:
             # Keep it if not expired by duration and not fully consumed
             if not food.is_expired() and food.remaining_energy > 0:
                 new_foods.append(food)
-            else:
-                # Remove from food_positions for backward compatibility
-                if (food.x, food.y) in self.food_positions:
-                    self.food_positions.remove((food.x, food.y))
+                # Update food_positions for backward compatibility
+                new_food_positions.add((int(food.x), int(food.y)))
 
         self.foods = new_foods
+        self.food_positions = new_food_positions
 
 # Import at the end to avoid circular imports
 from .creature import Creature

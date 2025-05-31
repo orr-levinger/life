@@ -44,8 +44,17 @@ class TestContinuousMovement(unittest.TestCase):
         For this test, we override the prey's decide method to flee instead of attack.
         """
         w = World(10, 10, food_spawn_rate=0.0)
+
+        # Create creatures with VisionSensor explicitly for this test
+        from src.sensors import VisionSensor
+
         predator = Creature(2.0, 3.0, size=1.0, energy=5.0)
         prey = Creature(2.0, 2.0, size=1.0, energy=5.0)
+
+        # Replace the default ProximitySensor with VisionSensor for this test
+        predator.sensors = (VisionSensor(),)
+        prey.sensors = (VisionSensor(),)
+
         w.add_creature(predator)
         w.add_creature(prey)
 
@@ -143,7 +152,8 @@ class TestContinuousMovement(unittest.TestCase):
         (0.5 + (-√2/2), 0.5 + (-√2/2)) clamped to (0,0). Energy drops by 1.0.
         """
         w = World(10, 10, food_spawn_rate=0.0)
-        c = Creature(0.5, 0.5, size=1.0, energy=5.0)
+        # Set radius to 0.0 explicitly for this test to ensure clamping to 0.0
+        c = Creature(0.5, 0.5, size=1.0, energy=5.0, radius=0.0)
         w.add_creature(c)
 
         def go_sw(vision, on_food=False):

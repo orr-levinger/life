@@ -25,7 +25,7 @@ class TestContinuousMovement(unittest.TestCase):
         w.add_creature(c)
 
         # Force movement twice max
-        def go_too_fast(vision):
+        def go_too_fast(vision, on_food=False):
             return ("MOVE", (2.0, 0.0))
         c.decide = go_too_fast
 
@@ -47,7 +47,7 @@ class TestContinuousMovement(unittest.TestCase):
         w.add_creature(prey)
 
         # Freeze predator so it doesn't move during the step
-        def always_rest(vision):
+        def always_rest(vision, on_food=False):
             return ("REST", None)
         predator.decide = always_rest
 
@@ -124,7 +124,7 @@ class TestContinuousMovement(unittest.TestCase):
         c = Creature(0.5, 0.5, size=1.0, energy=5.0)
         w.add_creature(c)
 
-        def go_sw(vision):
+        def go_sw(vision, on_food=False):
             return ("MOVE", (-1.0, -1.0))
         c.decide = go_sw
 

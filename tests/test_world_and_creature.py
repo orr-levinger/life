@@ -29,7 +29,7 @@ class TestWorldAndCreature(unittest.TestCase):
         world.add_creature(c)
 
         # Override decide to always return REST
-        def always_rest(vision):
+        def always_rest(vision, on_food=False):
             return ("REST", None)
         c.decide = always_rest
 
@@ -43,7 +43,7 @@ class TestWorldAndCreature(unittest.TestCase):
         world.add_creature(c)
 
         # Override decide to always return REST
-        def always_rest(vision):
+        def always_rest(vision, on_food=False):
             return ("REST", None)
         c.decide = always_rest
 

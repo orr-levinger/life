@@ -1,8 +1,9 @@
-from typing import List, Set, Tuple, TYPE_CHECKING
+from typing import List, Set, Tuple, Dict, TYPE_CHECKING
 import random
 
 if TYPE_CHECKING:
     from .creature import Creature
+    from .food import Food
 
 class World:
     def __init__(self, width: int, height: int, food_spawn_rate: float):
@@ -14,6 +15,8 @@ class World:
         self.height = height
         self.food_spawn_rate = food_spawn_rate
         self.creatures: List['Creature'] = []
+        self.foods: List['Food'] = []
+        # Keep food_positions for backward compatibility with existing code
         self.food_positions: Set[Tuple[int, int]] = set()
 
     def add_creature(self, creature: 'Creature') -> None:

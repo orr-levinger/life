@@ -78,7 +78,7 @@ class World:
         # Apply food limit only for normal simulation (not for tests with high spawn rates)
         if self.food_spawn_rate < 0.5:
             # Maximum number of food items allowed (fixed at 20)
-            MAX_FOOD = 20
+            MAX_FOOD = 100
 
             # If we're already at or above the maximum, don't spawn more food
             if len(self.foods) >= MAX_FOOD:

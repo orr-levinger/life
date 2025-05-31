@@ -195,9 +195,18 @@ class World:
         new_foods = []
         new_food_positions = set()
 
+        # Get the current food positions before decay
+        # This is used to identify which foods were created in this step
+        current_food_positions = {(int(f.x), int(f.y)) for f in self.foods}
+
+        # Identify foods created in this step (those that don't exist in food_positions)
+        new_food_positions_this_step = current_food_positions - self.food_positions
+
         for food in self.foods:
-            # Decay the food
-            food.decay()
+            # Skip decay for foods created in this step
+            if (int(food.x), int(food.y)) not in new_food_positions_this_step:
+                # Decay the food
+                food.decay()
 
             # Keep it if not expired by duration and not fully consumed
             if not food.is_expired() and food.remaining_energy > 0:

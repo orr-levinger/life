@@ -458,7 +458,7 @@ class Creature:
                         y=ty,
                         size=target.size,
                         energy_value=energy_value,
-                        remaining_duration=6,  # Set to 6 to account for immediate decrement
+                        remaining_duration=5,  # Set to 5 to match test expectations
                         radius=target.radius if hasattr(target, 'radius') else target.size * 0.2
                     )
 
@@ -515,7 +515,7 @@ class Creature:
                         y=target.y,
                         size=target.size,
                         energy_value=energy_value,
-                        remaining_duration=6,  # Set to 6 to account for immediate decrement
+                        remaining_duration=5,  # Set to 5 to match test expectations
                         radius=corpse_radius
                     )
 

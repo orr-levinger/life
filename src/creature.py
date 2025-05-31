@@ -126,18 +126,20 @@ class Creature:
             self.energy -= actual_dist
 
         elif act_type == "EAT" and param is not None:
-            # Move into adjacent food cell at max speed
+            # Move into adjacent food cell at a fixed speed (1.0) regardless of creature size
+            # This ensures all creatures can eat food regardless of their size
             direction = param
             dx, dy = 0.0, 0.0
+            fixed_speed = 1.0  # Fixed speed for eating, independent of creature size
 
             if direction == "north":
-                dx, dy = 0.0, self.velocity
+                dx, dy = 0.0, fixed_speed
             elif direction == "south":
-                dx, dy = 0.0, -self.velocity
+                dx, dy = 0.0, -fixed_speed
             elif direction == "east":
-                dx, dy = self.velocity, 0.0
+                dx, dy = fixed_speed, 0.0
             elif direction == "west":
-                dx, dy = -self.velocity, 0.0
+                dx, dy = -fixed_speed, 0.0
 
             # Compute new coordinates, then clamp to [0, width], [0, height]
             new_x = self.x + dx
@@ -153,6 +155,7 @@ class Creature:
         elif act_type == "EAT_AT_CURRENT":
             # Eat food in current cell
             # Deduct a small "eat-in-place" cost
+            # The energy bonus will be applied in world.step()
             self.energy -= 0.2
 
         else:  # "REST"

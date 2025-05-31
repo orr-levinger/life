@@ -71,13 +71,13 @@ class Visualizer:
         if len(world.food_positions) > 0:
             food_xs = [pos[0] + 0.5 for pos in world.food_positions]
             food_ys = [pos[1] + 0.5 for pos in world.food_positions]
-            # Use red squares; size=100 is arbitrary (feel free to tweak)
+            # Use red squares; smaller size (25) to make food appear smaller
             self.ax.scatter(
                 food_xs,
                 food_ys,
                 marker='s',
                 color='red',
-                s=100,
+                s=25,
                 alpha=0.8,
                 label='Food'
             )

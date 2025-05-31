@@ -22,7 +22,7 @@ def main() -> None:
     WIDTH, HEIGHT = 30, 30
     FOOD_RATE = 0.01          # Reduced food spawn rate to prevent screen filling
     INITIAL_CREATURES = 30     # Start with 10 creatures
-    NUM_STEPS = 10000            # Run 100 steps for demonstration
+    NUM_STEPS = 1000            # Run 100 steps for demonstration
     PAUSE_TIME = 0.01           # seconds to pause between frames
 
     # 1) Create the world

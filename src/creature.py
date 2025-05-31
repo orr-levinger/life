@@ -210,8 +210,11 @@ class Creature:
             # Calculate attack range based on radii
             attack_range = (self.radius + closest_creature.radius) * self.ATTACK_RANGE_FACTOR
 
-            # If within attack range, attack (but not if it's a direct child or parent)
-            if distance <= attack_range and closest_creature.id not in self.children_ids and closest_creature.id != self.parent_id:
+            # If within attack range, attack (but not if it's a direct child, parent, or sibling)
+            if (distance <= attack_range and 
+                closest_creature.id not in self.children_ids and 
+                closest_creature.id != self.parent_id and
+                not (self.parent_id is not None and closest_creature.parent_id is not None and self.parent_id == closest_creature.parent_id)):
                 # Set speed to maximum for attacking
                 self.current_speed = self.velocity
                 self.intent = "ATTACK"

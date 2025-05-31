@@ -20,7 +20,7 @@ else:
 def main() -> None:
     # Configuration for Stage 1.5
     WIDTH, HEIGHT = 20, 20
-    FOOD_RATE = 0.0            # No food spawns in Stage 1
+    FOOD_RATE = 5.0            # No food spawns in Stage 1
     INITIAL_CREATURES = 10     # Start with 10 creatures
     NUM_STEPS = 100            # Run 100 steps for demonstration
     PAUSE_TIME = 0.1           # seconds to pause between frames
@@ -33,7 +33,7 @@ def main() -> None:
         x = random.randint(0, WIDTH - 1)
         y = random.randint(0, HEIGHT - 1)
         size = random.uniform(0.5, 2.0)
-        energy = random.uniform(5.0, 15.0)
+        energy = random.uniform(50.0, 150.0)
         # IMPLEMENT: no need to compute velocity here; Creature.__init__ will do it
         # velocity = 1.0 / size
         creature = Creature(x, y, size, energy)

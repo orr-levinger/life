@@ -107,9 +107,11 @@ class Creature:
             # Compute new coordinates, then clamp to [0, width], [0, height]
             new_x = self.x + dx
             new_y = self.y + dy
-            # Clamp within world bounds:
-            self.x = min(max(new_x, 0.0), world.width)
-            self.y = min(max(new_y, 0.0), world.height)
+            # Clamp within world bounds, accounting for creature size and visualization offset:
+            # The visualization adds 0.5 to center creatures in grid cells, so we need to adjust the bounds
+            # to ensure creatures stay fully within the screen
+            self.x = min(max(new_x, 0.0), world.width - 1.0)
+            self.y = min(max(new_y, 0.0), world.height - 1.0)
 
             # Deduct energy equal to distance moved
             self.energy -= actual_dist

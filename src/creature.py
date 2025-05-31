@@ -4,18 +4,23 @@ if TYPE_CHECKING:
     from .world import World
 
 class Creature:
-    def __init__(self, x: int, y: int, size: float, energy: float, velocity: float):
+    def __init__(self, x: int, y: int, size: float, energy: float, velocity: float = None):
         """
         x, y: initial grid coordinates (integers).
         size: determines relative strength (unused in Stage 1) and relates inversely to velocity.
         energy: when ≤ 0, the creature "dies" and is removed by World.step().
         velocity: number of grid cells per step; bigger creatures → smaller velocity (by convention).
+                 If None, computed as 1.0 / size.
         """
         self.x = x
         self.y = y
         self.size = size
         self.energy = energy
-        self.velocity = velocity
+        # IMPLEMENT: compute velocity if not provided
+        if velocity is None:
+            self.velocity = 1.0 / size
+        else:
+            self.velocity = velocity
         # Placeholder for a future NeuralNetwork model; remains None this stage
         self.brain = None
 

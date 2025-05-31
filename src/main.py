@@ -34,8 +34,9 @@ def main() -> None:
         y = random.randint(0, HEIGHT - 1)
         size = random.uniform(0.5, 2.0)
         energy = random.uniform(5.0, 15.0)
-        velocity = 1.0 / size   # Example: bigger creatures move slower
-        creature = Creature(x, y, size, energy, velocity)
+        # IMPLEMENT: no need to compute velocity here; Creature.__init__ will do it
+        # velocity = 1.0 / size
+        creature = Creature(x, y, size, energy)
         world.add_creature(creature)
 
     # 3) Create the Visualizer

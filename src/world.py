@@ -23,9 +23,6 @@ class World:
         self.food_spawn_rate = food_spawn_rate
         self.creatures: List['Creature'] = []
         self.foods: List['Food'] = []
-        # Keep food_positions for backward compatibility with existing code
-        # This will store the integer grid cell coordinates (int(x), int(y))
-        self.food_positions: Set[Tuple[int, int]] = set()
 
     def add_creature(self, creature: 'Creature') -> None:
         """Add a Creature instance into the world's creature list."""
@@ -70,8 +67,6 @@ class World:
                             radius=self.DEFAULT_FOOD_RADIUS
                         )
                         self.foods.append(new_food)
-                        # Also update food_positions for backward compatibility (using integer coordinates)
-                        self.food_positions.add((int(fx), int(fy)))
             return
 
         # Normal case: calculate number of food items to try spawning
@@ -138,8 +133,6 @@ class World:
                 radius=self.DEFAULT_FOOD_RADIUS
             )
             self.foods.append(new_food)
-            # Also update food_positions for backward compatibility
-            self.food_positions.add((int(x), int(y)))
 
     def step(self) -> None:
         """
@@ -193,29 +186,23 @@ class World:
 
         # 5) Decay all Food objects and remove expired ones
         new_foods = []
-        new_food_positions = set()
 
-        # Get the current food positions before decay
-        # This is used to identify which foods were created in this step
-        current_food_positions = {(int(f.x), int(f.y)) for f in self.foods}
-
-        # Identify foods created in this step (those that don't exist in food_positions)
-        new_food_positions_this_step = current_food_positions - self.food_positions
+        # Get the foods created in this step
+        foods_created_this_step = set(id(food) for food in self.foods)
 
         for food in self.foods:
             # Skip decay for foods created in this step
-            if (int(food.x), int(food.y)) not in new_food_positions_this_step:
+            if id(food) in foods_created_this_step:
+                # Keep the food without decaying it
+                new_foods.append(food)
+            else:
                 # Decay the food
                 food.decay()
-
-            # Keep it if not expired by duration and not fully consumed
-            if not food.is_expired() and food.remaining_energy > 0:
-                new_foods.append(food)
-                # Update food_positions for backward compatibility
-                new_food_positions.add((int(food.x), int(food.y)))
+                # Keep it if not expired by duration and not fully consumed
+                if not food.is_expired() and food.remaining_energy > 0:
+                    new_foods.append(food)
 
         self.foods = new_foods
-        self.food_positions = new_food_positions
 
 # Import at the end to avoid circular imports
 from .creature import Creature

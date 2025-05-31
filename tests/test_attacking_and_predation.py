@@ -3,13 +3,14 @@
 import sys, os
 import unittest
 import random
+import math
 
 # Add the parent directory to the path so we can import the modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.world import World
 from src.creature import Creature
 from src.food import Food
-from src.sensors import VisionSensor
+from src.sensors import ProximitySensor
 
 class TestAttackingAndPredation(unittest.TestCase):
     def test_successful_attack_leaves_corpse(self):
@@ -18,11 +19,11 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         Create two creatures: A at (2,2) with enough energy to strike, and B at (2,3) with energy 4.0.
         Set A.attack_damage = 5.0, A.attack_cost = 1.0, A.attack_bonus = 2.0.
-        Monkey-patch A.decide() to always return ("ATTACK","north").
+        Monkey-patch A.decide() to always attack B.
         Monkey-patch B.decide() to always rest.
         Call world.step().
         Verify that B's energy goes from 4.0 → 4.0 − 5.0 = −1.0 (dead).
-        Confirm that a new Food object appears at (2,3) with energy_value = 2 × 4.0 = 8.0.
+        Confirm that a new Food object appears at B's position with energy_value = 2 × 4.0 = 8.0.
         Confirm that A.energy changed by −1.0 (attack cost) + 2.0 (attack bonus) = +1.0 net.
         Confirm that B is removed from world.creatures.
         """
@@ -38,13 +39,29 @@ class TestAttackingAndPredation(unittest.TestCase):
         world.add_creature(attacker)
 
         # Monkey-patch decide methods
-        def always_attack_north(vision, on_food=False):
-            return ("ATTACK", "north")
+        def always_attack_target(vision, on_food=False):
+            # Find nearby creatures
+            nearby_creatures = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "creature"]
+
+            if nearby_creatures:
+                # Sort by distance (closest first)
+                nearby_creatures.sort(key=lambda x: x[1])
+                closest_creature, distance, angle = nearby_creatures[0]
+
+                # Set intent for visualization
+                attacker.intent = "ATTACK"
+                attacker.intended_vector = (math.cos(angle) * attacker.velocity, 
+                                           math.sin(angle) * attacker.velocity)
+
+                return ("ATTACK", closest_creature)
+
+            # If no creatures nearby, rest
+            return ("REST", None)
 
         def always_rest(vision, on_food=False):
             return ("REST", None)
 
-        attacker.decide = always_attack_north
+        attacker.decide = always_attack_target
         target.decide = always_rest
 
         # Initial energy values
@@ -64,8 +81,8 @@ class TestAttackingAndPredation(unittest.TestCase):
         # Verify a corpse was created at target's position
         self.assertEqual(len(world.foods), 1)
         corpse = world.foods[0]
-        self.assertEqual(corpse.x, 2)
-        self.assertEqual(corpse.y, 3)
+        self.assertAlmostEqual(corpse.x, 2.0, places=5)
+        self.assertAlmostEqual(corpse.y, 3.0, places=5)
 
         # Verify corpse has correct energy_value (2 * damage_dealt)
         # damage_dealt = min(target_initial_energy, attacker.attack_damage) = min(4.0, 5.0) = 4.0
@@ -80,8 +97,8 @@ class TestAttackingAndPredation(unittest.TestCase):
         """
         Test that a missed attack costs the attacker energy but produces no corpse.
 
-        Place a single creature A at (2,2) with energy 10.0. No one at (2,3).
-        Monkey-patch A.decide() to ("ATTACK","north").
+        Place a single creature A at (2,2) with energy 10.0. No target in attack range.
+        Monkey-patch A.decide() to attack a non-existent target.
         Call world.step().
         Confirm that A.energy decreases by attack_cost (e.g. 1.0).
         Confirm that no new Food object is created.
@@ -96,11 +113,18 @@ class TestAttackingAndPredation(unittest.TestCase):
         # Add creature to the world
         world.add_creature(attacker)
 
-        # Monkey-patch decide method
-        def always_attack_north(vision, on_food=False):
-            return ("ATTACK", "north")
+        # Create a target that's not in the world (for the attack to miss)
+        target = Creature(10.0, 10.0, size=1.0, energy=4.0)  # Far away, not in world
 
-        attacker.decide = always_attack_north
+        # Monkey-patch decide method to always attack the non-existent target
+        def always_attack_missing_target(vision, on_food=False):
+            # Set intent for visualization
+            attacker.intent = "ATTACK"
+            attacker.intended_vector = (1.0, 0.0)  # Arbitrary direction
+
+            return ("ATTACK", target)
+
+        attacker.decide = always_attack_missing_target
 
         # Initial energy value
         attacker_initial_energy = attacker.energy
@@ -123,7 +147,7 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         Create world 5×5, two creatures A and B adjacent. Let B have energy small enough to die in one hit.
         Let A kill B in step 1.
-        Confirm a corpse Food appears at (2,3) with remaining_duration = D (e.g. D = int(B.size * FACTOR)).
+        Confirm a corpse Food appears at B's position with remaining_duration = D.
         Advance D additional steps by calling world.step() in a loop without any creatures attacking that corpse.
         After exactly D calls to world.step(), assert that the corpse no longer exists in world.foods.
         If you call one more world.step(), confirm the corpse is still gone and does not re-appear.
@@ -140,13 +164,29 @@ class TestAttackingAndPredation(unittest.TestCase):
         world.add_creature(attacker)
 
         # Monkey-patch decide methods
-        def always_attack_north(vision, on_food=False):
-            return ("ATTACK", "north")
+        def always_attack_target(vision, on_food=False):
+            # Find nearby creatures
+            nearby_creatures = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "creature"]
+
+            if nearby_creatures:
+                # Sort by distance (closest first)
+                nearby_creatures.sort(key=lambda x: x[1])
+                closest_creature, distance, angle = nearby_creatures[0]
+
+                # Set intent for visualization
+                attacker.intent = "ATTACK"
+                attacker.intended_vector = (math.cos(angle) * attacker.velocity, 
+                                           math.sin(angle) * attacker.velocity)
+
+                return ("ATTACK", closest_creature)
+
+            # If no creatures nearby, rest
+            return ("REST", None)
 
         def always_rest(vision, on_food=False):
             return ("REST", None)
 
-        attacker.decide = always_attack_north
+        attacker.decide = always_attack_target
         target.decide = always_rest
 
         # Call world.step() to kill the target
@@ -190,7 +230,7 @@ class TestAttackingAndPredation(unittest.TestCase):
         A attacks and kills B in step 1; corpse appears with energy_value = 8.0. A's energy is now 11.0.
         In step 2, monkey-patch A's decide() so that it always returns ("MOVE", (0.0, +A.velocity)) (i.e. move north).
         Call world.step().
-        Confirm that A's new position is (2.0, 3.0) (the corpse's cell).
+        Confirm that A's new position is (2.0, 3.0) (the corpse's position).
 
         With incremental eating, the creature needs to take multiple bites to consume the entire corpse.
         After moving onto the corpse, the creature will call EAT_AT_CURRENT to take bites.
@@ -210,13 +250,29 @@ class TestAttackingAndPredation(unittest.TestCase):
         world.add_creature(attacker)
 
         # Monkey-patch decide methods for step 1
-        def always_attack_north(vision, on_food=False):
-            return ("ATTACK", "north")
+        def always_attack_target(vision, on_food=False):
+            # Find nearby creatures
+            nearby_creatures = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "creature"]
+
+            if nearby_creatures:
+                # Sort by distance (closest first)
+                nearby_creatures.sort(key=lambda x: x[1])
+                closest_creature, distance, angle = nearby_creatures[0]
+
+                # Set intent for visualization
+                attacker.intent = "ATTACK"
+                attacker.intended_vector = (math.cos(angle) * attacker.velocity, 
+                                           math.sin(angle) * attacker.velocity)
+
+                return ("ATTACK", closest_creature)
+
+            # If no creatures nearby, rest
+            return ("REST", None)
 
         def always_rest(vision, on_food=False):
             return ("REST", None)
 
-        attacker.decide = always_attack_north
+        attacker.decide = always_attack_target
         target.decide = always_rest
 
         # Call world.step() to kill the target
@@ -233,6 +289,10 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         # Monkey-patch attacker to move north in step 2
         def move_north(vision, on_food=False):
+            # Set intent for visualization
+            attacker.intent = "GO_TO_FOOD"
+            attacker.intended_vector = (0.0, attacker.velocity)
+
             return ("MOVE", (0.0, attacker.velocity))
 
         attacker.decide = move_north
@@ -250,6 +310,10 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         # Now monkey-patch attacker to eat at current position
         def eat_at_current(vision, on_food=False):
+            # Set intent for visualization
+            attacker.intent = "GO_TO_FOOD"
+            attacker.intended_vector = (0.0, 0.0)
+
             return ("EAT_AT_CURRENT", None)
 
         attacker.decide = eat_at_current
@@ -270,27 +334,25 @@ class TestAttackingAndPredation(unittest.TestCase):
         # Verify the corpse is gone after all bites
         self.assertEqual(len(world.foods), 0)
 
-        # Verify attacker's final energy is 14.0 (10.0 + 4.0)
-        # The corpse only provides 4 energy units, not 8, due to how the test is set up
-        self.assertAlmostEqual(attacker.energy, 14.0, places=5)
+        # Verify attacker's final energy is 18.0 (10.0 + 8.0)
+        self.assertAlmostEqual(attacker.energy, 18.0, places=5)
 
     def test_mixed_interactions(self):
         """
         Test mixed interactions between food and predators.
 
-        Create a world with one spawned food at (4,4) (set food_spawn_rate=0 and manually add a Food object).
-        Place predator A at (2,2), herbivore B at (3,2) with some food nearby.
+        Create a world with one spawned food at (4,4).
+        Place predator A at (2,2), herbivore B at (3,2).
         In step N, check that B will either go for the spawned food or get attacked by A 
         based on the decision logic's priority ("ATTACK" supersedes "EAT").
-        Confirm that if B is adjacent to A, it never "eats" the spawned food—instead it gets attacked first.
+        Confirm that if B is within attack range of A, it gets attacked first.
         """
         # Create a world
         world = World(5, 5, food_spawn_rate=0.0)
 
         # Create a spawned food at (4,4)
-        spawned_food = Food(x=4, y=4, size=1.0, energy_value=2.0, remaining_duration=-1)
+        spawned_food = Food(x=4.0, y=4.0, size=1.0, energy_value=2.0, remaining_duration=-1)
         world.foods.append(spawned_food)
-        world.food_positions.add((4, 4))  # For backward compatibility
 
         # Create predator (A) and herbivore (B)
         predator = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
@@ -300,17 +362,88 @@ class TestAttackingAndPredation(unittest.TestCase):
         world.add_creature(herbivore)
         world.add_creature(predator)
 
-        # Monkey-patch predator to always attack east
-        def always_attack_east(vision, on_food=False):
-            return ("ATTACK", "east")
+        # Monkey-patch predator to always attack nearby creatures
+        def predator_attack_nearby(vision, on_food=False):
+            # Find nearby creatures
+            nearby_creatures = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "creature"]
 
-        predator.decide = always_attack_east
+            if nearby_creatures:
+                # Sort by distance (closest first)
+                nearby_creatures.sort(key=lambda x: x[1])
+                closest_creature, distance, angle = nearby_creatures[0]
 
-        # Monkey-patch herbivore to always rest
-        def always_rest(vision, on_food=False):
+                # Calculate attack range based on radii
+                attack_range = (predator.radius + closest_creature.radius) * predator.ATTACK_RANGE_FACTOR
+
+                # If within attack range, attack
+                if distance <= attack_range:
+                    # Set intent for visualization
+                    predator.intent = "ATTACK"
+                    predator.intended_vector = (math.cos(angle) * predator.velocity, 
+                                               math.sin(angle) * predator.velocity)
+
+                    return ("ATTACK", closest_creature)
+
+            # If no creatures in attack range, rest
             return ("REST", None)
 
-        herbivore.decide = always_rest
+        # Monkey-patch herbivore to go for food if not in danger
+        def herbivore_eat_or_flee(vision, on_food=False):
+            # Find nearby creatures (potential threats)
+            nearby_creatures = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "creature"]
+
+            # Find nearby food
+            nearby_food = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "food"]
+
+            # If there are creatures nearby, flee
+            if nearby_creatures:
+                # Sort by distance (closest first)
+                nearby_creatures.sort(key=lambda x: x[1])
+                closest_creature, distance, angle = nearby_creatures[0]
+
+                # Calculate flee direction (opposite of creature)
+                flee_angle = angle + math.pi
+
+                # Set intent for visualization
+                herbivore.intent = "RUN_AWAY"
+                herbivore.intended_vector = (math.cos(flee_angle) * herbivore.velocity, 
+                                            math.sin(flee_angle) * herbivore.velocity)
+
+                return ("FLEE", (math.cos(flee_angle) * herbivore.velocity, 
+                                math.sin(flee_angle) * herbivore.velocity))
+
+            # If there's food nearby, go for it
+            if nearby_food:
+                # Sort by distance (closest first)
+                nearby_food.sort(key=lambda x: x[1])
+                closest_food, distance, angle = nearby_food[0]
+
+                # Calculate eat range based on radii
+                eat_range = (herbivore.radius + closest_food.radius) * herbivore.EAT_RANGE_FACTOR
+
+                # If within eat range, eat
+                if distance <= eat_range:
+                    # Set intent for visualization
+                    herbivore.intent = "GO_TO_FOOD"
+                    herbivore.intended_vector = (math.cos(angle) * herbivore.velocity * 0.75, 
+                                               math.sin(angle) * herbivore.velocity * 0.75)
+
+                    return ("EAT", closest_food)
+
+                # If not in eat range, move toward the food
+                # Set intent for visualization
+                herbivore.intent = "GO_TO_FOOD"
+                herbivore.intended_vector = (math.cos(angle) * herbivore.velocity * 0.75, 
+                                           math.sin(angle) * herbivore.velocity * 0.75)
+
+                return ("MOVE", (math.cos(angle) * herbivore.velocity * 0.75, 
+                                math.sin(angle) * herbivore.velocity * 0.75))
+
+            # If nothing interesting, rest
+            return ("REST", None)
+
+        predator.decide = predator_attack_nearby
+        herbivore.decide = herbivore_eat_or_flee
 
         # Call world.step()
         world.step()
@@ -321,10 +454,10 @@ class TestAttackingAndPredation(unittest.TestCase):
         # Verify a corpse was created at herbivore's position
         self.assertEqual(len(world.foods), 2)  # Original food + corpse
 
-        # Find the corpse (the one at (3,2))
+        # Find the corpse (the one at herbivore's position)
         corpse = None
         for food in world.foods:
-            if food.x == 3 and food.y == 2:
+            if math.isclose(food.x, 3.0, abs_tol=0.01) and math.isclose(food.y, 2.0, abs_tol=0.01):
                 corpse = food
                 break
 
@@ -332,7 +465,6 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         # Verify corpse has correct energy_value
         expected_energy = 2.0 * min(4.0, predator.attack_damage)  # 2 * min(4.0, 5.0) = 8.0
-        expected_energy = round(expected_energy, 1)  # Round to match the implementation
         self.assertAlmostEqual(corpse.energy_value, expected_energy, places=5)
 
 if __name__ == "__main__":

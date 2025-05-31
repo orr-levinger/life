@@ -177,7 +177,7 @@ class Visualizer:
         self.ax.set_title(
             f"World: {len(world.creatures)} creatures, {len(world.foods)} food",
             color='white',
-            pad=10
+            pad=0
         )
 
         # Finally, draw the canvas immediately:

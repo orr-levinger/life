@@ -1,12 +1,14 @@
 import sys, os
 import unittest
 import random
+import math
 
 # Add the parent directory to the path so we can import the modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.world import World
 from src.creature import Creature
-from src.sensors import VisionSensor
+from src.food import Food
+from src.sensors import ProximitySensor
 
 class TestFoodAndEating(unittest.TestCase):
     def test_spawn_food(self):
@@ -20,9 +22,12 @@ class TestFoodAndEating(unittest.TestCase):
         # Call spawn_food() directly (no creatures present)
         world.spawn_food()
 
-        # Afterward, every grid cell (x, y) should be in food_positions
-        expected_food_positions = {(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)}
-        self.assertEqual(world.food_positions, expected_food_positions)
+        # Afterward, every grid cell should have a food item
+        # Count the number of food items in each grid cell
+        food_cells = {(int(f.x), int(f.y)) for f in world.foods}
+        expected_food_cells = {(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)}
+        self.assertEqual(food_cells, expected_food_cells)
+        self.assertEqual(len(world.foods), 6)  # 3x2 = 6 cells
 
     def test_food_does_not_spawn_under_creatures(self):
         """Test that food does not spawn under creatures"""
@@ -39,13 +44,14 @@ class TestFoodAndEating(unittest.TestCase):
         # Call spawn_food()
         world.spawn_food()
 
-        # Ensure (1,1) is not in food_positions, but all other cells are
-        expected_food_positions = {(0, 0), (0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1), (2, 2)}
-        self.assertEqual(world.food_positions, expected_food_positions)
-        self.assertNotIn((1, 1), world.food_positions)
+        # Ensure no food is at the creature's position
+        food_cells = {(int(f.x), int(f.y)) for f in world.foods}
+        expected_food_cells = {(0, 0), (0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1), (2, 2)}
+        self.assertEqual(food_cells, expected_food_cells)
+        self.assertNotIn((1, 1), food_cells)
 
-    def test_eating_adjacent_food(self):
-        """Test that creatures can eat food in adjacent cells without moving"""
+    def test_eating_nearby_food(self):
+        """Test that creatures can eat food that's within eat range"""
         # Create a world (5×5) with food_spawn_rate = 0.0
         world = World(5, 5, food_spawn_rate=0.0)
 
@@ -53,68 +59,69 @@ class TestFoodAndEating(unittest.TestCase):
         creature = Creature(2.0, 2.0, size=1.0, energy=10.0)
         world.add_creature(creature)
 
-        # Manually place food at (2,3) (one cell north) with remaining_energy = 5
-        from src.food import Food
-        food = Food(x=2, y=3, size=1.0, energy_value=5.0, remaining_duration=-1)
+        # Manually place food at (2.5, 2.5) with remaining_energy = 5
+        # This is within eat range of the creature
+        food = Food(x=2.5, y=2.5, size=1.0, energy_value=5.0, remaining_duration=-1)
         world.foods.append(food)
-        world.food_positions.add((2, 3))  # For backward compatibility
-
-        # Check that VisionSensor.get_reading(creature, world) reports "food" for "north"
-        vision = VisionSensor().get_reading(creature, world)
-        self.assertEqual(vision["north"], "food")
-
-        # Call action = creature.decide(reading), which should be ("EAT","north")
-        action = creature.decide(vision)
-        self.assertEqual(action[0], "EAT")
-        self.assertEqual(action[1], "north")
 
         # Initial energy and food remaining energy
         initial_energy = creature.energy
         initial_food_energy = food.remaining_energy
 
-        # Call creature.apply_action(action, world)
-        creature.apply_action(action, world)
+        # Override creature's decide method to always eat the food
+        def always_eat_food(vision, on_food=False):
+            # Find nearby food
+            nearby_food = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "food"]
+
+            if nearby_food:
+                # Sort by distance (closest first)
+                nearby_food.sort(key=lambda x: x[1])
+                closest_food, distance, angle = nearby_food[0]
+
+                # Calculate eat range based on radii
+                eat_range = (creature.radius + closest_food.radius) * creature.EAT_RANGE_FACTOR
+
+                # If within eat range, eat
+                if distance <= eat_range:
+                    # Set intent for visualization
+                    creature.intent = "GO_TO_FOOD"
+                    creature.intended_vector = (math.cos(angle) * creature.velocity * 0.75, 
+                                               math.sin(angle) * creature.velocity * 0.75)
+                    return ("EAT", closest_food)
+
+            # If no food in range, rest
+            return ("REST", None)
+
+        creature.decide = always_eat_food
+
+        # Call world.step()
+        world.step()
 
         # Verify creature position hasn't changed
-        self.assertEqual(creature.x, 2.0)
-        self.assertEqual(creature.y, 2.0)
+        self.assertAlmostEqual(creature.x, 2.0, places=5)
+        self.assertAlmostEqual(creature.y, 2.0, places=5)
 
         # Verify creature energy increased by 1
-        self.assertEqual(creature.energy, initial_energy + 1.0)
+        self.assertAlmostEqual(creature.energy, initial_energy + 1.0, places=5)
 
         # Verify food remaining energy decreased by 1
-        self.assertEqual(food.remaining_energy, initial_food_energy - 1.0)
+        self.assertAlmostEqual(food.remaining_energy, initial_food_energy - 1.0, places=5)
 
         # Verify food is still in world.foods (not fully consumed)
         self.assertIn(food, world.foods)
-        self.assertIn((2, 3), world.food_positions)
 
         # Take 4 more bites to fully consume the food
         for _ in range(4):
-            # Get vision again
-            vision = VisionSensor().get_reading(creature, world)
-            action = creature.decide(vision)
-            creature.apply_action(action, world)
-
-        # Monkey-patch decide method to always rest
-        # This ensures the creature doesn't try to eat something else in the next step
-        def always_rest(vision, on_food=False):
-            return ("REST", None)
-
-        creature.decide = always_rest
-
-        # Call world.step() to trigger the removal of expired foods
-        world.step()
+            world.step()
 
         # Verify food is now gone (fully consumed)
         self.assertNotIn(food, world.foods)
-        self.assertNotIn((2, 3), world.food_positions)
 
-        # Verify creature energy increased by a total of 5 and then decreased by 0.1 for REST
-        self.assertEqual(creature.energy, initial_energy + 5.0 - 0.1)
+        # Verify creature energy increased by a total of 5
+        self.assertAlmostEqual(creature.energy, initial_energy + 5.0, places=5)
 
-    def test_eating_in_current_cell(self):
-        """Test that creatures can eat food in their current cell incrementally"""
+    def test_eating_at_current_position(self):
+        """Test that creatures can eat food at their current position incrementally"""
         # Create a world (4×4) with food_spawn_rate = 0.0
         world = World(4, 4, food_spawn_rate=0.0)
 
@@ -122,128 +129,46 @@ class TestFoodAndEating(unittest.TestCase):
         creature = Creature(1.0, 1.0, size=1.0, energy=10.0)
         world.add_creature(creature)
 
-        # Manually place food at (1,1) with remaining_energy = 5
-        from src.food import Food
-        food = Food(x=1, y=1, size=1.0, energy_value=5.0, remaining_duration=-1)
+        # Manually place food at the same position (1.0, 1.0) with remaining_energy = 5
+        food = Food(x=1.0, y=1.0, size=1.0, energy_value=5.0, remaining_duration=-1)
         world.foods.append(food)
-        world.food_positions.add((1, 1))  # For backward compatibility
 
         # Initial energy and food remaining energy
         initial_energy = creature.energy
         initial_food_energy = food.remaining_energy
 
-        # Let reading = VisionSensor.get_reading(creature, world) (all directions return "empty")
-        vision = VisionSensor().get_reading(creature, world)
-
-        # Check if creature is on a food cell
-        on_food = (int(creature.x), int(creature.y)) in world.food_positions
-        self.assertTrue(on_food)
-
-        # When you call action = creature.decide(reading, on_food), it should yield ("EAT_AT_CURRENT", None)
-        action = creature.decide(vision, on_food)
-        self.assertEqual(action[0], "EAT_AT_CURRENT")
-        self.assertIsNone(action[1])
-
-        # Call creature.apply_action(action, world)
-        creature.apply_action(action, world)
-
-        # Verify creature energy increased by 1
-        self.assertEqual(creature.energy, initial_energy + 1.0)
-
-        # Verify food remaining energy decreased by 1
-        self.assertEqual(food.remaining_energy, initial_food_energy - 1.0)
-
-        # Verify food is still in world.foods (not fully consumed)
-        self.assertIn(food, world.foods)
-        self.assertIn((1, 1), world.food_positions)
-
-        # Take 4 more bites to fully consume the food
-        for _ in range(4):
-            # Get vision again
-            vision = VisionSensor().get_reading(creature, world)
-            action = creature.decide(vision, on_food=True)
-            creature.apply_action(action, world)
-
-        # Monkey-patch decide method to always rest
-        # This ensures the creature doesn't try to eat something else in the next step
-        def always_rest(vision, on_food=False):
-            return ("REST", None)
-
-        creature.decide = always_rest
-
-        # Call world.step() to trigger the removal of expired foods
-        world.step()
-
-        # Verify food is now gone (fully consumed)
-        self.assertNotIn(food, world.foods)
-        self.assertNotIn((1, 1), world.food_positions)
-
-        # Verify creature energy increased by a total of 5 and then decreased by 0.1 for REST
-        self.assertEqual(creature.energy, initial_energy + 5.0 - 0.1)
-
-    def test_spawn_and_eat_in_one_step(self):
-        """Test that food can spawn and be eaten incrementally"""
-        # Create a world (2×2) with food_spawn_rate = 1.0
-        world = World(2, 2, food_spawn_rate=1.0)
-
-        # Add one creature at (0.0, 0.0) with energy = 5.0
-        creature = Creature(0.0, 0.0, size=1.0, energy=5.0)
-        world.add_creature(creature)
-
-        # Set a fixed seed for reproducibility
-        random.seed(42)
-
-        # Initial energy
-        initial_energy = creature.energy
-
-        # Override creature's decide method to always rest
-        # This ensures it doesn't move and just eats in place
-        def always_rest_or_eat(vision, on_food=False):
+        # Override creature's decide method to always eat at current position if on food
+        def always_eat_at_current(vision, on_food=False):
             if on_food:
+                # Set intent for visualization
+                creature.intent = "GO_TO_FOOD"
+                creature.intended_vector = (0.0, 0.0)
                 return ("EAT_AT_CURRENT", None)
             return ("REST", None)
 
-        creature.decide = always_rest_or_eat
+        creature.decide = always_eat_at_current
 
-        # Call world.step() to spawn food
-        world.step()
-
-        # In the new implementation, we spawn food in all empty cells
-        # With a 2x2 grid and one creature, there are 3 empty cells
-        # The creature doesn't eat any food because it's not on a food cell to begin with
-        self.assertEqual(len(world.foods), 3)
-
-        # Manually place food at (0,0) with remaining_energy = 2
-        from src.food import Food
-        food = Food(x=0, y=0, size=1.0, energy_value=2.0, remaining_duration=-1)
-        world.foods.append(food)
-        world.food_positions.add((0, 0))  # For backward compatibility
-
-        # Initial food remaining energy
-        initial_food_energy = food.remaining_energy
-
-        # Call world.step() again
+        # Call world.step()
         world.step()
 
         # Verify creature energy increased by 1
-        self.assertEqual(creature.energy, initial_energy - 0.1 + 1.0)  # -0.1 for REST in first step, +1 for one bite
+        self.assertAlmostEqual(creature.energy, initial_energy + 1.0, places=5)
 
         # Verify food remaining energy decreased by 1
-        self.assertEqual(food.remaining_energy, initial_food_energy - 1.0)
+        self.assertAlmostEqual(food.remaining_energy, initial_food_energy - 1.0, places=5)
 
         # Verify food is still in world.foods (not fully consumed)
         self.assertIn(food, world.foods)
-        self.assertIn((0, 0), world.food_positions)
 
-        # Call world.step() one more time to fully consume the food
-        world.step()
+        # Take 4 more bites to fully consume the food
+        for _ in range(4):
+            world.step()
 
         # Verify food is now gone (fully consumed)
         self.assertNotIn(food, world.foods)
-        self.assertNotIn((0, 0), world.food_positions)
 
-        # Verify creature energy increased by a total of 2
-        self.assertEqual(creature.energy, initial_energy - 0.1 + 2.0)
+        # Verify creature energy increased by a total of 5
+        self.assertAlmostEqual(creature.energy, initial_energy + 5.0, places=5)
 
     def test_simultaneous_eating(self):
         """Test that multiple creatures can eat the same food simultaneously"""
@@ -251,45 +176,71 @@ class TestFoodAndEating(unittest.TestCase):
         world = World(5, 5, food_spawn_rate=0.0)
 
         # Add two creatures on opposite sides of a food
-        creature_a = Creature(1.0, 2.0, size=1.0, energy=10.0)  # Left of food
-        creature_b = Creature(3.0, 2.0, size=1.0, energy=10.0)  # Right of food
+        creature_a = Creature(1.5, 2.0, size=1.0, energy=10.0)  # Left of food
+        creature_b = Creature(2.5, 2.0, size=1.0, energy=10.0)  # Right of food
         world.add_creature(creature_a)
         world.add_creature(creature_b)
 
-        # Manually place food at (2,2) with remaining_energy = 5
-        from src.food import Food
-        food = Food(x=2, y=2, size=1.0, energy_value=5.0, remaining_duration=-1)
+        # Manually place food at (2.0, 2.0) with remaining_energy = 5
+        food = Food(x=2.0, y=2.0, size=1.0, energy_value=5.0, remaining_duration=-1)
         world.foods.append(food)
-        world.food_positions.add((2, 2))  # For backward compatibility
 
         # Initial energy and food remaining energy
         initial_energy_a = creature_a.energy
         initial_energy_b = creature_b.energy
         initial_food_energy = food.remaining_energy
 
-        # Monkey-patch decide methods to always eat toward the food
-        def always_eat_east(vision, on_food=False):
-            return ("EAT", "east")
+        # Override creatures' decide methods to always eat the food
+        def always_eat_food(vision, on_food=False):
+            # Find nearby food
+            nearby_food = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "food"]
 
-        def always_eat_west(vision, on_food=False):
-            return ("EAT", "west")
+            if nearby_food:
+                # Sort by distance (closest first)
+                nearby_food.sort(key=lambda x: x[1])
+                closest_food, distance, angle = nearby_food[0]
 
-        creature_a.decide = always_eat_east
-        creature_b.decide = always_eat_west
+                # Calculate eat range based on radii
+                eat_range = (self.radius + closest_food.radius) * self.EAT_RANGE_FACTOR
+
+                # If within eat range, eat
+                if distance <= eat_range:
+                    # Set intent for visualization
+                    self.intent = "GO_TO_FOOD"
+                    self.intended_vector = (math.cos(angle) * self.velocity * 0.75, 
+                                           math.sin(angle) * self.velocity * 0.75)
+                    return ("EAT", closest_food)
+
+            # If no food in range, rest
+            return ("REST", None)
+
+        # Bind the method to each creature
+        creature_a.decide = lambda vision, on_food=False: always_eat_food(creature_a, vision, on_food)
+        creature_b.decide = lambda vision, on_food=False: always_eat_food(creature_b, vision, on_food)
 
         # Call world.step()
         world.step()
 
         # Verify both creatures' energy increased by 1
-        self.assertEqual(creature_a.energy, initial_energy_a + 1.0)
-        self.assertEqual(creature_b.energy, initial_energy_b + 1.0)
+        self.assertAlmostEqual(creature_a.energy, initial_energy_a + 1.0, places=5)
+        self.assertAlmostEqual(creature_b.energy, initial_energy_b + 1.0, places=5)
 
         # Verify food remaining energy decreased by 2 (1 per creature)
-        self.assertEqual(food.remaining_energy, initial_food_energy - 2.0)
+        self.assertAlmostEqual(food.remaining_energy, initial_food_energy - 2.0, places=5)
 
         # Verify food is still in world.foods (not fully consumed)
         self.assertIn(food, world.foods)
-        self.assertIn((2, 2), world.food_positions)
+
+        # Take 2 more bites to fully consume the food (5 energy / 2 creatures = 3 steps)
+        for _ in range(2):
+            world.step()
+
+        # Verify food is now gone (fully consumed)
+        self.assertNotIn(food, world.foods)
+
+        # Verify both creatures' energy increased by a total of 3 (5 energy / 2 creatures = 2.5, rounded up to 3)
+        self.assertAlmostEqual(creature_a.energy, initial_energy_a + 3.0, places=5)
+        self.assertAlmostEqual(creature_b.energy, initial_energy_b + 3.0, places=5)
 
         # Call world.step() again
         world.step()

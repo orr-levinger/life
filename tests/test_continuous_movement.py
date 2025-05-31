@@ -12,7 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.world import World
 from src.creature import Creature
-from src.sensors import VisionSensor
+from src.sensors import ProximitySensor
 
 class TestContinuousMovement(unittest.TestCase):
     def test_max_speed_enforced(self):
@@ -26,6 +26,9 @@ class TestContinuousMovement(unittest.TestCase):
 
         # Force movement twice max
         def go_too_fast(vision, on_food=False):
+            # Set intent and intended_vector for visualization
+            c.intent = "WANDER"
+            c.intended_vector = (2.0, 0.0)
             return ("MOVE", (2.0, 0.0))
         c.decide = go_too_fast
 
@@ -34,26 +37,18 @@ class TestContinuousMovement(unittest.TestCase):
         self.assertAlmostEqual(c.x, 6.0, places=5)
         self.assertAlmostEqual(c.y, 5.0, places=5)
         self.assertAlmostEqual(c.energy, 9.0, places=5)
+        # Check that current_speed was clamped to max velocity
+        self.assertAlmostEqual(c.current_speed, c.velocity, places=5)
 
-    def test_flee_from_adjacent(self):
+    def test_flee_from_nearby(self):
         """
-        Two creatures at (2,2) and (2,3). Prey at (2,2) sees predator north,
-        so should move directly south by velocity (which is 1.0).
-
-        Note: In the new predation system, creatures attack by default when they see other creatures.
-        For this test, we override the prey's decide method to flee instead of attack.
+        Two creatures at (2,2) and (2,3). Prey at (2,2) sees predator nearby,
+        so should move directly away at max speed.
         """
         w = World(10, 10, food_spawn_rate=0.0)
 
-        # Create creatures with VisionSensor explicitly for this test
-        from src.sensors import VisionSensor
-
         predator = Creature(2.0, 3.0, size=1.0, energy=5.0)
         prey = Creature(2.0, 2.0, size=1.0, energy=5.0)
-
-        # Replace the default ProximitySensor with VisionSensor for this test
-        predator.sensors = (VisionSensor(),)
-        prey.sensors = (VisionSensor(),)
 
         w.add_creature(predator)
         w.add_creature(prey)
@@ -65,38 +60,48 @@ class TestContinuousMovement(unittest.TestCase):
 
         # Override prey's decide method to flee instead of attack
         def flee_from_creatures(vision, on_food=False):
-            # If creature to the north, flee south
-            if vision.get("north") == "creature":
-                return ("MOVE", (0.0, -prey.velocity))
-            # If creature to the south, flee north
-            elif vision.get("south") == "creature":
-                return ("MOVE", (0.0, prey.velocity))
-            # If creature to the east, flee west
-            elif vision.get("east") == "creature":
-                return ("MOVE", (-prey.velocity, 0.0))
-            # If creature to the west, flee east
-            elif vision.get("west") == "creature":
-                return ("MOVE", (prey.velocity, 0.0))
-            # Otherwise, rest
+            # Find nearby creatures
+            nearby_creatures = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "creature"]
+
+            if nearby_creatures:
+                # Sort by distance (closest first)
+                nearby_creatures.sort(key=lambda x: x[1])
+                closest_creature, distance, angle = nearby_creatures[0]
+
+                # Flee in the opposite direction
+                flee_angle = angle + math.pi  # Opposite direction
+
+                # Set speed to maximum for fleeing
+                prey.current_speed = prey.velocity
+                prey.intent = "RUN_AWAY"
+
+                # Calculate direction vector away from the creature
+                dx = math.cos(flee_angle) * prey.current_speed
+                dy = math.sin(flee_angle) * prey.current_speed
+
+                # Store the intended vector
+                prey.intended_vector = (dx, dy)
+
+                return ("FLEE", (dx, dy))
+
+            # If no creatures nearby, rest
             return ("REST", None)
 
         prey.decide = flee_from_creatures
 
-        # First, verify that the sensor reading and decision are correct
-        vs = VisionSensor()
-        reading = vs.get_reading(prey, w)
-        action = prey.decide(reading)
-        # Should be ("MOVE", (0.0, -1.0))
-        self.assertEqual(action[0], "MOVE")
-        dx, dy = action[1]
-        self.assertAlmostEqual(dx, 0.0, places=5)
-        self.assertAlmostEqual(dy, -1.0, places=5)
+        # Initial energy
+        initial_energy = prey.energy
 
-        # After world.step(), prey.y should be 1.0 and energy 4.0
+        # Call world.step()
         w.step()
+
+        # Verify prey moved away from predator (should move south)
         self.assertAlmostEqual(prey.x, 2.0, places=5)
-        self.assertAlmostEqual(prey.y, 1.0, places=5)
-        self.assertAlmostEqual(prey.energy, 4.0, places=5)
+        self.assertAlmostEqual(prey.y, 1.0, places=5)  # Moved south by velocity=1.0
+        # Energy decreased by distance moved (velocity=1.0)
+        self.assertAlmostEqual(prey.energy, initial_energy - prey.velocity, places=5)
+        # Check intent was set correctly
+        self.assertEqual(prey.intent, "RUN_AWAY")
 
     def test_random_wander_and_rest(self):
         """
@@ -106,19 +111,21 @@ class TestContinuousMovement(unittest.TestCase):
         w = World(10, 10, food_spawn_rate=0.0)
         c = Creature(5.0, 5.0, size=1.0, energy=100.0)
         w.add_creature(c)
-        vs = VisionSensor()
 
         seen_move = False
         seen_rest = False
 
         # Run multiple trials
         for _ in range(50):
-            # Reset position and get reading
+            # Reset position and energy
             c.x, c.y = 5.0, 5.0
             initial_energy = c.energy
 
-            reading = vs.get_reading(c, w)
-            action = c.decide(reading)
+            # Get empty vision (no nearby objects)
+            vision = []
+
+            # Decide action based on empty vision
+            action = c.decide(vision)
 
             # Apply the action to update energy and position
             c.apply_action(action, w)
@@ -129,6 +136,8 @@ class TestContinuousMovement(unittest.TestCase):
                 dx, dy = action[1]
                 expected_dist = min(math.hypot(dx, dy), c.velocity)
                 self.assertAlmostEqual(initial_energy - c.energy, expected_dist, places=5)
+                # Check that intent was set to "WANDER"
+                self.assertEqual(c.intent, "WANDER")
                 # Reset energy and position
                 c.energy = initial_energy
                 c.x, c.y = 5.0, 5.0
@@ -136,6 +145,8 @@ class TestContinuousMovement(unittest.TestCase):
                 seen_rest = True
                 # Check that energy decreased by 0.1
                 self.assertAlmostEqual(initial_energy - c.energy, 0.1, places=5)
+                # Check that intent was set to "REST"
+                self.assertEqual(c.intent, "REST")
                 # Reset energy
                 c.energy = initial_energy
 
@@ -157,6 +168,9 @@ class TestContinuousMovement(unittest.TestCase):
         w.add_creature(c)
 
         def go_sw(vision, on_food=False):
+            # Set intent and intended_vector for visualization
+            c.intent = "WANDER"
+            c.intended_vector = (-1.0, -1.0)
             return ("MOVE", (-1.0, -1.0))
         c.decide = go_sw
 
@@ -170,6 +184,8 @@ class TestContinuousMovement(unittest.TestCase):
         self.assertAlmostEqual(c.y, max(expected_y, 0.0), places=5)
         # Energy should have dropped by 1.0
         self.assertAlmostEqual(c.energy, 4.0, places=5)
+        # Check that current_speed was clamped to max velocity
+        self.assertAlmostEqual(c.current_speed, c.velocity, places=5)
 
 if __name__ == "__main__":
     unittest.main()

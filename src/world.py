@@ -113,23 +113,19 @@ class World:
         """
         Advance the simulation by one time step:
         1. Call spawn_food() to randomly place new food items on empty grid cells.
-        2. Process all creatures:
-           a. Get vision = creature.sensors[0].get_reading(creature, self)
-           b. Check if creature is on a food cell
-           c. action = creature.decide(vision, on_food)
-           d. Apply all ATTACK actions first
-           e. Apply all non-attack actions (MOVE, EAT, EAT_AT_CURRENT, REST)
-           f. Check if creature is on a food cell, if so:
-              - Find the Food object at that cell
-              - Increase creature's energy by the food's energy_value
-              - Remove the Food object
-           g. If creature.energy ≤ 0: remove creature from self.creatures
-        3. Decay all Food objects and remove expired ones
+        2. Gather all creatures' decisions.
+        3. Process all creatures in phases:
+           a. Apply all ATTACK actions first (kills generate corpses → new Food objects)
+           b. Apply all EAT actions next (which decrement food energy by 1 per bite)
+           c. Apply all other actions (MOVE, EAT_AT_CURRENT, REST)
+        4. Remove dead creatures (energy ≤ 0)
+        5. Decay all Food objects and remove expired ones
         """
         # 1) Spawn new food
         self.spawn_food()
 
-        # 2) Process all creatures
+        # 2) Gather all creatures' decisions
+        decisions = []
         for creature in list(self.creatures):
             # Get vision reading
             vision = creature.sensors[0].get_reading(creature, self)
@@ -140,39 +136,34 @@ class World:
 
             # Decide action
             action = creature.decide(vision, on_food)
+            decisions.append((creature, action))
 
-            # Apply the action
-            creature.apply_action(action, self)
+        # 3a) Apply all ATTACK actions first
+        for creature, action in decisions:
+            if action[0] == "ATTACK":
+                creature.apply_action(action, self)
 
-            # Check if creature is on a food cell after moving
-            creature_cell = (int(creature.x), int(creature.y))
-            for food in list(self.foods):
-                if food.x == creature_cell[0] and food.y == creature_cell[1]:
-                    # Creature eats the food
-                    creature.energy += food.energy_value
-                    creature.last_action = f"EAT_FOOD({food.energy_value:.1f})"
+        # 3b) Apply all EAT actions next
+        for creature, action in decisions:
+            if action[0] == "EAT":
+                creature.apply_action(action, self)
 
-                    # Remove the food
-                    self.foods.remove(food)
+        # 3c) Apply all other actions (MOVE, EAT_AT_CURRENT, REST)
+        for creature, action in decisions:
+            if action[0] not in ("ATTACK", "EAT"):
+                creature.apply_action(action, self)
 
-                    # Also update food_positions for backward compatibility
-                    self.food_positions.discard((food.x, food.y))
+        # 4) Remove dead creatures
+        self.creatures = [c for c in self.creatures if c.energy > 0]
 
-                    # Only eat one food item per step
-                    break
-
-            # Remove if dead
-            if creature.energy <= 0:
-                self.creatures.remove(creature)
-
-        # 3) Decay all Food objects and remove expired ones
+        # 5) Decay all Food objects and remove expired ones
         new_foods = []
         for food in self.foods:
             # Decay the food
             food.decay()
 
-            # Keep it if not expired
-            if not food.is_expired():
+            # Keep it if not expired (either by duration or by being fully consumed)
+            if not food.is_expired() and food.remaining_energy > 0:
                 new_foods.append(food)
             else:
                 # Remove from food_positions for backward compatibility

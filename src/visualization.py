@@ -26,10 +26,11 @@ class Visualizer:
         plt.pause(0.1)           # pause briefly so the figure updates
     """
 
-    def __init__(self, width: int, height: int, cell_size: float = 1.0):
+    def __init__(self, width: int, height: int, cell_size: float = 1.0, debug: bool = False):
         """
         width, height: The dimensions of the world grid.
         cell_size: The size of each "cell" in plotting units. Defaults to 1.0.
+        debug: Whether to show debug information like remaining energy.
 
         Initializes a Matplotlib figure & axes, sets aspect ratio, and
         turns off the axis ticks.
@@ -37,6 +38,7 @@ class Visualizer:
         self.width = width
         self.height = height
         self.cell_size = cell_size
+        self.debug = debug
 
         # Create figure & axis:
         self.fig, self.ax = plt.subplots(figsize=(width * 0.5, height * 0.5))
@@ -67,15 +69,15 @@ class Visualizer:
         self.ax.set_yticks([])
         self.ax.set_facecolor('black')
 
-        # 1) Draw food (if any). Each food point is a red square with size proportional to food.size:
+        # 1) Draw food (if any). Each food point is a red square with size proportional to remaining_energy / size:
         if len(world.foods) > 0:
             food_xs = [f.x + 0.5 for f in world.foods]
             food_ys = [f.y + 0.5 for f in world.foods]
-            # Scale the food size (which might be any float)
+            # Scale the food size based on remaining energy
             # Matplotlib's 's' argument in scatter is area in points^2
-            food_sizes = [(f.size * 25) for f in world.foods]  # Smaller baseline than creatures
+            food_sizes = [(f.size * 25 * (f.remaining_energy / f.energy_value)) for f in world.foods]  # Scale by remaining energy
 
-            # Use red squares with size proportional to food.size
+            # Use red squares with size proportional to remaining energy
             self.ax.scatter(
                 food_xs,
                 food_ys,
@@ -86,8 +88,9 @@ class Visualizer:
                 label='Food'
             )
 
-            # Optionally, draw remaining duration for non-infinite food
+            # Draw remaining duration and energy information
             for f in world.foods:
+                # Draw remaining duration for non-infinite food
                 if f.remaining_duration > 0:
                     self.ax.text(
                         f.x + 0.5, 
@@ -95,6 +98,18 @@ class Visualizer:
                         f"{f.remaining_duration}", 
                         color='white',
                         fontsize=8,
+                        ha='center',
+                        va='center'
+                    )
+
+                # In debug mode, show remaining energy
+                if self.debug:
+                    self.ax.text(
+                        f.x + 0.5,
+                        f.y + 0.7,
+                        f"{f.remaining_energy:.1f}",
+                        color='white',
+                        fontsize=6,
                         ha='center',
                         va='center'
                     )

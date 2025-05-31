@@ -49,13 +49,13 @@ class Creature:
         Decide movement based on VisionSensor. Return:
           - ("MOVE", (dx, dy)) where sqrt(dx^2 + dy^2) ≤ self.velocity,
           - ("REST", None) for resting,
-          - ("EAT", direction) to move toward and eat food in an adjacent cell,
+          - ("EAT", direction) to take one bite from food in an adjacent cell,
           - ("EAT_AT_CURRENT", None) to eat food in the current cell,
           - ("ATTACK", direction) to attack a creature in an adjacent cell.
 
         Logic:
         1. If any direction maps to "creature", return ("ATTACK", direction) to attack that creature.
-        2. If any direction maps to "food", return ("EAT", direction) to move toward and eat that food.
+        2. If any direction maps to "food", return ("EAT", direction) to take one bite from that food.
         3. If the creature's current cell has food (on_food=True), return ("EAT_AT_CURRENT", None).
         4. Else (nothing sensed), randomly choose either:
            - Move in random angle at max speed, OR
@@ -69,7 +69,7 @@ class Creature:
             if content == "creature":
                 return ("ATTACK", direction)
 
-        # 2) Food adjacent? Return EAT action with direction
+        # 2) Food adjacent? Return EAT action with direction (without moving)
         for direction, content in vision.items():
             if content == "food":
                 if direction == "north":
@@ -205,39 +205,71 @@ class Creature:
                 world.creatures.remove(target)
 
         elif act_type == "EAT" and param is not None:
-            # Move into adjacent food cell at a fixed speed (1.0) regardless of creature size
-            # This ensures all creatures can eat food regardless of their size
+            # Take one bite from food in the adjacent cell without moving
             direction = param
-            dx, dy = 0.0, 0.0
-            fixed_speed = 1.0  # Fixed speed for eating, independent of creature size
+
+            # Compute the grid coordinates of the food being eaten
+            cx, cy = int(self.x), int(self.y)
+            tx, ty = cx, cy
 
             if direction == "north":
-                dx, dy = 0.0, fixed_speed
+                ty += 1
             elif direction == "south":
-                dx, dy = 0.0, -fixed_speed
+                ty -= 1
             elif direction == "east":
-                dx, dy = fixed_speed, 0.0
+                tx += 1
             elif direction == "west":
-                dx, dy = -fixed_speed, 0.0
+                tx -= 1
 
-            # Compute new coordinates, then clamp to [0, width], [0, height]
-            new_x = self.x + dx
-            new_y = self.y + dy
-            # Clamp within world bounds
-            self.x = min(max(new_x, 0.0), world.width - 1.0)
-            self.y = min(max(new_y, 0.0), world.height - 1.0)
+            # Look up in world.foods for any Food at those coordinates
+            target_food = None
+            for food in world.foods:
+                if food.x == tx and food.y == ty:
+                    target_food = food
+                    break
 
-            # Deduct energy equal to distance moved
-            actual_dist = math.hypot(dx, dy)
-            self.energy -= actual_dist
+            # If no food is found, deduct a small penalty
+            if target_food is None:
+                eat_miss_cost = 1.0  # Small penalty for missing a bite
+                self.energy -= eat_miss_cost
+                self.last_action = "EAT_MISS"
+                return
+
+            # If a Food is found, subtract 1 from its remaining_energy and add 1 to the creature's energy
+            target_food.remaining_energy -= 1
+            self.energy += 1
             self.last_action = f"EAT→{direction.upper()}"
 
+            # Note: We don't remove the food here even if remaining_energy <= 0
+            # This allows multiple creatures to eat the same food in the same step
+            # The World.step() method will remove expired foods at the end of the step
+
         elif act_type == "EAT_AT_CURRENT":
-            # Eat food in current cell
-            # Deduct a small "eat-in-place" cost
-            # The energy bonus will be applied in world.step()
-            self.energy -= 0.2
+            # Take one bite from food in the current cell
+            cx, cy = int(self.x), int(self.y)
+
+            # Look up in world.foods for any Food at the current coordinates
+            target_food = None
+            for food in world.foods:
+                if food.x == cx and food.y == cy:
+                    target_food = food
+                    break
+
+            # If no food is found, deduct a small penalty
+            if target_food is None:
+                eat_miss_cost = 0.2  # Small penalty for missing a bite (same as before)
+                self.energy -= eat_miss_cost
+                self.last_action = "EAT_MISS"
+                return
+
+            # If a Food is found, subtract 1 from its remaining_energy and add 1 to the creature's energy
+            target_food.remaining_energy -= 1
+            self.energy += 1
             self.last_action = "EAT_AT_CURRENT"
+
+            # Note: We don't remove the food here even if remaining_energy <= 0
+            # This allows multiple creatures to eat the same food in the same step
+            # The World.step() method will remove expired foods at the end of the step
 
         else:  # "REST"
             self.energy -= 0.1

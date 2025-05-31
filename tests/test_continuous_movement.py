@@ -109,7 +109,8 @@ class TestContinuousMovement(unittest.TestCase):
         Run 50 trials and confirm at least one move and one rest occur.
         """
         w = World(10, 10, food_spawn_rate=0.0)
-        c = Creature(5.0, 5.0, size=1.0, energy=100.0)
+        # Create a creature without a neural network so it uses the old decision logic
+        c = Creature(5.0, 5.0, size=1.0, energy=100.0, brain=None)
         w.add_creature(c)
 
         seen_move = False

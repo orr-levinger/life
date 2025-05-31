@@ -23,7 +23,7 @@ class Creature:
 
     def __init__(self, x: float, y: float, size: float, energy: float, velocity: float = None, 
                  eat_bonus: float = 5.0, radius: float = None, brain: Optional['NeuralNetwork'] = None,
-                 create_brain: bool = False):
+                 create_brain: bool = False, parent_id: int = None):
         """
         x, y: initial continuous coordinates (floats).
         size: determines relative strength, attack_damage, attack_cost, and max_energy.
@@ -36,12 +36,16 @@ class Creature:
         radius: physical size for collision detection. If None, computed as size * RADIUS_FACTOR.
         brain: neural network for decision making. If None and create_brain=True, a new one is created.
         create_brain: whether to create a new neural network if brain is None. Default is False for backward compatibility with tests.
+        parent_id: ID of the parent creature. None for initial creatures.
         """
         self.x = float(x)
         self.y = float(y)
         self.size = size
         self.energy = energy
         self.eat_bonus = eat_bonus
+        self.id = id(self)  # Unique identifier for this creature
+        self.parent_id = parent_id  # ID of the parent creature
+        self.children_ids = set()  # IDs of direct children
 
         # Size determines attack_damage and attack_cost
         self.attack_damage = size * 5.0
@@ -558,10 +562,13 @@ class Creature:
             velocity=self.velocity,
             eat_bonus=self.eat_bonus,
             radius=self.radius,
-            brain=self.brain.clone() if self.brain else None
+            brain=self.brain.clone() if self.brain else None,
+            parent_id=self.id  # Set the parent ID to this creature's ID
         )
         world.add_creature(clone)
         children.append(clone)
+        # Add the child's ID to the parent's children_ids set
+        self.children_ids.add(clone.id)
 
         # Create three mutated children
         for i in range(3):
@@ -582,10 +589,13 @@ class Creature:
                 velocity=self.velocity,
                 eat_bonus=self.eat_bonus,
                 radius=self.radius,
-                brain=mutated_brain
+                brain=mutated_brain,
+                parent_id=self.id  # Set the parent ID to this creature's ID
             )
             world.add_creature(mutated_child)
             children.append(mutated_child)
+            # Add the child's ID to the parent's children_ids set
+            self.children_ids.add(mutated_child.id)
 
         return children
 

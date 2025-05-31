@@ -19,11 +19,11 @@ else:
 
 def main() -> None:
     # Configuration for Stage 1.5
-    WIDTH, HEIGHT = 20, 20
-    FOOD_RATE = 0.003           # Reduced food spawn rate to prevent screen filling
-    INITIAL_CREATURES = 20     # Start with 10 creatures
+    WIDTH, HEIGHT = 30, 30
+    FOOD_RATE = 0.01          # Reduced food spawn rate to prevent screen filling
+    INITIAL_CREATURES = 30     # Start with 10 creatures
     NUM_STEPS = 1000            # Run 100 steps for demonstration
-    PAUSE_TIME = 0.2           # seconds to pause between frames
+    PAUSE_TIME = 0.01           # seconds to pause between frames
 
     # 1) Create the world
     world = World(WIDTH, HEIGHT, FOOD_RATE)

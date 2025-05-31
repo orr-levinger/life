@@ -37,6 +37,14 @@ class Creature:
             self.velocity = 1.0 / size
         else:
             self.velocity = velocity
+
+        # Current speed can vary based on action (wandering, chasing, fleeing)
+        # For tests, we'll start at max speed to maintain compatibility
+        self.current_speed = self.velocity  # Start at max speed
+
+        # Store the last movement vector for visualization
+        self.movement_vector = (0.0, 0.0)
+
         # Placeholder for a future NeuralNetwork model; remains None this stage
         self.brain = None
 
@@ -51,25 +59,64 @@ class Creature:
           - ("REST", None) for resting,
           - ("EAT", direction) to take one bite from food in an adjacent cell,
           - ("EAT_AT_CURRENT", None) to eat food in the current cell,
-          - ("ATTACK", direction) to attack a creature in an adjacent cell.
+          - ("ATTACK", direction) to attack a creature in an adjacent cell,
+          - ("FLEE", (dx, dy)) to move away from a threat at max speed.
 
         Logic:
         1. If any direction maps to "creature", return ("ATTACK", direction) to attack that creature.
         2. If any direction maps to "food", return ("EAT", direction) to take one bite from that food.
         3. If the creature's current cell has food (on_food=True), return ("EAT_AT_CURRENT", None).
         4. Else (nothing sensed), randomly choose either:
-           - Move in random angle at max speed, OR
+           - Move in random angle at variable speed, OR
            - Rest (cost is lower). Use 50/50 split.
         """
         if vision is None:
             return ("REST", None)
 
-        # 1) Creature adjacent? Return ATTACK action with direction
+        # Check if there's a creature nearby that might be a threat
+        # For simplicity, we'll consider any creature as a potential threat
+        # In a more complex simulation, we might check size, energy, etc.
+        creature_directions = []
         for direction, content in vision.items():
             if content == "creature":
-                return ("ATTACK", direction)
+                creature_directions.append(direction)
+
+        # If there are creatures nearby, decide whether to attack or flee
+        if creature_directions:
+            # For this simple implementation, we'll always attack
+            # Set speed to maximum for attacking (chasing)
+            self.current_speed = self.velocity
+
+            # 10% chance to flee instead of attack (to demonstrate fleeing behavior)
+            if random.random() < 0.1:
+                # Flee in the opposite direction of the first creature
+                direction = creature_directions[0]
+                dx, dy = 0, 0
+
+                # Set speed to maximum for fleeing
+                self.current_speed = self.velocity
+
+                if direction == "north":
+                    dy = -1  # Flee south
+                elif direction == "south":
+                    dy = 1   # Flee north
+                elif direction == "east":
+                    dx = -1  # Flee west
+                elif direction == "west":
+                    dx = 1   # Flee east
+
+                # Scale by current speed
+                dx *= self.current_speed
+                dy *= self.current_speed
+
+                return ("FLEE", (dx, dy))
+            else:
+                # Attack the first creature
+                return ("ATTACK", creature_directions[0])
 
         # 2) Food adjacent? Return EAT action with direction (without moving)
+        # Set speed to 75% of maximum for going to food
+        self.current_speed = self.velocity * 0.75
         for direction, content in vision.items():
             if content == "food":
                 if direction == "north":
@@ -85,12 +132,14 @@ class Creature:
         if on_food:
             return ("EAT_AT_CURRENT", None)
 
-        # 4) Nothing sensed: random
+        # 4) Nothing sensed: random movement with continuous angles
+        # Set speed to 50% of maximum for wandering (to conserve energy)
+        self.current_speed = self.velocity * 0.5
         if random.random() < 0.5:
-            # Random angle in [0, 2π)
+            # Random angle in [0, 2π) for truly continuous movement
             angle = random.random() * 2 * math.pi
-            dx = math.cos(angle) * self.velocity
-            dy = math.sin(angle) * self.velocity
+            dx = math.cos(angle) * self.current_speed
+            dy = math.sin(angle) * self.current_speed
             return ("MOVE", (dx, dy))
         else:
             return ("REST", None)
@@ -103,22 +152,29 @@ class Creature:
           - ("EAT", direction): move into adjacent food cell at max speed; energy -= distance
           - ("EAT_AT_CURRENT", None): eat food in current cell; energy -= 0.2
           - ("ATTACK", direction): attack a creature in the specified direction; energy -= attack_cost
+          - ("FLEE", (dx, dy)): move away from a threat at max speed; energy -= distance
         """
         act_type, param = action
         self.last_action = f"{act_type}"
 
-        if act_type == "MOVE" and param is not None:
+        # Reset movement vector by default
+        self.movement_vector = (0.0, 0.0)
+
+        if (act_type == "MOVE" or act_type == "FLEE") and param is not None:
             dx, dy = param
             # Compute requested distance
             requested_dist = math.hypot(dx, dy)
-            # If more than max, scale down to max:
-            if requested_dist > self.velocity:
-                scale = self.velocity / requested_dist
+            # If more than current speed, scale down to current speed:
+            if requested_dist > self.current_speed:
+                scale = self.current_speed / requested_dist
                 dx *= scale
                 dy *= scale
-                actual_dist = self.velocity
+                actual_dist = self.current_speed
             else:
                 actual_dist = requested_dist
+
+            # Store the movement vector for visualization
+            self.movement_vector = (dx, dy)
 
             # Compute new coordinates, then clamp to [0, width], [0, height]
             new_x = self.x + dx
@@ -131,7 +187,12 @@ class Creature:
 
             # Deduct energy equal to distance moved
             self.energy -= actual_dist
-            self.last_action = f"MOVE"
+
+            # Set the last_action based on the action type
+            if act_type == "FLEE":
+                self.last_action = f"FLEE"
+            else:
+                self.last_action = f"MOVE"
 
         elif act_type == "ATTACK" and param is not None:
             # Get the direction to attack
@@ -139,14 +200,22 @@ class Creature:
 
             # Determine target cell coordinates
             tx, ty = int(self.x), int(self.y)
+            dx, dy = 0, 0
             if direction == "north":
                 ty += 1
+                dy = 1
             elif direction == "south":
                 ty -= 1
+                dy = -1
             elif direction == "east":
                 tx += 1
+                dx = 1
             elif direction == "west":
                 tx -= 1
+                dx = -1
+
+            # Set movement vector for visualization (scaled by current speed)
+            self.movement_vector = (dx * self.current_speed, dy * self.current_speed)
 
             # Find target creature in that cell
             target = None
@@ -212,15 +281,23 @@ class Creature:
             # Compute the grid coordinates of the food being eaten
             cx, cy = int(self.x), int(self.y)
             tx, ty = cx, cy
+            dx, dy = 0, 0
 
             if direction == "north":
                 ty += 1
+                dy = 1
             elif direction == "south":
                 ty -= 1
+                dy = -1
             elif direction == "east":
                 tx += 1
+                dx = 1
             elif direction == "west":
                 tx -= 1
+                dx = -1
+
+            # Set movement vector for visualization (scaled by current speed)
+            self.movement_vector = (dx * self.current_speed, dy * self.current_speed)
 
             # Look up in world.foods for any Food at those coordinates
             target_food = None

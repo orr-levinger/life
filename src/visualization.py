@@ -133,6 +133,42 @@ class Visualizer:
                 label='Creatures'
             )
 
+            # Draw arrows indicating movement direction for each creature
+            for c in world.creatures:
+                # Get the creature's position (center of the circle)
+                cx, cy = c.x + 0.5, c.y + 0.5
+
+                # Get the movement vector
+                dx, dy = c.movement_vector
+
+                # Skip if no movement
+                if dx == 0 and dy == 0:
+                    continue
+
+                # Determine arrow color based on action
+                arrow_color = 'blue'  # Default color for movement
+
+                if c.last_action.startswith("ATTACK"):
+                    arrow_color = 'red'  # Red for attack
+                elif c.last_action.startswith("EAT"):
+                    arrow_color = 'green'  # Green for going to food
+                elif c.last_action.startswith("FLEE"):
+                    arrow_color = 'blue'  # Blue for fleeing
+
+                # Draw the arrow
+                # Scale the arrow length to be visible but not too large
+                # The arrow length is proportional to the creature's current speed
+                arrow_scale = 2.0  # Adjust this value to make arrows more visible
+                self.ax.arrow(
+                    cx, cy,  # Start at creature center
+                    dx * arrow_scale, dy * arrow_scale,  # End at scaled movement vector
+                    head_width=0.2,
+                    head_length=0.3,
+                    fc=arrow_color,
+                    ec=arrow_color,
+                    alpha=0.8
+                )
+
         # Optional: Add a legend or title
         # self.ax.legend(loc='upper right', fontsize='small', facecolor='black', labelcolor='white')
         self.ax.set_title(

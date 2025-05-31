@@ -346,10 +346,21 @@ class TestAttackingAndPredation(unittest.TestCase):
         for i in range(8):
             # If the corpse is gone, we're done
             if len(world.foods) == 0:
+                print(f"Corpse is gone after {i} bites")
                 break
+
+            # Print corpse state before step
+            if len(world.foods) > 0:
+                print(f"Before step {i+1}: corpse.remaining_energy={world.foods[0].remaining_energy}, attacker.energy={attacker.energy}")
 
             # Call world.step() to eat one bite
             world.step()
+
+            # Print corpse state after step
+            if len(world.foods) > 0:
+                print(f"After step {i+1}: corpse.remaining_energy={world.foods[0].remaining_energy}, attacker.energy={attacker.energy}")
+            else:
+                print(f"After step {i+1}: corpse is gone, attacker.energy={attacker.energy}")
 
             # Verify attacker's energy increased by 1 each step
             self.assertAlmostEqual(attacker.energy, 10.0 + (i + 1), places=5)

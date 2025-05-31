@@ -23,6 +23,7 @@ class World:
         self.food_spawn_rate = food_spawn_rate
         self.creatures: List['Creature'] = []
         self.foods: List['Food'] = []
+        self.foods_created_this_step: Set[int] = set()  # Track foods created in the current step
 
     def add_creature(self, creature: 'Creature') -> None:
         """Add a Creature instance into the world's creature list."""
@@ -133,6 +134,8 @@ class World:
                 radius=self.DEFAULT_FOOD_RADIUS
             )
             self.foods.append(new_food)
+            # Track that this food was created in this step
+            self.foods_created_this_step.add(id(new_food))
 
     def step(self) -> None:
         """
@@ -146,6 +149,9 @@ class World:
         4. Remove dead creatures (energy ≤ 0)
         5. Decay all Food objects and remove expired ones
         """
+        # Clear the set of foods created in the previous step
+        self.foods_created_this_step.clear()
+
         # 1) Spawn new food
         self.spawn_food()
 
@@ -187,12 +193,9 @@ class World:
         # 5) Decay all Food objects and remove expired ones
         new_foods = []
 
-        # Get the foods created in this step
-        foods_created_this_step = set(id(food) for food in self.foods)
-
         for food in self.foods:
             # Skip decay for foods created in this step
-            if id(food) in foods_created_this_step:
+            if id(food) in self.foods_created_this_step:
                 # Keep the food without decaying it
                 new_foods.append(food)
             else:

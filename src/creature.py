@@ -343,6 +343,8 @@ class Creature:
 
                 # Add corpse to world's foods
                 world.foods.append(corpse_food)
+                # Track that this food was created in this step
+                world.foods_created_this_step.add(id(corpse_food))
 
                 # Remove the dead creature immediately
                 try:

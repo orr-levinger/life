@@ -11,35 +11,33 @@ class Food:
     1. Spawned by the environment (with infinite duration)
     2. Created from a creature's corpse (with duration proportional to the creature's size)
 
-    Food has a remaining_energy that decreases as creatures eat it. Each "bite" reduces
-    remaining_energy by 1 and increases the creature's energy by 1.
+    Food has energy that decreases as creatures eat it. Each "bite" reduces
+    energy by 1 and increases the creature's energy by 1.
 
     Food has a physical radius for collision detection in continuous space.
+    Size is based on energy (size = energy).
     """
 
-    def __init__(self, x: float, y: float, size: float, energy_value: float, remaining_duration: int, radius: float = None):
+    def __init__(self, x: float, y: float, energy: float, remaining_duration: int, radius: float = None):
         """
         Initialize a new Food object.
 
         Args:
             x, y: Continuous coordinates where the food is located
-            size: How big this food is (affects visualization and total energy)
-            energy_value: How much total energy this food contains
+            energy: How much energy this food contains (also determines size)
             remaining_duration: Number of world steps this food persists before disappearing
                                -1 means it never expires (infinite lifespan)
             radius: Physical radius for collision detection. If None, computed as size * 0.2
         """
         self.x = float(x)
         self.y = float(y)
-        self.size = size
-        self.energy_value = energy_value
-        self.remaining_energy = energy_value  # Initialize remaining_energy to energy_value
-        self.initial_energy = energy_value    # Store initial energy for visualization scaling
+        self.energy = energy  # Single energy variable that decreases as creatures eat
+        self.size = energy    # Size is based on energy
         self.remaining_duration = remaining_duration
 
         # Set radius based on size if not provided
         if radius is None:
-            self.radius = size * 0.2  # Default radius factor
+            self.radius = self.size * 0.2  # Default radius factor
         else:
             self.radius = radius
 
@@ -99,4 +97,4 @@ class Food:
         String representation of the Food object.
         """
         duration_str = "∞" if self.remaining_duration == -1 else str(self.remaining_duration)
-        return f"<Food x={self.x:.2f} y={self.y:.2f} size={self.size:.2f} energy={self.energy_value:.2f} remaining={self.remaining_energy:.2f} radius={self.radius:.2f} duration={duration_str}>"
+        return f"<Food x={self.x:.2f} y={self.y:.2f} size={self.size:.2f} energy={self.energy:.2f} radius={self.radius:.2f} duration={duration_str}>"

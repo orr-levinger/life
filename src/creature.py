@@ -325,8 +325,8 @@ class Creature:
                 # Import Food here to avoid circular imports
                 from .food import Food
 
-                # Create corpse food with energy value = 2 * damage_dealt
-                energy_value = 2.0 * damage_dealt
+                # Create corpse food with energy = 2 * damage_dealt
+                energy = 2.0 * damage_dealt
 
                 # Calculate corpse radius based on target size
                 corpse_radius = target.radius
@@ -335,8 +335,7 @@ class Creature:
                 corpse_food = Food(
                     x=target.x,
                     y=target.y,
-                    size=target.size,
-                    energy_value=energy_value,
+                    energy=energy,
                     remaining_duration=5,  # Set to 5 to match test expectations
                     radius=corpse_radius
                 )
@@ -373,8 +372,8 @@ class Creature:
                 self.last_action = "EAT_MISS"
                 return
 
-            # If a Food is found and in range, subtract 1 from its remaining_energy and add 1 to the creature's energy
-            target_food.remaining_energy -= 1
+            # If a Food is found and in range, subtract 1 from its energy and add 1 to the creature's energy
+            target_food.energy -= 1
             self.energy += 1
             self.last_action = f"EAT→{target_food.id if hasattr(target_food, 'id') else id(target_food)}"
 
@@ -397,8 +396,8 @@ class Creature:
                 self.last_action = "EAT_MISS"
                 return
 
-            # If a Food is found, subtract 1 from its remaining_energy and add 1 to the creature's energy
-            target_food.remaining_energy -= 1
+            # If a Food is found, subtract 1 from its energy and add 1 to the creature's energy
+            target_food.energy -= 1
             self.energy += 1
             self.last_action = "EAT_AT_CURRENT"
 

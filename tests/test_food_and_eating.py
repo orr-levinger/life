@@ -59,14 +59,14 @@ class TestFoodAndEating(unittest.TestCase):
         creature = Creature(2.0, 2.0, size=1.0, energy=10.0)
         world.add_creature(creature)
 
-        # Manually place food at (2.5, 2.5) with remaining_energy = 5
+        # Manually place food at (2.5, 2.5) with energy = 5
         # This is within eat range of the creature
-        food = Food(x=2.5, y=2.5, size=1.0, energy_value=5.0, remaining_duration=-1)
+        food = Food(x=2.5, y=2.5, energy=5.0, remaining_duration=-1)
         world.foods.append(food)
 
-        # Initial energy and food remaining energy
+        # Initial energy and food energy
         initial_energy = creature.energy
-        initial_food_energy = food.remaining_energy
+        initial_food_energy = food.energy
 
         # Override creature's decide method to always eat the food
         def always_eat_food(vision, on_food=False):
@@ -104,8 +104,8 @@ class TestFoodAndEating(unittest.TestCase):
         # Verify creature energy increased by 1
         self.assertAlmostEqual(creature.energy, initial_energy + 1.0, places=5)
 
-        # Verify food remaining energy decreased by 1
-        self.assertAlmostEqual(food.remaining_energy, initial_food_energy - 1.0, places=5)
+        # Verify food energy decreased by 1
+        self.assertAlmostEqual(food.energy, initial_food_energy - 1.0, places=5)
 
         # Verify food is still in world.foods (not fully consumed)
         self.assertIn(food, world.foods)
@@ -129,8 +129,8 @@ class TestFoodAndEating(unittest.TestCase):
         creature = Creature(1.0, 1.0, size=1.0, energy=10.0)
         world.add_creature(creature)
 
-        # Manually place food at the same position (1.0, 1.0) with remaining_energy = 5
-        food = Food(x=1.0, y=1.0, size=1.0, energy_value=5.0, remaining_duration=-1)
+        # Manually place food at the same position (1.0, 1.0) with energy = 5
+        food = Food(x=1.0, y=1.0, energy=5.0, remaining_duration=-1)
         world.foods.append(food)
 
         # Initial energy and food remaining energy

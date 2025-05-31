@@ -62,8 +62,7 @@ class World:
                         new_food = Food(
                             x=fx,
                             y=fy,
-                            size=self.DEFAULT_FOOD_SIZE,
-                            energy_value=self.DEFAULT_FOOD_ENERGY,
+                            energy=self.DEFAULT_FOOD_ENERGY,
                             remaining_duration=-1,  # -1 means infinite duration
                             radius=self.DEFAULT_FOOD_RADIUS
                         )
@@ -128,8 +127,7 @@ class World:
             new_food = Food(
                 x=x,
                 y=y,
-                size=self.DEFAULT_FOOD_SIZE,
-                energy_value=self.DEFAULT_FOOD_ENERGY,
+                energy=self.DEFAULT_FOOD_ENERGY,
                 remaining_duration=-1,  # -1 means infinite duration
                 radius=self.DEFAULT_FOOD_RADIUS
             )
@@ -202,7 +200,7 @@ class World:
                 # Decay the food
                 food.decay()
                 # Keep it if not expired by duration and not fully consumed
-                if not food.is_expired() and food.remaining_energy > 0:
+                if not food.is_expired() and food.energy > 0:
                     new_foods.append(food)
 
         self.foods = new_foods

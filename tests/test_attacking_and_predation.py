@@ -92,7 +92,7 @@ class TestAttackingAndPredation(unittest.TestCase):
         print(f"  Target in world.creatures: {target in world.creatures}")
         print(f"  Number of foods: {len(world.foods)}")
         if world.foods:
-            print(f"  Food: x={world.foods[0].x}, y={world.foods[0].y}, energy_value={world.foods[0].energy_value}")
+            print(f"  Food: x={world.foods[0].x}, y={world.foods[0].y}, energy={world.foods[0].energy}")
 
         # Verify target is dead and removed from world.creatures
         self.assertNotIn(target, world.creatures)
@@ -107,10 +107,10 @@ class TestAttackingAndPredation(unittest.TestCase):
         self.assertAlmostEqual(corpse.x, 2.0, places=5)
         self.assertAlmostEqual(corpse.y, 3.0, places=5)
 
-        # Verify corpse has correct energy_value (2 * damage_dealt)
+        # Verify corpse has correct energy (2 * damage_dealt)
         # damage_dealt = min(target_initial_energy, attacker.attack_damage) = min(4.0, 5.0) = 4.0
-        # energy_value = 2 * 4.0 = 8.0
-        self.assertAlmostEqual(corpse.energy_value, 8.0, places=5)
+        # energy = 2 * 4.0 = 8.0
+        self.assertAlmostEqual(corpse.energy, 8.0, places=5)
 
         # Verify corpse has correct remaining_duration
         # The corpse duration should be 5 as set in Creature.apply_action
@@ -304,11 +304,10 @@ class TestAttackingAndPredation(unittest.TestCase):
         # Verify attacker's energy is now 11.0 (10.0 - 1.0 + 2.0)
         self.assertAlmostEqual(attacker.energy, 11.0, places=5)
 
-        # Verify a corpse was created with energy_value = 8.0
+        # Verify a corpse was created with energy = 8.0
         self.assertEqual(len(world.foods), 1)
         corpse = world.foods[0]
-        self.assertAlmostEqual(corpse.energy_value, 8.0, places=5)
-        self.assertAlmostEqual(corpse.remaining_energy, 8.0, places=5)
+        self.assertAlmostEqual(corpse.energy, 8.0, places=5)
 
         # Monkey-patch attacker to move north in step 2
         def move_north(vision, on_food=False):
@@ -351,14 +350,14 @@ class TestAttackingAndPredation(unittest.TestCase):
 
             # Print corpse state before step
             if len(world.foods) > 0:
-                print(f"Before step {i+1}: corpse.remaining_energy={world.foods[0].remaining_energy}, attacker.energy={attacker.energy}")
+                print(f"Before step {i+1}: corpse.energy={world.foods[0].energy}, attacker.energy={attacker.energy}")
 
             # Call world.step() to eat one bite
             world.step()
 
             # Print corpse state after step
             if len(world.foods) > 0:
-                print(f"After step {i+1}: corpse.remaining_energy={world.foods[0].remaining_energy}, attacker.energy={attacker.energy}")
+                print(f"After step {i+1}: corpse.energy={world.foods[0].energy}, attacker.energy={attacker.energy}")
             else:
                 print(f"After step {i+1}: corpse is gone, attacker.energy={attacker.energy}")
 
@@ -385,7 +384,7 @@ class TestAttackingAndPredation(unittest.TestCase):
         world = World(5, 5, food_spawn_rate=0.0)
 
         # Create a spawned food at (4,4)
-        spawned_food = Food(x=4.0, y=4.0, size=1.0, energy_value=2.0, remaining_duration=-1)
+        spawned_food = Food(x=4.0, y=4.0, energy=2.0, remaining_duration=-1)
         world.foods.append(spawned_food)
 
         # Create predator (A) and herbivore (B)
@@ -497,9 +496,9 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         self.assertIsNotNone(corpse)
 
-        # Verify corpse has correct energy_value
+        # Verify corpse has correct energy
         expected_energy = 2.0 * min(4.0, predator.attack_damage)  # 2 * min(4.0, 5.0) = 8.0
-        self.assertAlmostEqual(corpse.energy_value, expected_energy, places=5)
+        self.assertAlmostEqual(corpse.energy, expected_energy, places=5)
 
 if __name__ == "__main__":
     unittest.main()

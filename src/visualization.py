@@ -57,7 +57,7 @@ class Visualizer:
         """
         Draw the current state of `world`:
          - Creatures as green circles with radius = creature.radius.
-         - Food as red circles with radius proportional to remaining_energy/initial_energy.
+         - Food as red circles with radius proportional to its energy.
         After calling render(), call plt.pause() to let the figure update.
         """
         # Clear existing artists:
@@ -69,12 +69,11 @@ class Visualizer:
         self.ax.set_yticks([])
         self.ax.set_facecolor('black')
 
-        # 1) Draw food (if any) as red circles with radius proportional to remaining_energy/initial_energy
+        # 1) Draw food (if any) as red circles with radius proportional to energy
         if len(world.foods) > 0:
             for f in world.foods:
-                # Calculate the scaled radius based on remaining energy
-                energy_ratio = f.remaining_energy / f.initial_energy
-                scaled_radius = f.radius * energy_ratio
+                # Calculate the scaled radius based on energy
+                scaled_radius = f.radius
 
                 # Draw the food as a circle
                 food_circle = plt.Circle(
@@ -102,7 +101,7 @@ class Visualizer:
                     self.ax.text(
                         f.x,
                         f.y + scaled_radius * 0.5,
-                        f"{f.remaining_energy:.1f}",
+                        f"{f.energy:.1f}",
                         color='white',
                         fontsize=6,
                         ha='center',

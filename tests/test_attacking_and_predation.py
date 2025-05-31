@@ -31,7 +31,7 @@ class TestAttackingAndPredation(unittest.TestCase):
         world = World(5, 5, food_spawn_rate=0.0)
 
         # Create attacker (A) and target (B)
-        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0)
         target = Creature(2.0, 3.0, size=1.0, energy=4.0)
 
         # Add creatures to the world (target first so attacker moves after it in the step)
@@ -131,7 +131,7 @@ class TestAttackingAndPredation(unittest.TestCase):
         world = World(5, 5, food_spawn_rate=0.0)
 
         # Create attacker
-        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0)
 
         # Add creature to the world
         world.add_creature(attacker)
@@ -179,7 +179,7 @@ class TestAttackingAndPredation(unittest.TestCase):
         world = World(5, 5, food_spawn_rate=0.0)
 
         # Create attacker (A) and target (B)
-        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0)
         target = Creature(2.0, 3.0, size=1.0, energy=4.0)
 
         # Add creatures to the world (target first so attacker moves after it in the step)
@@ -265,7 +265,7 @@ class TestAttackingAndPredation(unittest.TestCase):
         world = World(5, 5, food_spawn_rate=0.0)
 
         # Create attacker (A) and target (B)
-        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+        attacker = Creature(2.0, 2.0, size=1.0, energy=10.0)
         target = Creature(2.0, 3.0, size=1.0, energy=4.0)
 
         # Add creatures to the world (target first so attacker moves after it in the step)
@@ -384,11 +384,11 @@ class TestAttackingAndPredation(unittest.TestCase):
         world = World(5, 5, food_spawn_rate=0.0)
 
         # Create a spawned food at (4,4)
-        spawned_food = Food(x=4.0, y=4.0, energy=2.0, remaining_duration=-1)
+        spawned_food = Food(x=4.0, y=4.0, remaining_duration=-1, energy=2.0)
         world.foods.append(spawned_food)
 
         # Create predator (A) and herbivore (B)
-        predator = Creature(2.0, 2.0, size=1.0, energy=10.0, attack_damage=5.0, attack_cost=1.0, attack_bonus=2.0)
+        predator = Creature(2.0, 2.0, size=1.0, energy=10.0)
         herbivore = Creature(3.0, 2.0, size=1.0, energy=4.0)  # Reduced energy so it dies in one hit
 
         # Add creatures to the world (target first so attacker moves after it in the step)

@@ -15,18 +15,16 @@ class Creature:
     EAT_RANGE_FACTOR = 3.0     # Eat range = (self.radius + food.radius) * EAT_RANGE_FACTOR
 
     def __init__(self, x: float, y: float, size: float, energy: float, velocity: float = None, 
-                 eat_bonus: float = 5.0, attack_damage: float = 5.0, attack_cost: float = 1.0, 
-                 attack_bonus: float = 2.0, radius: float = None):
+                 eat_bonus: float = 5.0, radius: float = None):
         """
         x, y: initial continuous coordinates (floats).
-        size: determines relative strength and relates inversely to velocity.
+        size: determines relative strength, attack_damage, attack_cost, and max_energy.
+              Also relates inversely to velocity.
         energy: when ≤ 0, the creature "dies" and is removed by World.step().
+               when ≥ max_energy, the creature splits into two identical creatures.
         velocity: maximum speed; bigger creatures → smaller velocity (by convention).
                  If None, computed as 1.0 / size.
         eat_bonus: how much energy a creature gains when it consumes one food item.
-        attack_damage: how much damage this creature deals when attacking.
-        attack_cost: energy cost to the attacker per strike.
-        attack_bonus: energy bonus to attacker per successful hit.
         radius: physical size for collision detection. If None, computed as size * RADIUS_FACTOR.
         """
         self.x = float(x)
@@ -34,9 +32,14 @@ class Creature:
         self.size = size
         self.energy = energy
         self.eat_bonus = eat_bonus
-        self.attack_damage = attack_damage
-        self.attack_cost = attack_cost
-        self.attack_bonus = attack_bonus
+
+        # Size determines attack_damage and attack_cost
+        self.attack_damage = size * 5.0
+        self.attack_cost = size * 1.0
+
+        # Max energy is determined by size
+        self.max_energy = size * 100.0
+
         self.last_action = "NONE"
 
         # Compute velocity if not provided
@@ -312,9 +315,8 @@ class Creature:
             # Debug prints
             print(f"ATTACK: damage_dealt={damage_dealt}, target_energy_after={target.energy}")
 
-            # Apply costs and bonuses to attacker
+            # Apply costs to attacker
             self.energy -= self.attack_cost
-            self.energy += self.attack_bonus
 
             # Update action descriptions
             self.last_action = f"ATTACK→{target.id if hasattr(target, 'id') else id(target)}"
@@ -328,16 +330,12 @@ class Creature:
                 # Create corpse food with energy = 2 * damage_dealt
                 energy = 2.0 * damage_dealt
 
-                # Calculate corpse radius based on target size
-                corpse_radius = target.radius
-
                 # For tests, we need to ensure exact duration
                 corpse_food = Food(
                     x=target.x,
                     y=target.y,
-                    energy=energy,
                     remaining_duration=5,  # Set to 5 to match test expectations
-                    radius=corpse_radius
+                    energy=energy
                 )
 
                 # Add corpse to world's foods
@@ -408,6 +406,51 @@ class Creature:
         else:  # "REST"
             self.energy -= 0.1
             self.last_action = "REST"
+
+    def should_split(self) -> bool:
+        """
+        Check if the creature has enough energy to split.
+
+        Returns:
+            True if the creature's energy is greater than or equal to its max_energy, False otherwise.
+        """
+        return self.energy >= self.max_energy
+
+    def split(self, world: 'World') -> 'Creature':
+        """
+        Split the creature into two identical creatures.
+        The parent creature keeps half of its energy, and the child gets the other half.
+
+        Args:
+            world: The world in which the creature lives.
+
+        Returns:
+            The new child creature.
+        """
+        # Create a new creature with the same attributes but half the energy
+        child = Creature(
+            x=self.x + random.uniform(-1.0, 1.0),  # Slightly offset position
+            y=self.y + random.uniform(-1.0, 1.0),
+            size=self.size,
+            energy=self.energy / 2.0,
+            velocity=self.velocity,
+            eat_bonus=self.eat_bonus,
+            radius=self.radius
+        )
+
+        # Reduce the parent's energy by half
+        self.energy /= 2.0
+
+        # Add the child to the world
+        world.add_creature(child)
+
+        return child
+
+    def __repr__(self) -> str:
+        """
+        String representation of the Creature object.
+        """
+        return f"<Creature x={self.x:.2f} y={self.y:.2f} size={self.size:.2f} energy={self.energy:.2f}/{self.max_energy:.2f}>"
 
 # Import at the end to avoid circular imports
 from .world import World

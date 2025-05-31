@@ -61,7 +61,7 @@ class TestFoodAndEating(unittest.TestCase):
 
         # Manually place food at (2.5, 2.5) with energy = 5
         # This is within eat range of the creature
-        food = Food(x=2.5, y=2.5, energy=5.0, remaining_duration=-1)
+        food = Food(x=2.5, y=2.5, remaining_duration=-1, energy=5.0)
         world.foods.append(food)
 
         # Initial energy and food energy
@@ -130,12 +130,12 @@ class TestFoodAndEating(unittest.TestCase):
         world.add_creature(creature)
 
         # Manually place food at the same position (1.0, 1.0) with energy = 5
-        food = Food(x=1.0, y=1.0, energy=5.0, remaining_duration=-1)
+        food = Food(x=1.0, y=1.0, remaining_duration=-1, energy=5.0)
         world.foods.append(food)
 
-        # Initial energy and food remaining energy
+        # Initial energy and food energy
         initial_energy = creature.energy
-        initial_food_energy = food.remaining_energy
+        initial_food_energy = food.energy
 
         # Override creature's decide method to always eat at current position if on food
         def always_eat_at_current(vision, on_food=False):
@@ -154,8 +154,8 @@ class TestFoodAndEating(unittest.TestCase):
         # Verify creature energy increased by 1
         self.assertAlmostEqual(creature.energy, initial_energy + 1.0, places=5)
 
-        # Verify food remaining energy decreased by 1
-        self.assertAlmostEqual(food.remaining_energy, initial_food_energy - 1.0, places=5)
+        # Verify food energy decreased by 1
+        self.assertAlmostEqual(food.energy, initial_food_energy - 1.0, places=5)
 
         # Verify food is still in world.foods (not fully consumed)
         self.assertIn(food, world.foods)
@@ -181,14 +181,14 @@ class TestFoodAndEating(unittest.TestCase):
         world.add_creature(creature_a)
         world.add_creature(creature_b)
 
-        # Manually place food at (2.0, 2.0) with remaining_energy = 5
-        food = Food(x=2.0, y=2.0, size=1.0, energy_value=5.0, remaining_duration=-1)
+        # Manually place food at (2.0, 2.0) with energy = 5
+        food = Food(x=2.0, y=2.0, remaining_duration=-1, energy=5.0)
         world.foods.append(food)
 
-        # Initial energy and food remaining energy
+        # Initial energy and food energy
         initial_energy_a = creature_a.energy
         initial_energy_b = creature_b.energy
-        initial_food_energy = food.remaining_energy
+        initial_food_energy = food.energy
 
         # Override creatures' decide methods to always eat the food
         def always_eat_food(vision, on_food=False):
@@ -225,8 +225,8 @@ class TestFoodAndEating(unittest.TestCase):
         self.assertAlmostEqual(creature_a.energy, initial_energy_a + 1.0, places=5)
         self.assertAlmostEqual(creature_b.energy, initial_energy_b + 1.0, places=5)
 
-        # Verify food remaining energy decreased by 2 (1 per creature)
-        self.assertAlmostEqual(food.remaining_energy, initial_food_energy - 2.0, places=5)
+        # Verify food energy decreased by 2 (1 per creature)
+        self.assertAlmostEqual(food.energy, initial_food_energy - 2.0, places=5)
 
         # Verify food is still in world.foods (not fully consumed)
         self.assertIn(food, world.foods)
@@ -249,8 +249,8 @@ class TestFoodAndEating(unittest.TestCase):
         self.assertEqual(creature_a.energy, initial_energy_a + 2.0)
         self.assertEqual(creature_b.energy, initial_energy_b + 2.0)
 
-        # Verify food remaining energy decreased by another 2
-        self.assertEqual(food.remaining_energy, initial_food_energy - 4.0)
+        # Verify food energy decreased by another 2
+        self.assertEqual(food.energy, initial_food_energy - 4.0)
 
         # Verify food is still in world.foods (not fully consumed)
         self.assertIn(food, world.foods)
@@ -277,16 +277,16 @@ class TestFoodAndEating(unittest.TestCase):
         world = World(5, 5, food_spawn_rate=0.0)
 
         # Test case 1: Corpse decays due to remaining_duration reaching 0
-        # Manually place a corpse at (1,1) with remaining_energy = 4 and remaining_duration = 2
+        # Manually place a corpse at (1,1) with energy = 4 and remaining_duration = 2
         from src.food import Food
-        corpse1 = Food(x=1, y=1, size=1.0, energy_value=4.0, remaining_duration=2)
+        corpse1 = Food(x=1, y=1, remaining_duration=2, energy=4.0)
         world.foods.append(corpse1)
         world.food_positions.add((1, 1))  # For backward compatibility
 
         # Call world.step() twice to let the corpse decay
         world.step()
         self.assertEqual(corpse1.remaining_duration, 1)
-        self.assertEqual(corpse1.remaining_energy, 4.0)  # Energy unchanged
+        self.assertEqual(corpse1.energy, 4.0)  # Energy unchanged
         self.assertIn(corpse1, world.foods)  # Corpse still exists
 
         world.step()
@@ -294,9 +294,9 @@ class TestFoodAndEating(unittest.TestCase):
         self.assertNotIn(corpse1, world.foods)
         self.assertNotIn((1, 1), world.food_positions)
 
-        # Test case 2: Corpse disappears when remaining_energy reaches 0 before remaining_duration
-        # Manually place a corpse at (2,2) with remaining_energy = 2 and remaining_duration = 5
-        corpse2 = Food(x=2, y=2, size=1.0, energy_value=2.0, remaining_duration=5)
+        # Test case 2: Corpse disappears when energy reaches 0 before remaining_duration
+        # Manually place a corpse at (2,2) with energy = 2 and remaining_duration = 5
+        corpse2 = Food(x=2, y=2, remaining_duration=5, energy=2.0)
         world.foods.append(corpse2)
         world.food_positions.add((2, 2))  # For backward compatibility
 
@@ -313,12 +313,12 @@ class TestFoodAndEating(unittest.TestCase):
         # Call world.step() to let the creature take one bite
         world.step()
         self.assertEqual(corpse2.remaining_duration, 4)  # Duration decreased
-        self.assertEqual(corpse2.remaining_energy, 1.0)  # Energy decreased by 1
+        self.assertEqual(corpse2.energy, 1.0)  # Energy decreased by 1
         self.assertIn(corpse2, world.foods)  # Corpse still exists
 
         # Call world.step() again to let the creature take another bite
         world.step()
-        # Corpse should be gone due to remaining_energy reaching 0
+        # Corpse should be gone due to energy reaching 0
         self.assertNotIn(corpse2, world.foods)
         self.assertNotIn((2, 2), world.food_positions)
 

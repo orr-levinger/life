@@ -62,9 +62,8 @@ class World:
                         new_food = Food(
                             x=fx,
                             y=fy,
-                            energy=self.DEFAULT_FOOD_ENERGY,
                             remaining_duration=-1,  # -1 means infinite duration
-                            radius=self.DEFAULT_FOOD_RADIUS
+                            energy=self.DEFAULT_FOOD_ENERGY
                         )
                         self.foods.append(new_food)
             return
@@ -127,9 +126,8 @@ class World:
             new_food = Food(
                 x=x,
                 y=y,
-                energy=self.DEFAULT_FOOD_ENERGY,
                 remaining_duration=-1,  # -1 means infinite duration
-                radius=self.DEFAULT_FOOD_RADIUS
+                energy=self.DEFAULT_FOOD_ENERGY
             )
             self.foods.append(new_food)
             # Track that this food was created in this step
@@ -187,6 +185,14 @@ class World:
 
         # 4) Remove dead creatures
         self.creatures = [c for c in self.creatures if c.energy > 0]
+
+        # 4.5) Check if any creatures should split and perform the split
+        # We need to make a copy of the list because we'll be modifying it
+        for creature in list(self.creatures):
+            if creature.should_split():
+                # Split the creature and add the child to the world
+                creature.split(self)
+                print(f"Creature split! Parent energy: {creature.energy}, size: {creature.size}")
 
         # 5) Decay all Food objects and remove expired ones
         new_foods = []

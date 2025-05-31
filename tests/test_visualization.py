@@ -61,8 +61,8 @@ class TestVisualization(unittest.TestCase):
         Place food in the world and verify render() draws it correctly.
         """
         w = World(5, 5, food_spawn_rate=0.0)
-        # Add a food item with remaining_energy = initial_energy
-        food = Food(x=2.5, y=2.5, size=1.0, energy_value=5.0, remaining_duration=-1)
+        # Add a food item with energy = 5.0
+        food = Food(x=2.5, y=2.5, remaining_duration=-1, energy=5.0)
         w.foods.append(food)
         viz = Visualizer(5, 5)
         viz.render(w)
@@ -122,16 +122,15 @@ class TestVisualization(unittest.TestCase):
 
     def test_food_radius_scaling(self):
         """
-        Test that food is drawn with radius proportional to remaining_energy/initial_energy.
+        Test that food is drawn with radius proportional to its energy.
         """
         w = World(5, 5, food_spawn_rate=0.0)
 
-        # Add a food item with remaining_energy = initial_energy
-        food1 = Food(x=1.0, y=1.0, size=1.0, energy_value=5.0, remaining_duration=-1)
+        # Add a food item with energy = 5.0
+        food1 = Food(x=1.0, y=1.0, remaining_duration=-1, energy=5.0)
 
-        # Add a food item with remaining_energy = 0.5 * initial_energy
-        food2 = Food(x=3.0, y=3.0, size=1.0, energy_value=5.0, remaining_duration=-1)
-        food2.remaining_energy = 2.5  # Half of initial_energy
+        # Add a food item with energy = 2.5 (half of the first food)
+        food2 = Food(x=3.0, y=3.0, remaining_duration=-1, energy=2.5)
 
         w.foods.append(food1)
         w.foods.append(food2)

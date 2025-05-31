@@ -18,28 +18,31 @@ class Food:
     Size is based on energy (size = energy).
     """
 
-    def __init__(self, x: float, y: float, energy: float, remaining_duration: int, radius: float = None):
+    def __init__(self, x: float, y: float, remaining_duration: int, energy: float = None):
         """
         Initialize a new Food object.
 
         Args:
             x, y: Continuous coordinates where the food is located
-            energy: How much energy this food contains (also determines size)
             remaining_duration: Number of world steps this food persists before disappearing
                                -1 means it never expires (infinite lifespan)
-            radius: Physical radius for collision detection. If None, computed as size * 0.2
+            energy: How much energy this food contains (also determines size)
+                   If None, a random value between 1-10 is used
         """
+        import random
         self.x = float(x)
         self.y = float(y)
-        self.energy = energy  # Single energy variable that decreases as creatures eat
-        self.size = energy    # Size is based on energy
-        self.remaining_duration = remaining_duration
 
-        # Set radius based on size if not provided
-        if radius is None:
-            self.radius = self.size * 0.2  # Default radius factor
+        # If energy is not provided, use a random value between 1-10
+        if energy is None:
+            self.energy = random.uniform(1.0, 10.0)
         else:
-            self.radius = radius
+            self.energy = energy
+
+        # Radius is 0.1 of the energy
+        self.radius = 0.1 * self.energy
+
+        self.remaining_duration = remaining_duration
 
     def decay(self) -> None:
         """
@@ -97,4 +100,4 @@ class Food:
         String representation of the Food object.
         """
         duration_str = "∞" if self.remaining_duration == -1 else str(self.remaining_duration)
-        return f"<Food x={self.x:.2f} y={self.y:.2f} size={self.size:.2f} energy={self.energy:.2f} radius={self.radius:.2f} duration={duration_str}>"
+        return f"<Food x={self.x:.2f} y={self.y:.2f} energy={self.energy:.2f} radius={self.radius:.2f} duration={duration_str}>"

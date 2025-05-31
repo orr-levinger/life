@@ -46,6 +46,11 @@ class TestContinuousMovement(unittest.TestCase):
         w.add_creature(predator)
         w.add_creature(prey)
 
+        # Freeze predator so it doesn't move during the step
+        def always_rest(vision):
+            return ("REST", None)
+        predator.decide = always_rest
+
         # First, verify that the sensor reading and decision are correct
         vs = VisionSensor()
         reading = vs.get_reading(prey, w)
@@ -55,11 +60,6 @@ class TestContinuousMovement(unittest.TestCase):
         dx, dy = action[1]
         self.assertAlmostEqual(dx, 0.0, places=5)
         self.assertAlmostEqual(dy, -1.0, places=5)
-
-        # Override decide to ensure it moves directly south
-        def move_south(vision):
-            return ("MOVE", (0.0, -1.0))
-        prey.decide = move_south
 
         # After world.step(), prey.y should be 1.0 and energy 4.0
         w.step()
@@ -89,6 +89,7 @@ class TestContinuousMovement(unittest.TestCase):
             reading = vs.get_reading(c, w)
             action = c.decide(reading)
 
+            # Apply the action to update energy and position
             c.apply_action(action, w)
 
             if action[0] == "MOVE":
@@ -97,10 +98,15 @@ class TestContinuousMovement(unittest.TestCase):
                 dx, dy = action[1]
                 expected_dist = min(math.hypot(dx, dy), c.velocity)
                 self.assertAlmostEqual(initial_energy - c.energy, expected_dist, places=5)
+                # Reset energy and position
+                c.energy = initial_energy
+                c.x, c.y = 5.0, 5.0
             elif action[0] == "REST":
                 seen_rest = True
                 # Check that energy decreased by 0.1
                 self.assertAlmostEqual(initial_energy - c.energy, 0.1, places=5)
+                # Reset energy
+                c.energy = initial_energy
 
             if seen_move and seen_rest:
                 break

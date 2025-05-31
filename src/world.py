@@ -1,7 +1,7 @@
 from typing import List, Set, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from creature import Creature
+    from .creature import Creature
 
 class World:
     def __init__(self, width: int, height: int, food_spawn_rate: float):
@@ -44,4 +44,4 @@ class World:
                 self.creatures.remove(creature)
 
 # Import at the end to avoid circular imports
-from creature import Creature
+from .creature import Creature

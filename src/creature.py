@@ -1,7 +1,7 @@
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from world import World
+    from .world import World
 
 class Creature:
     def __init__(self, x: int, y: int, size: float, energy: float, velocity: float):
@@ -39,4 +39,4 @@ class Creature:
         # TODO (future): implement movement, eating, attacking logic
 
 # Import at the end to avoid circular imports
-from world import World
+from .world import World

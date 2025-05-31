@@ -1,12 +1,10 @@
+import sys, os
 import unittest
-import sys
-import os
-
-from life_sim_stage1.creature import Creature
-from life_sim_stage1.world import World
-
 
 # Add the parent directory to the path so we can import the modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.world import World
+from src.creature import Creature
 
 class TestWorldAndCreature(unittest.TestCase):
     def test_creature_initialization(self):

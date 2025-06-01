@@ -12,6 +12,7 @@ class World:
     DEFAULT_FOOD_ENERGY = 2.0
     DEFAULT_FOOD_RADIUS = 0.2  # Default radius for food items
     MIN_SPAWN_DISTANCE = 0.5   # Minimum distance between spawned food and other objects
+    MAX_FOOD = 200 # Maximum number of food items allowed (fixed at 20)
 
     def __init__(self, width: int, height: int, food_spawn_rate: float):
         """
@@ -77,15 +78,13 @@ class World:
 
         # Apply food limit only for normal simulation (not for tests with high spawn rates)
         if self.food_spawn_rate < 0.5:
-            # Maximum number of food items allowed (fixed at 20)
-            MAX_FOOD = 100
 
             # If we're already at or above the maximum, don't spawn more food
-            if len(self.foods) >= MAX_FOOD:
+            if len(self.foods) >= self.MAX_FOOD:
                 return
 
             # Limit K to avoid excessive attempts when we're close to MAX_FOOD
-            K = min(K, MAX_FOOD - len(self.foods))
+            K = min(K, self.MAX_FOOD - len(self.foods))
 
         # Helper function to check if a position is valid for new food
         def is_valid_position(x, y, radius):

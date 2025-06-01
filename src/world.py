@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 class World:
     # Constants for continuous space
     DEFAULT_FOOD_SIZE = 1.0
-    DEFAULT_FOOD_ENERGY = 2.0
+    DEFAULT_FOOD_ENERGY = 10.0
     DEFAULT_FOOD_RADIUS = 0.2  # Default radius for food items
     MIN_SPAWN_DISTANCE = 0.5   # Minimum distance between spawned food and other objects
     MAX_FOOD = 200 # Maximum number of food items allowed (fixed at 20)

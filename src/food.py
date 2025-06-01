@@ -35,7 +35,7 @@ class Food:
 
         # If energy is not provided, use a random value between 1-10
         if energy is None:
-            self.energy = random.uniform(5.0, 25.0)
+            self.energy = random.uniform(10.0, 25.0)
         else:
             self.energy = energy
 

@@ -44,8 +44,7 @@ class Creature:
         self.energy = energy
         self.eat_bonus = eat_bonus
         self.id = id(self)  # Unique identifier for this creature
-        self.parent_id = parent_id  # ID of the parent creature
-        self.children_ids = set()  # IDs of direct children
+        self.parent_id = parent_id or 0  # ID of the parent creature
 
         # Size determines attack_damage and attack_cost
         self.attack_damage = size * 5.0
@@ -196,7 +195,11 @@ class Creature:
             return self._decide_rest_or_wander()
 
         # Find nearby creatures
-        nearby_creatures = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "creature"]
+        nearby_creatures = [
+            (obj, dist, angle)
+            for type_tag, obj, dist, angle in vision
+            if type_tag == "creature" and obj.parent_id != self.parent_id
+        ]
 
         # Find nearby food
         nearby_food = [(obj, dist, angle) for type_tag, obj, dist, angle in vision if type_tag == "food"]
@@ -211,11 +214,7 @@ class Creature:
             attack_range = (self.radius + closest_creature.radius) * self.ATTACK_RANGE_FACTOR
 
             # If within attack range, attack (but not if it's a direct child, parent, or sibling)
-            if (distance <= attack_range and 
-                closest_creature.id not in self.children_ids and 
-                closest_creature.id != self.parent_id and
-                not (self.parent_id is not None and closest_creature.parent_id is not None and self.parent_id == closest_creature.parent_id)):
-                # Set speed to maximum for attacking
+            if distance <= attack_range and closest_creature.parent_id != self.parent_id:
                 self.current_speed = self.velocity
                 self.intent = "ATTACK"
 
@@ -551,7 +550,7 @@ class Creature:
         energy_per_creature = self.energy / 4.0
 
         # Reduce the parent's energy
-        self.energy = energy_per_creature
+        self.energy = 0
 
         # Create children
         children = []
@@ -571,7 +570,6 @@ class Creature:
         world.add_creature(clone)
         children.append(clone)
         # Add the child's ID to the parent's children_ids set
-        self.children_ids.add(clone.id)
 
         # Create three mutated children
         for i in range(3):
@@ -597,8 +595,6 @@ class Creature:
             )
             world.add_creature(mutated_child)
             children.append(mutated_child)
-            # Add the child's ID to the parent's children_ids set
-            self.children_ids.add(mutated_child.id)
 
         return children
 

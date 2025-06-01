@@ -134,12 +134,12 @@ class World:
         """
         Advance the simulation by one time step:
         1. Call spawn_food() to randomly place new food items in continuous space.
-        2. Gather all creatures' decisions.
-        3. Process all creatures in phases:
+        2. Remove dead creatures (energy ≤ 0)
+        3. Gather all creatures' decisions.
+        4. Process all creatures in phases:
            a. Apply all ATTACK actions first (kills generate corpses → new Food objects)
            b. Apply all EAT actions next (which decrement food energy by 1 per bite)
            c. Apply all other actions (MOVE, EAT_AT_CURRENT, REST)
-        4. Remove dead creatures (energy ≤ 0)
         5. Decay all Food objects and remove expired ones
         """
         # Clear the set of foods created in the previous step
@@ -148,7 +148,10 @@ class World:
         # 1) Spawn new food
         self.spawn_food()
 
-        # 2) Gather all creatures' decisions
+        # 2) Remove dead creatures
+        self.creatures = [c for c in self.creatures if c.energy > 0]
+
+        # 3) Gather all creatures' decisions
         decisions = []
         for creature in list(self.creatures):
             # Get proximity reading
@@ -165,25 +168,22 @@ class World:
             action = creature.decide(vision, on_food)
             decisions.append((creature, action))
 
-        # 3a) Apply all ATTACK actions first
+        # 4a) Apply all ATTACK actions first
         for creature, action in decisions:
             if action[0] == "ATTACK":
                 creature.apply_action(action, self)
 
-        # 3b) Apply all EAT actions next
+        # 4b) Apply all EAT actions next
         for creature, action in decisions:
             if action[0] == "EAT":
                 creature.apply_action(action, self)
 
-        # 3c) Apply all other actions (MOVE, EAT_AT_CURRENT, REST)
+        # 4c) Apply all other actions (MOVE, EAT_AT_CURRENT, REST)
         for creature, action in decisions:
             if action[0] not in ("ATTACK", "EAT"):
                 creature.apply_action(action, self)
 
-        # 4) Remove dead creatures
-        self.creatures = [c for c in self.creatures if c.energy > 0]
-
-        # 4.5) Check if any creatures should split and perform the split
+        # 5.5) Check if any creatures should split and perform the split
         # We need to make a copy of the list because we'll be modifying it
         for creature in list(self.creatures):
             if creature.should_split():
@@ -191,7 +191,7 @@ class World:
                 children = creature.split(self)
                 print(f"Creature split into 4! Parent energy: {creature.energy}, size: {creature.size}, Children: {len(children)}")
 
-        # 5) Decay all Food objects and remove expired ones
+        # 6) Decay all Food objects and remove expired ones
         new_foods = []
 
         for food in self.foods:

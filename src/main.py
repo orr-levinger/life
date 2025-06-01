@@ -21,9 +21,10 @@ def main() -> None:
     # Configuration for Stage 1.5
     WIDTH, HEIGHT = 30, 30
     FOOD_RATE = 0.005          # Reduced food spawn rate to prevent screen filling
-    INITIAL_CREATURES = 50     # Start with 10 creatures
+    INITIAL_CREATURES = 20     # Start with 10 creatures
     NUM_STEPS = 1000            # Run 100 steps for demonstration
-    PAUSE_TIME = 0.0001          # seconds to pause between frames
+    PAUSE_TIME = 0.01          # seconds to pause between frames
+    USE_BRAIN = False  # Whether to use brains for creatures (default is True)
 
     # 1) Create the world
     world = World(WIDTH, HEIGHT, FOOD_RATE)
@@ -33,10 +34,10 @@ def main() -> None:
         x = random.randint(0, WIDTH - 1)
         y = random.randint(0, HEIGHT - 1)
         size = random.uniform(0.5, 2.0)
-        energy = random.uniform(150.0, 300.0)
+        energy = random.uniform(15.0, 30.0)
         # IMPLEMENT: no need to compute velocity here; Creature.__init__ will do it
         # velocity = 1.0 / size
-        creature = Creature(x, y, size, energy, create_brain=True)
+        creature = Creature(x, y, size, energy, create_brain=USE_BRAIN)
         world.add_creature(creature)
 
     # 3) Create the Visualizer

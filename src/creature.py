@@ -96,8 +96,8 @@ class Creature:
         if brain is not None:
             self.brain = brain
         elif create_brain:
-            from .neural_network import NeuralNetwork
-            self.brain = NeuralNetwork(
+            from .neural_network import TFNeuralNetwork
+            self.brain = TFNeuralNetwork(
                 input_size=self.INPUT_SIZE,
                 hidden_sizes=self.HIDDEN_SIZES,
                 output_size=self.OUTPUT_SIZE

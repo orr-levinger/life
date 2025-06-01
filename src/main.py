@@ -21,7 +21,7 @@ def main() -> None:
     # Configuration for Stage 1.5
     WIDTH, HEIGHT = 20, 20
     FOOD_RATE = 0.005          # Reduced food spawn rate to prevent screen filling
-    INITIAL_CREATURES = 200     # Start with 10 creatures
+    INITIAL_CREATURES = 60     # Start with 10 creatures
     NUM_STEPS = 1000            # Run 100 steps for demonstration
     PAUSE_TIME = 0.001          # seconds to pause between frames
     USE_BRAIN = True  # Whether to use brains for creatures (default is True)

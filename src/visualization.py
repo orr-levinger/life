@@ -133,6 +133,16 @@ class Visualizer:
                     va='bottom'
                 )
 
+                self.ax.text(
+                    c.x,
+                    c.y - c.radius - 0.2,   # Position text slightly below the bottom of the circle
+                    f"{c.steps_without_reward}",  # Display as integer
+                    color='white',
+                    fontsize=6,            # Smaller font so it doesn't clutter
+                    ha='center',
+                    va='top'               # Top-aligned so the text anchors from above
+                )
+
             # Draw arrows indicating movement direction for each creature
             for c in world.creatures:
                 # Get the creature's position (center of the circle)

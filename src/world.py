@@ -24,6 +24,7 @@ class World:
         self.food_spawn_rate = food_spawn_rate
         self.creatures: List['Creature'] = []
         self.foods: List['Food'] = []
+        self.step_count = 0
         self.foods_created_this_step: Set[int] = set()  # Track foods created in the current step
 
     def add_creature(self, creature: 'Creature') -> None:
@@ -143,6 +144,8 @@ class World:
         5. Decay all Food objects and remove expired ones
         """
         # Clear the set of foods created in the previous step
+
+        self.step_count += 1
         self.foods_created_this_step.clear()
 
         # 1) Spawn new food

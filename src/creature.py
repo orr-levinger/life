@@ -41,9 +41,6 @@ class Creature:
             y: float,
             size: float,
             energy: float,
-            velocity: float = None,
-            eat_bonus: float = 5.0,
-            radius: float = None,
             brain: Optional['NeuralNetwork'] = None,
             create_brain: bool = False,
             parent_id: int = None
@@ -69,7 +66,6 @@ class Creature:
         self.y = float(y)                   # Current y-coordinate
         self.size = size                    # Creature "size" scalar
         self.energy = energy                # Current energy level
-        self.eat_bonus = eat_bonus          # Energy reward per food unit
         self.id = id(self)                  # Unique identifier (Python's built-in id)
         self.parent_id = parent_id or 0     # Parent ID (0 if no parent)
 
@@ -94,16 +90,10 @@ class Creature:
         self.last_action = "NONE"
 
         # --- Velocity logic: larger creatures move more slowly (1/size) if not specified ---
-        if velocity is None:
-            self.velocity = 1.0 / size      # Base max speed
-        else:
-            self.velocity = velocity         # Use provided speed
+        self.velocity = 1.0 / size      # Base max speed
 
         # --- Physical radius for collisions: size * RADIUS_FACTOR unless overridden ---
-        if radius is None:
-            self.radius = size * self.RADIUS_FACTOR
-        else:
-            self.radius = radius
+        self.radius = size * self.RADIUS_FACTOR
 
         # --- Current speed can vary based on action (e.g., chasing or fleeing) ---
         self.current_speed = self.velocity  # Start at max speed by default
@@ -319,7 +309,7 @@ class Creature:
                 return ("ATTACK", closest_creature)
 
             # Otherwise, 10% chance to flee instead of closing in
-            if random.random() < 0.1:
+            if random.random() < 0.4:
                 flee_angle = angle + math.pi   # Directly opposite direction
                 self.current_speed = self.velocity
                 self.intent = "RUN_AWAY"
@@ -572,9 +562,8 @@ class Creature:
 
         # If creature’s energy reaches threshold and its brain hasn’t been saved yet, save it
         if (
-                self.brain is not None
-                and not self.brain_saved
-                and self.energy >= Creature.BRAIN_SAVE_THRESHOLD * self.max_energy
+            self.brain is not None
+            and self.get_nn_score() >= 80
         ):
             self._save_brain()
 
@@ -658,15 +647,14 @@ class Creature:
 
         children: List['Creature'] = []
 
+        size_mutation_factor = 1.0 + random.uniform(-0.1, 0.1)
+        mutated_size = self.size * size_mutation_factor
         # --- Create a clone with identical brain (deep copy via clone()) ---
         clone = Creature(
             x=self.x + random.uniform(-1.0, 1.0),  # Slight random offset so children don’t overlap exactly
             y=self.y + random.uniform(-1.0, 1.0),
-            size=self.size,
+            size=mutated_size,
             energy=energy_per_creature,
-            velocity=self.velocity,
-            eat_bonus=self.eat_bonus,
-            radius=self.radius,
             brain=self.brain.clone() if self.brain else None,  # Clone the neural network weights
             parent_id=self.id                                  # Set parent_id to this creature’s ID
         )
@@ -687,9 +675,6 @@ class Creature:
                 y=self.y + random.uniform(-1.0, 1.0),
                 size=self.size,
                 energy=energy_per_creature,
-                velocity=self.velocity,
-                eat_bonus=self.eat_bonus,
-                radius=self.radius,
                 brain=mutated_brain,
                 parent_id=self.id
             )

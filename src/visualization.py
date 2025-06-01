@@ -115,7 +115,7 @@ class Visualizer:
                 creature_circle = plt.Circle(
                     (c.x, c.y),
                     radius=c.radius,
-                    color='green',
+                    color=c.get_color(),  # Use the creature's color method
                     alpha=0.9,
                     ec='white',
                     lw=0.5

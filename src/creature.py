@@ -1,13 +1,14 @@
 from typing import Any, TYPE_CHECKING, Dict, Tuple, Optional, List, Union
 import random
 import math
-import numpy as np
+import os                             # ADDED: for saving brains
+import pickle                         # ADDED: for serializing brains
 
 if TYPE_CHECKING:
     from .world import World
-    from .sensors import Sensor, VisionSensor, ProximitySensor
+    from .sensors import Sensor, ProximitySensor
     from .food import Food
-    from .neural_network import NeuralNetwork
+    from .neural_network import TFNeuralNetwork as NeuralNetwork
 
 class Creature:
     # Constants for continuous space interaction
@@ -21,7 +22,12 @@ class Creature:
     HIDDEN_SIZES = [8, 8]  # Two hidden layers with 8 neurons each
     OUTPUT_SIZE = 8      # 6 action types + 2 for movement parameters
 
-    def __init__(self, x: float, y: float, size: float, energy: float, velocity: float = None, 
+    # ADDED: threshold fraction of max_energy at which to save brain
+    BRAIN_SAVE_THRESHOLD = 0.8
+    # ADDED: directory name for saved brains
+    SAVE_DIR = "saved_brains"
+
+    def __init__(self, x: float, y: float, size: float, energy: float, velocity: float = None,
                  eat_bonus: float = 5.0, radius: float = None, brain: Optional['NeuralNetwork'] = None,
                  create_brain: bool = False, parent_id: int = None):
         """
@@ -45,6 +51,14 @@ class Creature:
         self.eat_bonus = eat_bonus
         self.id = id(self)  # Unique identifier for this creature
         self.parent_id = parent_id or 0  # ID of the parent creature
+
+        # ADDED: track if last decision used brain
+        self.using_brain = False
+        # ADDED: ensure each brain is saved at most once
+        self.brain_saved = False
+
+        # Initialize no-reward counter
+        self.steps_without_reward = 0
 
         # Size determines attack_damage and attack_cost
         self.attack_damage = size * 5.0
@@ -107,9 +121,20 @@ class Creature:
 
         The neural network takes sensory inputs and outputs action probabilities.
         """
+        # If too many steps without positive reward, force random action
+        if self.steps_without_reward >= 10:
+            action_type, action_params = self._decide_without_brain(vision, on_food)
+            self._set_intent_and_vector(action_type, action_params, vision)
+            # REMOVED: no longer force using_brain=False here
+            return action_type, action_params
+
         # If brain is None (for backward compatibility with tests), use the old decision logic
         if self.brain is None:
+            self.using_brain = False
             return self._decide_without_brain(vision, on_food)
+
+        # Otherwise use the brain
+        self.using_brain = True
 
         # Prepare sensory inputs for the neural network
         sensory_inputs = {
@@ -307,7 +332,6 @@ class Creature:
         # 4) Nothing interesting sensed: rest or wander
         return self._decide_rest_or_wander()
 
-
     def _decide_rest_or_wander(self) -> Tuple[str, Any]:
         """Helper method for deciding between resting and wandering."""
         # Set speed to 50% of maximum for wandering (to conserve energy)
@@ -387,9 +411,9 @@ class Creature:
 
             # Set the last_action based on the action type
             if act_type == "FLEE":
-                self.last_action = f"FLEE"
+                self.last_action = "FLEE"
             else:
-                self.last_action = f"MOVE"
+                self.last_action = "MOVE"
 
         elif act_type == "ATTACK" and param is not None:
             # Continuous space attack on object
@@ -514,14 +538,44 @@ class Creature:
             self.energy -= 0.1
             self.last_action = "REST"
 
-        # Apply rewards/penalties to the neural network based on energy change
-        if self.brain is not None:
-            # Calculate energy change
-            energy_change = self.energy - initial_energy
+        # Calculate energy change
+        energy_change = self.energy - initial_energy
+        # Update no-reward counter based on energy change
+        if energy_change > 0:
+            self.steps_without_reward = 0
+        else:
+            self.steps_without_reward += 1
 
-            # Apply reward/penalty based on energy change
-            # Positive energy change = reward, negative energy change = penalty
+        # Apply reward/penalty to the neural network based on energy change
+        if self.brain is not None:
             self.brain.apply_reward(energy_change)
+
+        # ADDED: check if brain should be saved
+        if (
+                self.brain is not None
+                and not self.brain_saved
+                and self.energy >= Creature.BRAIN_SAVE_THRESHOLD * self.max_energy
+        ):
+            self._save_brain()
+
+    # ADDED: save the neural network to disk
+    def _save_brain(self) -> None:
+        if self.brain is None:
+            return
+        os.makedirs(Creature.SAVE_DIR, exist_ok=True)
+        energy_int = int(round(self.energy))
+        filename = f"brain_{self.id}_{energy_int}.pkl"
+        filepath = os.path.join(Creature.SAVE_DIR, filename)
+        try:
+            with open(filepath, "wb") as f:
+                pickle.dump(self.brain, f)
+            self.brain_saved = True
+        except Exception:
+            pass  # if saving fails, just skip
+
+    # ADDED: return "purple" if used brain, else "green"
+    def get_color(self) -> str:
+        return "purple" if self.using_brain else "green"
 
     def should_split(self) -> bool:
         """
@@ -569,7 +623,6 @@ class Creature:
         )
         world.add_creature(clone)
         children.append(clone)
-        # Add the child's ID to the parent's children_ids set
 
         # Create three mutated children
         for i in range(3):

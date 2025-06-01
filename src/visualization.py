@@ -135,6 +135,16 @@ class Visualizer:
 
                 self.ax.text(
                     c.x,
+                    c.y,
+                    f"{c.get_nn_score():.0f}",
+                    color='red',
+                    fontsize=6,
+                    ha='center',
+                    va='center'
+                )
+
+                self.ax.text(
+                    c.x,
                     c.y - c.radius - 0.2,   # Position text slightly below the bottom of the circle
                     f"{c.steps_without_reward}",  # Display as integer
                     color='white',

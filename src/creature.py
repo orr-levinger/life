@@ -80,6 +80,11 @@ class Creature:
         # --- Counter for steps without positive reward ---
         self.steps_without_reward = 0       # If ≥10, forces a random/legacy decision to encourage exploration
 
+        # --- Cumulative statistics for NN score calculation ---
+        self.nn_reward_count = 0            # Count of times energy_change > 0
+        self.nn_fallback_count = 0          # Count of times forced to use legacy logic
+        self.nn_total_steps = 0             # Count of total calls to decide()
+
         # --- Combat and splitting parameters derived from "size" ---
         self.attack_damage = size * 5.0     # Damage dealt on successful attack
         self.attack_cost = size * 1.0       # Energy cost to attempt an attack
@@ -148,9 +153,16 @@ class Creature:
                 - "ATTACK": target_creature reference to attempt attack
                 - "FLEE": (dx, dy) movement vector for fleeing
         """
+        # --- Increment total step counter for NN score calculation ---
+        self.nn_total_steps += 1
+
         # If the creature hasn't gained energy (no reward) for 10 steps,
         # force a random legacy action (no brain) to encourage exploration
         if self.steps_without_reward >= 10:
+            # Record that we fell back to legacy logic
+            if self.brain is not None:
+                self.nn_fallback_count += 1
+
             action_type, action_params = self._decide_without_brain(vision, on_food)
             self.using_brain = False
             # Set internal intent/velocity vectors for visualization
@@ -182,7 +194,6 @@ class Creature:
 
         # After deciding, set intent and movement vector for rendering/tracking
         self._set_intent_and_vector(action_type, action_params, vision)
-
         return action_type, action_params
 
     def _set_intent_and_vector(self, action_type: str, action_params: Any, vision: List[Tuple[str, Any, float, float]]) -> None:
@@ -392,7 +403,7 @@ class Creature:
           - ("ATTACK", Creature): Attempt to attack the specified creature; energy -= attack_cost, damage dealt.
 
         After the action, compute the energy change (new_energy - initial_energy) as the "reward"
-        and call self.brain.apply_reward(reward) if a brain is installed.
+        and update nn_reward_count or nn_fallback_count accordingly.
         """
         act_type, param = action
         self.last_action = f"{act_type}"         # Store action label for logging or debugging
@@ -546,14 +557,16 @@ class Creature:
         # --- After action, compute energy change as reward signal ---
         energy_change = self.energy - initial_energy
         if energy_change > 0:
-            # Reset no-reward counter if we gained energy
+            # Gained energy → record positive reward
+            if self.using_brain:
+                self.nn_reward_count += energy_change
             self.using_brain = True
             self.steps_without_reward = 0
         else:
-            # Increment counter if we did not gain energy
+            # No energy gain → increment no-reward counter
             self.steps_without_reward += 1
 
-        # If a brain exists, pass the reward (positive or negative) to it
+        # If a brain exists, pass this reward (possibly negative or zero) to it
         if self.brain is not None:
             self.brain.apply_reward(energy_change)
 
@@ -587,6 +600,25 @@ class Creature:
         except Exception:
             # If saving fails (e.g., disk error), silently skip
             pass
+
+    def get_nn_score(self) -> float:
+        """
+        Compute a normalized NN score between 0 and 100 for this creature:
+            score = ((num_positive_rewards - num_fallbacks) / total_steps) * 100
+
+        If the result is negative, clamp to 0. If it exceeds 100, clamp to 100.
+        """
+        # Avoid division by zero if no steps have been taken yet
+        if self.nn_total_steps == 0:
+            return 0.0
+
+        raw = (self.nn_reward_count - self.nn_fallback_count) / self.nn_total_steps * 100.0
+        # Clamp to [0, 100]
+        if raw < 0.0:
+            return 0.0
+        if raw > 100.0:
+            return 100.0
+        return raw
 
     def get_color(self) -> str:
         """

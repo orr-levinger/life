@@ -148,7 +148,8 @@ class Creature:
                 - "ATTACK": target_creature reference to attempt attack
                 - "FLEE": (dx, dy) movement vector for fleeing
         """
-        # If the creature hasn't gained energy (no reward) for 10 steps, force a random legacy action
+        # If the creature hasn't gained energy (no reward) for 10 steps,
+        # force a random legacy action (no brain) to encourage exploration
         if self.steps_without_reward >= 10:
             action_type, action_params = self._decide_without_brain(vision, on_food)
             self.using_brain = False
@@ -456,45 +457,43 @@ class Creature:
             if distance > attack_range:
                 self.energy -= self.attack_cost  # Pay energy cost for attempted attack
                 self.last_action = "ATTACK_MISS"
-                print(f"ATTACK_MISS: distance > attack_range")
-                return
+            else:
+                # Otherwise, deal damage
+                target_initial_energy = target.energy
+                damage_dealt = min(target_initial_energy, self.attack_damage)
+                target.energy -= damage_dealt
 
-            # Otherwise, deal damage
-            target_initial_energy = target.energy
-            damage_dealt = min(target_initial_energy, self.attack_damage)
-            target.energy -= damage_dealt
+                # Debug print: how much damage was dealt
+                print(f"ATTACK: damage_dealt={damage_dealt}, target_energy_after={target.energy}")
 
-            # Debug print: how much damage was dealt
-            print(f"ATTACK: damage_dealt={damage_dealt}, target_energy_after={target.energy}")
+                # Deduct attack cost from attacker’s energy
+                self.energy -= self.attack_cost
 
-            # Deduct attack cost from attacker’s energy
-            self.energy -= self.attack_cost
+                # Update action labels for logging
+                self.last_action = f"ATTACK→{target.id if hasattr(target, 'id') else id(target)}"
+                target.last_action = "HIT_BY_ATTACK"
 
-            # Update action labels for logging
-            self.last_action = f"ATTACK→{target.id if hasattr(target, 'id') else id(target)}"
-            target.last_action = "HIT_BY_ATTACK"
+                # If target’s energy falls to 0 or below, create a corpse Food
+                if target.energy <= 0:
+                    from .food import Food
+                    # Corpse energy is proportional to target’s size * 8.0
+                    energy = target.size * 8.0
+                    corpse_food = Food(
+                        x=target.x,
+                        y=target.y,
+                        remaining_duration=5,  # Food lasts 5 steps
+                        energy=energy
+                    )
+                    # Add corpse to the world’s food list
+                    world.foods.append(corpse_food)
+                    world.foods_created_this_step.add(id(corpse_food))
 
-            # If target’s energy falls to 0 or below, create a corpse Food
-            if target.energy <= 0:
-                from .food import Food
-                # Corpse energy is proportional to target’s size * 8.0
-                energy = target.size * 8.0
-                corpse_food = Food(
-                    x=target.x,
-                    y=target.y,
-                    remaining_duration=5,  # Food lasts 5 steps
-                    energy=energy
-                )
-                # Add corpse to the world’s food list
-                world.foods.append(corpse_food)
-                world.foods_created_this_step.add(id(corpse_food))
-
-                # Remove the dead creature from the world if present
-                try:
-                    world.creatures.remove(target)
-                except ValueError:
-                    # If it’s already removed or not exactly the same object, ignore
-                    pass
+                    # Remove the dead creature from the world if present
+                    try:
+                        world.creatures.remove(target)
+                    except ValueError:
+                        # If it’s already removed or not exactly the same object, ignore
+                        pass
 
         # --- Handle EAT action when pursuing a food object ---
         elif act_type == "EAT" and param is not None:
@@ -513,12 +512,11 @@ class Creature:
                 eat_miss_cost = 1.0
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
-                return
-
-            # If in range, subtract one unit of energy from the food and add one to the creature
-            target_food.energy -= 1
-            self.energy += 1
-            self.last_action = f"EAT→{target_food.id if hasattr(target_food, 'id') else id(target_food)}"
+            else:
+                # If in range, subtract one unit of energy from the food and add one to the creature
+                target_food.energy -= 1
+                self.energy += 1
+                self.last_action = f"EAT→{target_food.id if hasattr(target_food, 'id') else id(target_food)}"
 
         # --- Handle EAT_AT_CURRENT action when creature is exactly on a food source ---
         elif act_type == "EAT_AT_CURRENT":
@@ -534,12 +532,11 @@ class Creature:
                 eat_miss_cost = 0.2
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
-                return
-
-            # Otherwise, subtract one energy unit from that food and add one to creature
-            target_food.energy -= 1
-            self.energy += 1
-            self.last_action = "EAT_AT_CURRENT"
+            else:
+                # Otherwise, subtract one energy unit from that food and add one to creature
+                target_food.energy -= 1
+                self.energy += 1
+                self.last_action = "EAT_AT_CURRENT"
 
         # --- Handle REST action (no parameters) ---
         else:  # "REST"

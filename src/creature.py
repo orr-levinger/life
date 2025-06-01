@@ -54,9 +54,6 @@ class Creature:
             size (float): Determines strength, attack cost, and maximum energy.
                            Larger size → more energy capacity and damage, but slower.
             energy (float): Starting energy. Energy ≤ 0 means death; ≥ max_energy means split.
-            velocity (float, optional): Max speed. If None, computed as 1.0 / size.
-            eat_bonus (float): Energy gained when consuming one unit of food.
-            radius (float, optional): Physical collision radius. If None, computed as size * RADIUS_FACTOR.
             brain (NeuralNetwork, optional): Pre-existing neural network to control decisions.
             create_brain (bool): If True and brain is None, instantiates a new NeuralNetwork.
             parent_id (int, optional): ID of the parent creature (used to avoid attacking close kin).
@@ -90,7 +87,7 @@ class Creature:
         self.last_action = "NONE"
 
         # --- Velocity logic: larger creatures move more slowly (1/size) if not specified ---
-        self.velocity = 1.0 / size      # Base max speed
+        self.velocity = 1.0 / size          # Base max speed
 
         # --- Physical radius for collisions: size * RADIUS_FACTOR unless overridden ---
         self.radius = size * self.RADIUS_FACTOR
@@ -308,7 +305,7 @@ class Creature:
                 self.intended_vector = (dx, dy)
                 return ("ATTACK", closest_creature)
 
-            # Otherwise, 10% chance to flee instead of closing in
+            # Otherwise, 40% chance to flee instead of closing in
             if random.random() < 0.4:
                 flee_angle = angle + math.pi   # Directly opposite direction
                 self.current_speed = self.velocity
@@ -647,13 +644,11 @@ class Creature:
 
         children: List['Creature'] = []
 
-        size_mutation_factor = 1.0 + random.uniform(-0.1, 0.1)
-        mutated_size = self.size * size_mutation_factor
         # --- Create a clone with identical brain (deep copy via clone()) ---
         clone = Creature(
             x=self.x + random.uniform(-1.0, 1.0),  # Slight random offset so children don’t overlap exactly
             y=self.y + random.uniform(-1.0, 1.0),
-            size=mutated_size,
+            size=self.size,
             energy=energy_per_creature,
             brain=self.brain.clone() if self.brain else None,  # Clone the neural network weights
             parent_id=self.id                                  # Set parent_id to this creature’s ID
@@ -669,11 +664,12 @@ class Creature:
                 mutation_rate = 0.1 * (i + 1)
                 mutation_scale = 0.2
                 mutated_brain = self.brain.mutate(mutation_rate, mutation_scale)
-
+            size_mutation_factor = 1.0 + random.uniform(-0.1, 0.1)
+            mutated_size = max(self.size * size_mutation_factor, 0.1)
             mutated_child = Creature(
                 x=self.x + random.uniform(-1.0, 1.0),
                 y=self.y + random.uniform(-1.0, 1.0),
-                size=self.size,
+                size=mutated_size,
                 energy=energy_per_creature,
                 brain=mutated_brain,
                 parent_id=self.id

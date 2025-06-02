@@ -43,7 +43,8 @@ class Creature:
             energy: float,
             brain: Optional['NeuralNetwork'] = None,
             create_brain: bool = False,
-            parent_id: int = None
+            parent_id: int = None,
+            generation: int = 0
     ):
         """
         Initialize a Creature.
@@ -57,6 +58,7 @@ class Creature:
             brain (NeuralNetwork, optional): Pre-existing neural network to control decisions.
             create_brain (bool): If True and brain is None, instantiates a new NeuralNetwork.
             parent_id (int, optional): ID of the parent creature (used to avoid attacking close kin).
+            generation (int): Which generation this creature belongs to (0 for the original seed).
         """
         # --- Position and physical attributes ---
         self.x = float(x)                   # Current x-coordinate
@@ -66,6 +68,9 @@ class Creature:
         self.id = id(self)                  # Unique identifier (Python's built-in id)
         self.parent_id = parent_id or 0     # Parent ID (0 if no parent)
 
+        # --- Generation counter: we will not use the brain until generation ≥ 10 ---
+        self.generation = generation        # Generation number (0 for starting creatures)
+
         # --- Tracking whether this creature's last decision used its brain ---
         self.using_brain = False            # True if last call to decide() used the neural network
         self.brain_saved = False            # Prevent saving the same brain more than once
@@ -74,7 +79,7 @@ class Creature:
         self.steps_without_reward = 0       # If ≥10, forces a random/legacy decision to encourage exploration
 
         # --- Cumulative statistics for NN score calculation ---
-        self.nn_reward_count = 0            # Count of times energy_change > 0
+        self.nn_reward_count = 0            # Count of times energy_change > 0 when using brain
         self.nn_fallback_count = 0          # Count of times forced to use legacy logic
         self.nn_total_steps = 0             # Count of total calls to decide()
 
@@ -126,6 +131,9 @@ class Creature:
         """
         Determine the next action for this creature based on sensory inputs.
 
+        If generation < 10, ALWAYS use legacy logic (no brain) but count it as a fallback.
+        Once generation >= 10, revert to the old logic (including step‐without‐reward fallback).
+
         Args:
             vision (List[Tuple[str, Any, float, float]]): A list of sensed objects in the format
                 (type_tag, object_reference, distance, angle). type_tag is "creature" or "food".
@@ -143,31 +151,52 @@ class Creature:
         # --- Increment total step counter for NN score calculation ---
         self.nn_total_steps += 1
 
+        # ----------------------------------------------------
+        # 1) If generation < 10 → force legacy logic, no brain.
+        #    (Count as a fallback if a brain exists, so we know these
+        #     decisions are “observations” for generations 0–9.)
+        # ----------------------------------------------------
+        if self.generation < 10:
+            if self.brain is not None:
+                # We “fell back” to legacy purely for generation < 10
+                self.nn_fallback_count += 1
+
+            action_type, action_params = self._decide_without_brain(vision, on_food)
+            self.using_brain = False
+            # Set intent & vector for visualization
+            self._set_intent_and_vector(action_type, action_params, vision)
+            return action_type, action_params
+
+        # ----------------------------------------------------
+        # 2) Now that generation >= 10, resume the existing logic:
+        #    (a) If no brain installed → legacy
+        #    (b) If too many steps_without_reward → legacy
+        #    (c) Otherwise → use brain
+        # ----------------------------------------------------
+
         # If the creature hasn't gained energy (no reward) for 10 steps,
         # force a random legacy action (no brain) to encourage exploration
         if self.steps_without_reward >= 10:
-            # Record that we fell back to legacy logic
             if self.brain is not None:
                 self.nn_fallback_count += 1
 
             action_type, action_params = self._decide_without_brain(vision, on_food)
             self.using_brain = False
-            # Set internal intent/velocity vectors for visualization
             self._set_intent_and_vector(action_type, action_params, vision)
             return action_type, action_params
 
         # If no brain is installed, fallback to legacy decision logic
         if self.brain is None:
-            self.using_brain = False           # Mark that we did not use the neural network
+            self.using_brain = False
             return self._decide_without_brain(vision, on_food)
 
         # Otherwise, use the neural network to decide
-        self.using_brain = True                # Mark that we are using the brain
+        self.using_brain = True
 
         # Package sensory data into a dictionary for the neural network
         sensory_inputs = {
-            'vision': vision,                  # Nearby creatures/food information
-            'on_food': on_food,                # Are we standing on food now?
+            'vision': vision,
+            'on_food': on_food,
             'creature_state': {
                 'energy': self.energy,
                 'size': self.size,
@@ -193,28 +222,22 @@ class Creature:
             vision: Same vision list passed to decide(), used to calculate direction toward/away from targets.
         """
         if action_type == "MOVE":
-            # Unpack movement vector
             dx, dy = action_params
-            # Clamp current speed to velocity if the magnitude is too big
             self.current_speed = min(math.hypot(dx, dy), self.velocity)
-            self.intent = "WANDER"             # Intent is wandering around
-            self.intended_vector = (dx, dy)    # Raw intended dx/dy
+            self.intent = "WANDER"
+            self.intended_vector = (dx, dy)
 
         elif action_type == "REST":
-            # No movement, minimal energy drain
             self.current_speed = 0.0
             self.intent = "REST"
             self.intended_vector = (0.0, 0.0)
 
         elif action_type == "EAT":
-            # The parameter is a Food object to move toward
             food = action_params
-            # Compute direction vector toward the food for visualization
             dx = food.x - self.x
             dy = food.y - self.y
             dist = math.hypot(dx, dy)
             if dist > 0:
-                # Normalize and scale to 75% of max velocity for eating approach
                 dx = (dx / dist) * self.velocity * 0.75
                 dy = (dy / dist) * self.velocity * 0.75
             self.current_speed = self.velocity * 0.75
@@ -222,20 +245,16 @@ class Creature:
             self.intended_vector = (dx, dy)
 
         elif action_type == "EAT_AT_CURRENT":
-            # No movement; creature eats directly beneath itself
             self.current_speed = 0.0
-            self.intent = "GO_TO_FOOD"         # Still considered "going to food" intent
+            self.intent = "GO_TO_FOOD"
             self.intended_vector = (0.0, 0.0)
 
         elif action_type == "ATTACK":
-            # Attack parameter is a target Creature object
             target = action_params
-            # Compute vector toward the target for visualization
             dx = target.x - self.x
             dy = target.y - self.y
             dist = math.hypot(dx, dy)
             if dist > 0:
-                # Normalize and scale to max velocity to rush the target
                 dx = (dx / dist) * self.velocity
                 dy = (dy / dist) * self.velocity
             self.current_speed = self.velocity
@@ -243,9 +262,7 @@ class Creature:
             self.intended_vector = (dx, dy)
 
         elif action_type == "FLEE":
-            # Flee parameter is a (dx, dy) vector away from the threat
             dx, dy = action_params
-            # Clamp speed to velocity
             self.current_speed = min(math.hypot(dx, dy), self.velocity)
             self.intent = "RUN_AWAY"
             self.intended_vector = (dx, dy)
@@ -267,7 +284,6 @@ class Creature:
         Returns:
             Tuple[action_type (str), action_params (Any)] as in decide().
         """
-        # If nothing is sensed, go to resting/wandering logic
         if vision is None or len(vision) == 0:
             return self._decide_rest_or_wander()
 
@@ -275,7 +291,6 @@ class Creature:
         nearby_creatures = [
             (obj, dist, angle)
             for type_tag, obj, dist, angle in vision
-            # Ignore same-family creatures (parent/child) to prevent immediate sibling cannibalism
             if type_tag == "creature" and obj.parent_id != self.parent_id
         ]
         # --- 2) Check for nearby food ---
@@ -285,29 +300,21 @@ class Creature:
             if type_tag == "food"
         ]
 
-        # --- If there are creatures nearby, handle attack/flee logic ---
         if nearby_creatures:
-            # Sort by distance so the closest creature is first
             nearby_creatures.sort(key=lambda x: x[1])
             closest_creature, distance, angle = nearby_creatures[0]
-
-            # Compute dynamic attack range (sum of radii * factor)
             attack_range = (self.radius + closest_creature.radius) * self.ATTACK_RANGE_FACTOR
 
-            # If in attack range, attempt to attack
             if distance <= attack_range and closest_creature.parent_id != self.parent_id:
-                # Rush at full velocity to strike
                 self.current_speed = self.velocity
                 self.intent = "ATTACK"
-                # Compute movement vector (using angle from sensor)
                 dx = math.cos(angle) * self.current_speed
                 dy = math.sin(angle) * self.current_speed
                 self.intended_vector = (dx, dy)
                 return ("ATTACK", closest_creature)
 
-            # Otherwise, 40% chance to flee instead of closing in
             if random.random() < 0.4:
-                flee_angle = angle + math.pi   # Directly opposite direction
+                flee_angle = angle + math.pi
                 self.current_speed = self.velocity
                 self.intent = "RUN_AWAY"
                 dx = math.cos(flee_angle) * self.current_speed
@@ -315,7 +322,6 @@ class Creature:
                 self.intended_vector = (dx, dy)
                 return ("FLEE", (dx, dy))
 
-            # If not fleeing and not yet in range, move toward the creature for a future attack
             self.current_speed = self.velocity
             self.intent = "ATTACK"
             dx = math.cos(angle) * self.current_speed
@@ -323,22 +329,19 @@ class Creature:
             self.intended_vector = (dx, dy)
             return ("MOVE", (dx, dy))
 
-        # --- If no creatures to fight, check for food ---
         if nearby_food:
             nearby_food.sort(key=lambda x: x[1])
             closest_food, distance, angle = nearby_food[0]
             eat_range = (self.radius + closest_food.radius) * self.EAT_RANGE_FACTOR
 
-            # If within eating distance, attempt to eat
             if distance <= eat_range:
-                self.current_speed = self.velocity * 0.75  # Approach at 75% speed for eating
+                self.current_speed = self.velocity * 0.75
                 self.intent = "GO_TO_FOOD"
                 dx = math.cos(angle) * self.current_speed
                 dy = math.sin(angle) * self.current_speed
                 self.intended_vector = (dx, dy)
                 return ("EAT", closest_food)
 
-            # Otherwise, move toward the food at 75% speed
             self.current_speed = self.velocity * 0.75
             self.intent = "GO_TO_FOOD"
             dx = math.cos(angle) * self.current_speed
@@ -346,13 +349,11 @@ class Creature:
             self.intended_vector = (dx, dy)
             return ("MOVE", (dx, dy))
 
-        # --- If there's food at the current location, eat without moving ---
         if on_food:
             self.intent = "GO_TO_FOOD"
             self.intended_vector = (0.0, 0.0)
             return ("EAT_AT_CURRENT", None)
 
-        # --- Otherwise, nothing interesting: rest or wander ---
         return self._decide_rest_or_wander()
 
     def _decide_rest_or_wander(self) -> Tuple[str, Any]:
@@ -360,11 +361,9 @@ class Creature:
         Helper function: randomly choose between resting (no movement) or wandering (random direction).
         Resting conserves a bit of energy; wandering expends some energy but may discover food/targets.
         """
-        # Wander at 50% of maximum speed when moving
         self.current_speed = self.velocity * 0.5
 
         if random.random() < 0.5:
-            # Choose a random direction in [0, 2π)
             angle = random.random() * 2 * math.pi
             dx = math.cos(angle) * self.current_speed
             dy = math.sin(angle) * self.current_speed
@@ -372,7 +371,6 @@ class Creature:
             self.intended_vector = (dx, dy)
             return ("MOVE", (dx, dy))
         else:
-            # Rest: no movement
             self.intent = "REST"
             self.intended_vector = (0.0, 0.0)
             return ("REST", None)
@@ -385,25 +383,24 @@ class Creature:
           - ("MOVE", (dx, dy)): Move and deduct energy equal to distance traveled.
           - ("FLEE", (dx, dy)): Move (similar to MOVE) and deduct energy equal to distance traveled.
           - ("REST", None): Deduct a small flat energy cost (0.1).
-          - ("EAT", Food): Attempt to eat the specified food object if in range; energy += 1 if successful.
-          - ("EAT_AT_CURRENT", None): Eat any food overlapping current position; energy += 1 if successful.
+          - ("EAT", Food): Attempt to eat the specified food object if in range; energy += up to 5 if successful.
+          - ("EAT_AT_CURRENT", None): Eat any food overlapping current position; energy += up to 5 if successful.
           - ("ATTACK", Creature): Attempt to attack the specified creature; energy -= attack_cost, damage dealt.
 
-        After the action, compute the energy change (new_energy - initial_energy) as the "reward"
-        and update nn_reward_count or nn_fallback_count accordingly.
+        After the action, compute the energy change (new_energy - initial_energy) as the “reward” and
+        call `self.brain.apply_reward(reward, terminal)` so that multi‐step (episode‐based) REINFORCE works.
         """
         act_type, param = action
-        self.last_action = f"{act_type}"         # Store action label for logging or debugging
+        self.last_action = f"{act_type}"
 
-        initial_energy = self.energy             # Record pre-action energy
-        self.movement_vector = self.intended_vector  # For visualization: record how we moved
+        initial_energy = self.energy
+        self.movement_vector = self.intended_vector
 
         # --- Handle MOVE or FLEE (movement) ---
         if (act_type == "MOVE" or act_type == "FLEE") and param is not None:
             dx, dy = param
-            requested_dist = math.hypot(dx, dy)  # Euclidean distance of intended move
+            requested_dist = math.hypot(dx, dy)
 
-            # If requested movement exceeds current_speed, scale it down
             if requested_dist > self.current_speed:
                 scale = self.current_speed / requested_dist
                 dx *= scale
@@ -412,24 +409,18 @@ class Creature:
             else:
                 actual_dist = requested_dist
 
-            # Compute new coordinates before clamping to world bounds
             new_x = self.x + dx
             new_y = self.y + dy
 
-            # Compute boundaries accounting for creature radius
             min_x = max(0.0, self.radius) if self.radius > 0.1 else 0.0
             min_y = max(0.0, self.radius) if self.radius > 0.1 else 0.0
             max_x = min(world.width, world.width - self.radius) if self.radius > 0.1 else world.width
             max_y = min(world.height, world.height - self.radius) if self.radius > 0.1 else world.height
 
-            # Clamp position so the creature remains entirely inside world boundaries
             self.x = min(max(new_x, min_x), max_x)
             self.y = min(max(new_y, min_y), max_y)
-
-            # Deduct energy equal to distance actually traveled
             self.energy -= actual_dist
 
-            # Update last_action string for clarity
             if act_type == "FLEE":
                 self.last_action = "FLEE"
             else:
@@ -437,130 +428,118 @@ class Creature:
 
         # --- Handle ATTACK action ---
         elif act_type == "ATTACK" and param is not None:
-            target = param  # Target creature object
-
-            # Compute distance to target
+            target = param
             dx = target.x - self.x
             dy = target.y - self.y
             distance = math.sqrt(dx * dx + dy * dy)
-
-            # Compute attack range same as in decide()
             attack_range = (self.radius + target.radius) * self.ATTACK_RANGE_FACTOR
 
-            # Debug prints for tracing attacks (can be removed in production)
             print(f"ATTACK: distance={distance}, attack_range={attack_range}")
             print(f"ATTACK: target_initial_energy={target.energy}, attack_damage={self.attack_damage}")
 
-            # If the target is out of range, the attack misses
             if distance > attack_range:
-                self.energy -= self.attack_cost  # Pay energy cost for attempted attack
+                self.energy -= self.attack_cost
                 self.last_action = "ATTACK_MISS"
             else:
-                # Otherwise, deal damage
                 target_initial_energy = target.energy
                 damage_dealt = min(target_initial_energy, self.attack_damage)
                 target.energy -= damage_dealt
 
-                # Debug print: how much damage was dealt
                 print(f"ATTACK: damage_dealt={damage_dealt}, target_energy_after={target.energy}")
 
-                # Deduct attack cost from attacker’s energy
                 self.energy -= self.attack_cost
-
-                # Update action labels for logging
                 self.last_action = f"ATTACK→{target.id if hasattr(target, 'id') else id(target)}"
                 target.last_action = "HIT_BY_ATTACK"
 
-                # If target’s energy falls to 0 or below, create a corpse Food
                 if target.energy <= 0:
                     from .food import Food
-                    # Corpse energy is proportional to target’s size * 8.0
                     energy = target.size * 8.0
                     corpse_food = Food(
                         x=target.x,
                         y=target.y,
-                        remaining_duration=5,  # Food lasts 5 steps
+                        remaining_duration=5,
                         energy=energy
                     )
-                    # Add corpse to the world’s food list
                     world.foods.append(corpse_food)
                     world.foods_created_this_step.add(id(corpse_food))
-
-                    # Remove the dead creature from the world if present
                     try:
                         world.creatures.remove(target)
                     except ValueError:
-                        # If it’s already removed or not exactly the same object, ignore
                         pass
 
         # --- Handle EAT action when pursuing a food object ---
         elif act_type == "EAT" and param is not None:
-            target_food = param  # Food object to attempt to eat
-
-            # Compute distance to that food
+            target_food = param
             dx = target_food.x - self.x
             dy = target_food.y - self.y
             distance = math.sqrt(dx * dx + dy * dy)
-
-            # Eat range based on radii
             eat_range = (self.radius + target_food.radius) * self.EAT_RANGE_FACTOR
 
-            # If out of range, the eating attempt misses
             if distance > eat_range:
                 eat_miss_cost = 1.0
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                # If in range, subtract one unit of energy from the food and add one to the creature
-                target_food.energy -= 1
-                self.energy += 1
+                amt = min(5, target_food.energy)
+                target_food.energy -= amt
+                self.energy += amt
                 self.last_action = f"EAT→{target_food.id if hasattr(target_food, 'id') else id(target_food)}"
 
         # --- Handle EAT_AT_CURRENT action when creature is exactly on a food source ---
         elif act_type == "EAT_AT_CURRENT":
             target_food = None
-            # Find any food overlapping the creature’s current position
             for food in world.foods:
                 if food.is_overlapping(self.x, self.y, self.radius):
                     target_food = food
                     break
 
-            # If no overlapping food is found, small energy penalty
             if target_food is None:
                 eat_miss_cost = 0.2
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                # Otherwise, subtract one energy unit from that food and add one to creature
-                target_food.energy -= 1
-                self.energy += 1
+                amt = min(5, target_food.energy)
+                target_food.energy -= amt
+                self.energy += amt
                 self.last_action = "EAT_AT_CURRENT"
 
         # --- Handle REST action (no parameters) ---
         else:  # "REST"
-            self.energy -= 0.1     # Flat energy penalty for resting
+            self.energy -= 0.1
             self.last_action = "REST"
 
         # --- After action, compute energy change as reward signal ---
         energy_change = self.energy - initial_energy
+
+        # --- Determine terminal condition for reward ---
+        terminal = False
+        if act_type in ("EAT", "EAT_AT_CURRENT") and energy_change > 0:
+            # Successfully ate food → end of short episode
+            terminal = True
+        elif self.energy <= 0:
+            # Creature died → end of episode
+            terminal = True
+
+        # --- If the creature gained energy and used brain, count it for score ---
+        if energy_change > 0 and self.using_brain:
+            self.nn_reward_count += energy_change
+
+        # --- Update steps_without_reward counter ---
         if energy_change > 0:
-            # Gained energy → record positive reward
-            if self.using_brain:
-                self.nn_reward_count += energy_change
-            self.using_brain = True
             self.steps_without_reward = 0
         else:
-            # No energy gain → increment no-reward counter
             self.steps_without_reward += 1
 
-        # If a brain exists, pass this reward (possibly negative or zero) to it
+        # --- Pass the reward into the neural network as episodic (REINFORCE) ---
         if self.brain is not None:
-            self.brain.apply_reward(energy_change)
+            # If terminal, pass actual energy_change; otherwise pass zero
+            self.brain.apply_reward(energy_change if terminal else 0.0, terminal)
 
-        # If creature’s energy reaches threshold and its brain hasn’t been saved yet, save it
+        # --- If creature’s energy reaches threshold and its brain hasn’t been saved yet, save it ---
         if (
-            self.brain is not None
-            and self.get_nn_score() >= 80
+                self.brain is not None
+                and self.get_nn_score() >= 80
+                and not self.brain_saved
         ):
             self._save_brain()
 
@@ -572,19 +551,16 @@ class Creature:
         if self.brain is None:
             return
 
-        # Ensure save directory exists
         os.makedirs(Creature.SAVE_DIR, exist_ok=True)
         energy_int = int(round(self.energy))
         filename = f"brain_{self.id}_{energy_int}.pkl"
         filepath = os.path.join(Creature.SAVE_DIR, filename)
 
         try:
-            # Write the brain object to disk
             with open(filepath, "wb") as f:
                 pickle.dump(self.brain, f)
             self.brain_saved = True
         except Exception:
-            # If saving fails (e.g., disk error), silently skip
             pass
 
     def get_nn_score(self) -> float:
@@ -594,12 +570,10 @@ class Creature:
 
         If the result is negative, clamp to 0. If it exceeds 100, clamp to 100.
         """
-        # Avoid division by zero if no steps have been taken yet
         if self.nn_total_steps == 0:
             return 0.0
 
         raw = (self.nn_reward_count - self.nn_fallback_count) / self.nn_total_steps * 100.0
-        # Clamp to [0, 100]
         if raw < 0.0:
             return 0.0
         if raw > 100.0:
@@ -628,7 +602,8 @@ class Creature:
           2) Three mutated offspring with variations of the parent brain.
 
         Each new creature (including the clone) receives 1/4 of the parent’s energy,
-        and the parent’s energy is set to 0. All children are placed near the parent’s position.
+        and the parent’s energy is set to 0. All children are placed near the parent’s position,
+        and their generation = parent.generation + 1.
 
         Args:
             world (World): Reference to the world, so new creatures can be added.
@@ -636,43 +611,42 @@ class Creature:
         Returns:
             List of newly created child Creature instances.
         """
-        # Each child (and the clone) gets 1/4 of parent’s current energy
         energy_per_creature = self.energy / 4.0
-
-        # Parent expends all energy in the process of splitting
         self.energy = 0
-
         children: List['Creature'] = []
 
         # --- Create a clone with identical brain (deep copy via clone()) ---
         clone = Creature(
-            x=self.x + random.uniform(-1.0, 1.0),  # Slight random offset so children don’t overlap exactly
+            x=self.x + random.uniform(-1.0, 1.0),
             y=self.y + random.uniform(-1.0, 1.0),
             size=self.size,
             energy=energy_per_creature,
-            brain=self.brain.clone() if self.brain else None,  # Clone the neural network weights
-            parent_id=self.id                                  # Set parent_id to this creature’s ID
+            brain=self.brain.clone() if self.brain else None,
+            parent_id=self.id,
+            generation=self.generation + 1
         )
         world.add_creature(clone)
         children.append(clone)
 
-        # --- Create three mutated children with incremental mutation rates ---
+        # --- Create three mutated children with incremental mutation rates and slight size variation ---
         for i in range(3):
             mutated_brain = None
             if self.brain:
-                # Mutation rate increases for each of the three children: 0.1, 0.2, 0.3
                 mutation_rate = 0.1 * (i + 1)
                 mutation_scale = 0.2
                 mutated_brain = self.brain.mutate(mutation_rate, mutation_scale)
+
             size_mutation_factor = 1.0 + random.uniform(-0.1, 0.1)
             mutated_size = max(self.size * size_mutation_factor, 0.1)
+
             mutated_child = Creature(
                 x=self.x + random.uniform(-1.0, 1.0),
                 y=self.y + random.uniform(-1.0, 1.0),
                 size=mutated_size,
                 energy=energy_per_creature,
                 brain=mutated_brain,
-                parent_id=self.id
+                parent_id=self.id,
+                generation=self.generation + 1
             )
             world.add_creature(mutated_child)
             children.append(mutated_child)

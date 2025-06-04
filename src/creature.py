@@ -44,7 +44,9 @@ class Creature:
             brain: Optional['NeuralNetwork'] = None,
             create_brain: bool = False,
             parent_id: int = None,
-            generation: int = 0
+            generation: int = 0,
+            velocity: Optional[float] = None,
+            radius: Optional[float] = None
     ):
         """
         Initialize a Creature.
@@ -59,6 +61,8 @@ class Creature:
             create_brain (bool): If True and brain is None, instantiates a new NeuralNetwork.
             parent_id (int, optional): ID of the parent creature (used to avoid attacking close kin).
             generation (int): Which generation this creature belongs to (0 for the original seed).
+            velocity (float, optional): Maximum movement speed. Defaults to 1/size if None.
+            radius (float, optional): Physical radius used for collisions. Defaults to size * RADIUS_FACTOR if None.
         """
         # --- Position and physical attributes ---
         self.x = float(x)                   # Current x-coordinate
@@ -67,6 +71,7 @@ class Creature:
         self.energy = energy                # Current energy level
         self.id = id(self)                  # Unique identifier (Python's built-in id)
         self.parent_id = parent_id or 0     # Parent ID (0 if no parent)
+        self.children_ids: List[int] = []   # Track IDs of direct children
 
         # --- Generation counter: we will not use the brain until generation ≥ 10 ---
         self.generation = generation        # Generation number (0 for starting creatures)
@@ -92,10 +97,10 @@ class Creature:
         self.last_action = "NONE"
 
         # --- Velocity logic: larger creatures move more slowly (1/size) if not specified ---
-        self.velocity = 1.0 / size          # Base max speed
+        self.velocity = velocity if velocity is not None else 1.0 / size
 
         # --- Physical radius for collisions: size * RADIUS_FACTOR unless overridden ---
-        self.radius = size * self.RADIUS_FACTOR
+        self.radius = radius if radius is not None else size * self.RADIUS_FACTOR
 
         # --- Current speed can vary based on action (e.g., chasing or fleeing) ---
         self.current_speed = self.velocity  # Start at max speed by default
@@ -288,11 +293,18 @@ class Creature:
             return self._decide_rest_or_wander()
 
         # --- 1) Check for nearby creatures (enemies) ---
-        nearby_creatures = [
-            (obj, dist, angle)
-            for type_tag, obj, dist, angle in vision
-            if type_tag == "creature" and obj.parent_id != self.parent_id
-        ]
+        nearby_creatures = []
+        for type_tag, obj, dist, angle in vision:
+            if type_tag != "creature" or obj is self:
+                continue
+            # Skip direct children and parents
+            if obj.id in self.children_ids or obj.parent_id == self.id:
+                continue
+            if self.parent_id != 0 and obj.id == self.parent_id:
+                continue
+            if obj.parent_id == self.parent_id and self.parent_id != 0:
+                continue
+            nearby_creatures.append((obj, dist, angle))
         # --- 2) Check for nearby food ---
         nearby_food = [
             (obj, dist, angle)
@@ -305,7 +317,7 @@ class Creature:
             closest_creature, distance, angle = nearby_creatures[0]
             attack_range = (self.radius + closest_creature.radius) * self.ATTACK_RANGE_FACTOR
 
-            if distance <= attack_range and closest_creature.parent_id != self.parent_id:
+            if distance <= attack_range:
                 self.current_speed = self.velocity
                 self.intent = "ATTACK"
                 dx = math.cos(angle) * self.current_speed
@@ -434,8 +446,6 @@ class Creature:
             distance = math.sqrt(dx * dx + dy * dy)
             attack_range = (self.radius + target.radius) * self.ATTACK_RANGE_FACTOR
 
-            print(f"ATTACK: distance={distance}, attack_range={attack_range}")
-            print(f"ATTACK: target_initial_energy={target.energy}, attack_damage={self.attack_damage}")
 
             if distance > attack_range:
                 self.energy -= self.attack_cost
@@ -445,7 +455,6 @@ class Creature:
                 damage_dealt = min(target_initial_energy, self.attack_damage)
                 target.energy -= damage_dealt
 
-                print(f"ATTACK: damage_dealt={damage_dealt}, target_energy_after={target.energy}")
 
                 self.energy -= self.attack_cost
                 self.last_action = f"ATTACK→{target.id if hasattr(target, 'id') else id(target)}"
@@ -480,9 +489,17 @@ class Creature:
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                amt = min(5, target_food.energy)
+                if target_food.energy <= 0:
+                    amt = 1.0
+                else:
+                    amt = min(1.0, target_food.energy)
                 target_food.energy -= amt
                 self.energy += amt
+                if target_food.energy <= 0:
+                    try:
+                        world.foods.remove(target_food)
+                    except ValueError:
+                        pass
                 self.last_action = f"EAT→{target_food.id if hasattr(target_food, 'id') else id(target_food)}"
 
         # --- Handle EAT_AT_CURRENT action when creature is exactly on a food source ---
@@ -498,9 +515,17 @@ class Creature:
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                amt = min(5, target_food.energy)
+                if target_food.energy <= 0:
+                    amt = 1.0
+                else:
+                    amt = min(1.0, target_food.energy)
                 target_food.energy -= amt
                 self.energy += amt
+                if target_food.energy <= 0:
+                    try:
+                        world.foods.remove(target_food)
+                    except ValueError:
+                        pass
                 self.last_action = "EAT_AT_CURRENT"
 
         # --- Handle REST action (no parameters) ---
@@ -627,6 +652,7 @@ class Creature:
         )
         world.add_creature(clone)
         children.append(clone)
+        self.children_ids.append(clone.id)
 
         # --- Create three mutated children with incremental mutation rates and slight size variation ---
         for i in range(3):
@@ -650,6 +676,7 @@ class Creature:
             )
             world.add_creature(mutated_child)
             children.append(mutated_child)
+            self.children_ids.append(mutated_child.id)
 
         return children
 

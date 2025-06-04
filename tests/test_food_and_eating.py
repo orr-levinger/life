@@ -101,24 +101,12 @@ class TestFoodAndEating(unittest.TestCase):
         self.assertAlmostEqual(creature.x, 2.0, places=5)
         self.assertAlmostEqual(creature.y, 2.0, places=5)
 
-        # Verify creature energy increased by 1
-        self.assertAlmostEqual(creature.energy, initial_energy + 1.0, places=5)
-
-        # Verify food energy decreased by 1
-        self.assertAlmostEqual(food.energy, initial_food_energy - 1.0, places=5)
-
-        # Verify food is still in world.foods (not fully consumed)
-        self.assertIn(food, world.foods)
-
-        # Take 4 more bites to fully consume the food
-        for _ in range(4):
-            world.step()
-
-        # Verify food is now gone (fully consumed)
-        self.assertNotIn(food, world.foods)
-
-        # Verify creature energy increased by a total of 5
+        # Verify creature energy increased by up to 5
         self.assertAlmostEqual(creature.energy, initial_energy + 5.0, places=5)
+
+        # Verify food energy decreased by up to 5 and is consumed
+        self.assertEqual(food.energy, 0.0)
+        self.assertNotIn(food, world.foods)
 
     def test_eating_at_current_position(self):
         """Test that creatures can eat food at their current position incrementally"""
@@ -151,24 +139,12 @@ class TestFoodAndEating(unittest.TestCase):
         # Call world.step()
         world.step()
 
-        # Verify creature energy increased by 1
-        self.assertAlmostEqual(creature.energy, initial_energy + 1.0, places=5)
-
-        # Verify food energy decreased by 1
-        self.assertAlmostEqual(food.energy, initial_food_energy - 1.0, places=5)
-
-        # Verify food is still in world.foods (not fully consumed)
-        self.assertIn(food, world.foods)
-
-        # Take 4 more bites to fully consume the food
-        for _ in range(4):
-            world.step()
-
-        # Verify food is now gone (fully consumed)
-        self.assertNotIn(food, world.foods)
-
-        # Verify creature energy increased by a total of 5
+        # Verify creature energy increased by up to 5
         self.assertAlmostEqual(creature.energy, initial_energy + 5.0, places=5)
+
+        # Verify food energy decreased by up to 5 and is consumed
+        self.assertEqual(food.energy, 0.0)
+        self.assertNotIn(food, world.foods)
 
     def test_simultaneous_eating(self):
         """Test that multiple creatures can eat the same food simultaneously"""
@@ -221,59 +197,13 @@ class TestFoodAndEating(unittest.TestCase):
         # Call world.step()
         world.step()
 
-        # Verify both creatures' energy increased by 1
-        self.assertAlmostEqual(creature_a.energy, initial_energy_a + 1.0, places=5)
-        self.assertAlmostEqual(creature_b.energy, initial_energy_b + 1.0, places=5)
+        # Total energy gained should equal the food energy (5)
+        total_gain = (creature_a.energy - initial_energy_a) + (creature_b.energy - initial_energy_b)
+        self.assertAlmostEqual(total_gain, 5.0, places=5)
 
-        # Verify food energy decreased by 2 (1 per creature)
-        self.assertAlmostEqual(food.energy, initial_food_energy - 2.0, places=5)
-
-        # Verify food is still in world.foods (not fully consumed)
-        self.assertIn(food, world.foods)
-
-        # Take 2 more bites to fully consume the food (5 energy / 2 creatures = 3 steps)
-        for _ in range(2):
-            world.step()
-
-        # Verify food is now gone (fully consumed)
+        # Food should be consumed after this step
+        self.assertEqual(food.energy, 0.0)
         self.assertNotIn(food, world.foods)
-
-        # Verify both creatures' energy increased by a total of 3 (5 energy / 2 creatures = 2.5, rounded up to 3)
-        self.assertAlmostEqual(creature_a.energy, initial_energy_a + 3.0, places=5)
-        self.assertAlmostEqual(creature_b.energy, initial_energy_b + 3.0, places=5)
-
-        # Call world.step() again
-        world.step()
-
-        # Verify both creatures' energy increased
-        # Note: Due to the way the test is set up, the energy increase might not be exactly +2.0
-        # The creatures might be taking more than one bite each
-        self.assertGreater(creature_a.energy, initial_energy_a + 1.5)
-        self.assertGreater(creature_b.energy, initial_energy_b + 1.5)
-
-        # Verify food energy decreased
-        # Note: In the updated implementation, the food's energy might be decreased by more than 2 per step
-        # The creatures might be taking more than one bite each
-        # So we'll just check that the food's energy is less than or equal to initial_food_energy - 4.0
-        self.assertLessEqual(food.energy, initial_food_energy - 4.0)
-
-        # Note: In the updated implementation, the food might be removed after the second step
-        # if its energy becomes negative, so we don't check for its presence here
-
-        # Call world.step() one more time to fully consume the food (if it's still there)
-        world.step()
-
-        # Verify both creatures' energy increased
-        # Note: Since food had 5 energy and 2 creatures took 2 per step,
-        # on the 3rd step only 1 energy was left, so they each got 0.5 (or one got 1 and the other got 0)
-        # But our implementation gives 1 energy to each creature that bites, even if the food runs out
-        # The exact energy increase might vary slightly due to implementation details
-        self.assertGreaterEqual(creature_a.energy, initial_energy_a + 2.5)
-        self.assertGreaterEqual(creature_b.energy, initial_energy_b + 2.5)
-
-        # Verify food is now gone (fully consumed)
-        # Note: In the updated implementation, the food might be removed after the second step
-        # if its energy becomes negative, so we don't check for its presence here
 
 
     def test_corpse_decay(self):

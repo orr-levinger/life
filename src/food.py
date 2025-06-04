@@ -27,19 +27,19 @@ class Food:
             remaining_duration: Number of world steps this food persists before disappearing
                                -1 means it never expires (infinite lifespan)
             energy: How much energy this food contains (also determines size)
-                   If None, a random value between 1-10 is used
+                   If None, a random value between 10-25 is used
         """
         import random
         self.x = float(x)
         self.y = float(y)
 
-        # If energy is not provided, use a random value between 1-10
+        # If energy is not provided, use a random value between 10-25
         if energy is None:
             self.energy = random.uniform(10.0, 25.0)
         else:
             self.energy = energy
 
-        # Radius is 0.1 of the energy
+        # Radius is 0.01 of the energy
         self.radius = 0.01 * self.energy
 
         self.remaining_duration = remaining_duration

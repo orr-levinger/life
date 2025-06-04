@@ -201,7 +201,8 @@ class Creature:
                 'energy': self.energy,
                 'size': self.size,
                 'velocity': self.velocity,
-                'max_energy': self.max_energy
+                'max_energy': self.max_energy,
+                'position': (self.x, self.y)
             }
         }
 
@@ -480,9 +481,15 @@ class Creature:
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                amt = min(5, target_food.energy)
+                # Take a single "bite" of 1 energy at most
+                amt = min(1.0, target_food.energy)
                 target_food.energy -= amt
                 self.energy += amt
+
+                # If the food is depleted remove it from the world immediately
+                if target_food.energy <= 0 and target_food in world.foods:
+                    world.foods.remove(target_food)
+
                 self.last_action = f"EAT→{target_food.id if hasattr(target_food, 'id') else id(target_food)}"
 
         # --- Handle EAT_AT_CURRENT action when creature is exactly on a food source ---
@@ -498,9 +505,11 @@ class Creature:
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                amt = min(5, target_food.energy)
+                amt = min(1.0, target_food.energy)
                 target_food.energy -= amt
                 self.energy += amt
+                if target_food.energy <= 0 and target_food in world.foods:
+                    world.foods.remove(target_food)
                 self.last_action = "EAT_AT_CURRENT"
 
         # --- Handle REST action (no parameters) ---

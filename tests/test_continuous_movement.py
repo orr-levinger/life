@@ -164,8 +164,8 @@ class TestContinuousMovement(unittest.TestCase):
         (0.5 + (-√2/2), 0.5 + (-√2/2)) clamped to (0,0). Energy drops by 1.0.
         """
         w = World(10, 10, food_spawn_rate=0.0)
-        # Set radius to 0.0 explicitly for this test to ensure clamping to 0.0
-        c = Creature(0.5, 0.5, size=1.0, energy=5.0, radius=0.0)
+        # Creature size=1.0 → radius > 0; clamp position using this radius
+        c = Creature(0.5, 0.5, size=1.0, energy=5.0)
         w.add_creature(c)
 
         def go_sw(vision, on_food=False):
@@ -181,8 +181,8 @@ class TestContinuousMovement(unittest.TestCase):
         expected_x = 0.5 + (-norm)
         expected_y = 0.5 + (-norm)
         # But clamped to 0.0 minimum
-        self.assertAlmostEqual(c.x, max(expected_x, 0.0), places=5)
-        self.assertAlmostEqual(c.y, max(expected_y, 0.0), places=5)
+        self.assertAlmostEqual(c.x, max(expected_x, c.radius), places=5)
+        self.assertAlmostEqual(c.y, max(expected_y, c.radius), places=5)
         # Energy should have dropped by 1.0
         self.assertAlmostEqual(c.energy, 4.0, places=5)
         # Check that current_speed was clamped to max velocity

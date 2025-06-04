@@ -23,6 +23,7 @@ class TestNeuralNetworkLearning(unittest.TestCase):
         nn = NeuralNetwork(
             input_size=14, hidden_sizes=[8], output_size=8, learning_rate=0.1
         )
+        logger.info("Initialized NeuralNetwork with learning rate %s", nn.lr)
 
         def build_state(creature_pos, food_pos, energy):
             dx, dy = food_pos[0] - creature_pos[0], food_pos[1] - creature_pos[1]
@@ -41,8 +42,9 @@ class TestNeuralNetworkLearning(unittest.TestCase):
             }
 
         train_pairs = [((0.0, 0.0), (6.0, 0.0)), ((-4.0, 2.0), (1.0, 2.0))]
+        logger.info("Training on scenarios: %s", train_pairs)
 
-        for _ in range(300):
+        for i in range(300):
             for start, food in train_pairs:
                 pos = np.array(start)
                 energy = 10.0
@@ -65,18 +67,28 @@ class TestNeuralNetworkLearning(unittest.TestCase):
                     )
                     pos += step
                     energy -= 0.1
+            if (i + 1) % 100 == 0:
+                logger.info("Completed %d training iterations", i + 1)
 
         # Evaluation on unseen scenario
         pos = np.array([3.0, -3.0])
         food = np.array([9.0, -3.0])
         energy = 10.0
         success = False
+        logger.info("Starting evaluation on unseen scenario from %s to %s", pos, food)
         for _ in range(10):
             state = build_state(tuple(pos), tuple(food), energy)
             vec = nn._process_sensory_inputs(state)
             logits = nn.model(np.expand_dims(vec, 0))
             probs = tf.nn.softmax(logits, axis=-1).numpy().flatten()
             act = int(np.argmax(probs[:6]))
+            logger.info(
+                "Eval step: pos=%s action=%d prob_move=%.3f prob_eat=%.3f",
+                pos,
+                act,
+                probs[0],
+                probs[2],
+            )
             if act == 2 and np.hypot(*(food - pos)) < 0.5:
                 success = True
                 break
@@ -87,6 +99,7 @@ class TestNeuralNetworkLearning(unittest.TestCase):
                 energy -= 0.1
             else:
                 break
+        logger.info("Evaluation success=%s final_pos=%s", success, pos)
         self.assertTrue(success, "NN failed to move to food and eat in new scenario")
 
 

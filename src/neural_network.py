@@ -145,6 +145,19 @@ class NeuralNetwork:
         grads = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
+    def train_supervised(self, input_vec: np.ndarray, action_idx: int) -> None:
+        """Perform a supervised cross-entropy update for a single example."""
+        input_batch = np.expand_dims(input_vec, axis=0).astype(np.float32)
+        target = tf.convert_to_tensor([action_idx], dtype=tf.int32)
+        with tf.GradientTape() as tape:
+            logits = self.model(input_batch)[:, :6]
+            loss = tf.keras.losses.sparse_categorical_crossentropy(
+                target, logits, from_logits=True
+            )
+            loss = tf.reduce_mean(loss)
+        grads = tape.gradient(loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+
     def _process_sensory_inputs(self, sensory_inputs: Dict[str, Any]) -> np.ndarray:
         """
         Convert the dictionary of sensory inputs into a flat numpy array for the neural network.
@@ -211,6 +224,12 @@ class NeuralNetwork:
             np.cos(nearest_food_angle),           # X-component of nearest food direction
             np.sin(nearest_food_angle)            # Y-component of nearest food direction
         ])
+
+        # Optionally include creature position if expected by the model
+        if self.input_size >= 14:
+            pos = creature_state.get('position', (0.0, 0.0))
+            inputs.append(pos[0] / 10.0)
+            inputs.append(pos[1] / 10.0)
 
         return np.array(inputs, dtype=np.float32)
 

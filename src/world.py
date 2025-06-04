@@ -194,6 +194,9 @@ class World:
                 children = creature.split(self)
                 print(f"Creature split into 4! Parent energy: {creature.energy}, size: {creature.size}, Children: {len(children)}")
 
+        # Remove any creatures that died during this step
+        self.creatures = [c for c in self.creatures if c.energy > 0]
+
         # 6) Decay all Food objects and remove expired ones
         new_foods = []
 

@@ -32,11 +32,11 @@ class TestNeuralNetworkLearning(unittest.TestCase):
             }, 5)   # Expect FLEE
         ]
 
-        # Train for a few epochs
+        # Supervised training: force correct actions
         for _ in range(500):
             for inputs, action_idx in train_scenarios:
                 vec = nn._process_sensory_inputs(inputs)
-                nn.train_reinforce(vec, action_idx, reward=1.0)
+                nn.train_supervised(vec, action_idx)
 
         # New scenarios (slightly different distances/angles)
         test_scenarios = [

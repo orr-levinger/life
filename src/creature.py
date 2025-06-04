@@ -201,7 +201,8 @@ class Creature:
                 'energy': self.energy,
                 'size': self.size,
                 'velocity': self.velocity,
-                'max_energy': self.max_energy
+                'max_energy': self.max_energy,
+                'position': (self.x, self.y)
             }
         }
 

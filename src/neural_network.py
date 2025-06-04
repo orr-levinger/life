@@ -146,11 +146,11 @@ class NeuralNetwork:
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
     def train_supervised(self, input_vec: np.ndarray, action_idx: int) -> None:
-        """Train using supervised cross-entropy on a single example."""
+        """Perform a supervised cross-entropy update for a single example."""
         input_batch = np.expand_dims(input_vec, axis=0).astype(np.float32)
+        target = tf.convert_to_tensor([action_idx], dtype=tf.int32)
         with tf.GradientTape() as tape:
             logits = self.model(input_batch)[:, :6]
-            target = tf.convert_to_tensor([action_idx], dtype=tf.int32)
             loss = tf.keras.losses.sparse_categorical_crossentropy(
                 target, logits, from_logits=True
             )
@@ -180,9 +180,9 @@ class NeuralNetwork:
             np.ndarray of length input_size, dtype float32
         """
         creature_state = sensory_inputs.get('creature_state', {})
-
         # Normalize creature state features
         inputs: List[float] = [
+            creature_state.get('position', (0.0, 0.0)),
             creature_state.get('energy', 0) / 100.0,
             creature_state.get('size', 1.0) / 5.0,
             creature_state.get('velocity', 1.0),

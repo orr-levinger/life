@@ -2,10 +2,14 @@ import unittest
 import numpy as np
 import tensorflow as tf
 import sys, os
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.neural_network import NeuralNetwork
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class TestNeuralNetworkLearning(unittest.TestCase):
     def test_training_and_generalization(self):
@@ -33,10 +37,19 @@ class TestNeuralNetworkLearning(unittest.TestCase):
         ]
 
         # Supervised training: force correct actions
-        for _ in range(500):
+        for step in range(500):
             for inputs, action_idx in train_scenarios:
                 vec = nn._process_sensory_inputs(inputs)
                 nn.train_supervised(vec, action_idx)
+            if (step + 1) % 100 == 0:
+                correct = 0
+                for inputs, action_idx in train_scenarios:
+                    vec = nn._process_sensory_inputs(inputs)
+                    logits = nn.model(np.expand_dims(vec, 0))
+                    probs = tf.nn.softmax(logits, axis=-1).numpy().flatten()
+                    pred = int(np.argmax(probs[:6]))
+                    correct += pred == action_idx
+                logger.info("Training step %d: %d/%d correct", step + 1, correct, len(train_scenarios))
 
         # New scenarios (slightly different distances/angles)
         test_scenarios = [
@@ -62,6 +75,12 @@ class TestNeuralNetworkLearning(unittest.TestCase):
             logits = nn.model(np.expand_dims(vec, 0))
             probs = tf.nn.softmax(logits, axis=-1).numpy().flatten()
             pred_idx = int(np.argmax(probs[:6]))
+            logger.info(
+                "Scenario %d predicted action %d (expected %d)",
+                idx,
+                pred_idx,
+                expected_idx,
+            )
             if idx < 2:
                 self.assertEqual(pred_idx, expected_idx)
             else:

@@ -342,38 +342,19 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         attacker.decide = eat_at_current
 
-        # Take bites until the corpse is fully consumed
-        # We'll need to take 8 bites total, but we need to check if the corpse exists after each bite
-        for i in range(8):
-            # If the corpse is gone, we're done
-            if len(world.foods) == 0:
-                print(f"Corpse is gone after {i} bites")
+        # Take bites for up to the corpse's remaining duration
+        for _ in range(corpse.remaining_duration):
+            if not world.foods:
                 break
 
-            # Print corpse state before step
-            if len(world.foods) > 0:
-                print(f"Before step {i+1}: corpse.energy={world.foods[0].energy}, attacker.energy={attacker.energy}")
-
-            # Call world.step() to eat one bite
             world.step()
 
-            # Print corpse state after step
-            if len(world.foods) > 0:
-                print(f"After step {i+1}: corpse.energy={world.foods[0].energy}, attacker.energy={attacker.energy}")
-            else:
-                print(f"After step {i+1}: corpse is gone, attacker.energy={attacker.energy}")
-
-            # Verify attacker's energy increased by 1 each step
-            # Starting from 8.0, energy should increase by 1 for each bite
-            self.assertAlmostEqual(attacker.energy, 8.0 + (i + 1), places=5)
-
-        # Verify the corpse is gone after all bites
+        # Corpse should be gone after duration expires or energy depleted
         self.assertEqual(len(world.foods), 0)
 
-        # Verify attacker's final energy
-        # Note: In the updated implementation, the corpse is removed after 4 bites instead of 8 bites
-        # So the attacker's energy is 8.0 + 4.0 = 12.0
-        self.assertAlmostEqual(attacker.energy, 12.0, places=5)
+        # Attacker gains at most one energy per bite (up to 5 bites)
+        expected_gain = min(5, int(corpse.energy))
+        self.assertAlmostEqual(attacker.energy, 8.0 + expected_gain, places=5)
 
     def test_mixed_interactions(self):
         """

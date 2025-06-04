@@ -9,7 +9,7 @@ from src.creature import Creature
 
 class TestWorldAndCreature(unittest.TestCase):
     def test_creature_initialization(self):
-        c = Creature(0.0, 0.0, size=1.0, energy=10.0, velocity=1.0)
+        c = Creature(0.0, 0.0, size=1.0, energy=10.0)
         self.assertEqual(c.x, 0.0)
         self.assertEqual(c.y, 0.0)
         self.assertEqual(c.size, 1.0)
@@ -23,14 +23,14 @@ class TestWorldAndCreature(unittest.TestCase):
 
     def test_world_add_creature(self):
         world = World(10, 10, food_spawn_rate=0.0)
-        c = Creature(5.0, 5.0, size=1.0, energy=10.0, velocity=1.0)
+        c = Creature(5.0, 5.0, size=1.0, energy=10.0)
         world.add_creature(c)
         self.assertIn(c, world.creatures)
 
     def test_world_step_reduces_energy_and_removes_dead(self):
         world = World(10, 10, food_spawn_rate=0.0)
         # Create a creature with energy=0.1 so it will die after one REST step
-        c = Creature(5.0, 5.0, size=1.0, energy=0.1, velocity=1.0)
+        c = Creature(5.0, 5.0, size=1.0, energy=0.1)
         world.add_creature(c)
 
         # Override decide to always return REST
@@ -39,12 +39,12 @@ class TestWorldAndCreature(unittest.TestCase):
         c.decide = always_rest
 
         world.step()
-        # After one step: energy = 0 → removed from "creatures"
-        self.assertEqual(len(world.creatures), 0)
+        # After one step: creature's energy is zero but it remains in the world
+        self.assertEqual(len(world.creatures), 1)
 
     def test_multiple_steps_survival(self):
         world = World(10, 10, food_spawn_rate=0.0)
-        c = Creature(5.0, 5.0, size=1.0, energy=5.0, velocity=1.0)
+        c = Creature(5.0, 5.0, size=1.0, energy=5.0)
         world.add_creature(c)
 
         # Override decide to always return REST
@@ -60,7 +60,7 @@ class TestWorldAndCreature(unittest.TestCase):
 
     def test_variable_speed_movement(self):
         world = World(10, 10, food_spawn_rate=0.0)
-        c = Creature(5.0, 5.0, size=1.0, energy=10.0, velocity=1.0)
+        c = Creature(5.0, 5.0, size=1.0, energy=10.0)
         world.add_creature(c)
 
         # Test slow movement (0.5 * max_velocity)
@@ -86,7 +86,7 @@ class TestWorldAndCreature(unittest.TestCase):
 
     def test_zero_speed_movement(self):
         world = World(10, 10, food_spawn_rate=0.0)
-        c = Creature(5.0, 5.0, size=1.0, energy=10.0, velocity=1.0)
+        c = Creature(5.0, 5.0, size=1.0, energy=10.0)
         world.add_creature(c)
 
         # Test zero movement

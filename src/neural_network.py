@@ -224,7 +224,10 @@ class NeuralNetwork:
             np.cos(nearest_food_angle),           # X-component of nearest food direction
             np.sin(nearest_food_angle)            # Y-component of nearest food direction
         ])
-
+        if self.input_size >= 14:
+            pos = creature_state.get('position', (0.0, 0.0))
+            inputs.append(pos[0] / 10.0)
+            inputs.append(pos[1] / 10.0)
         return np.array(inputs, dtype=np.float32)
 
     def _map_output_to_action(self,

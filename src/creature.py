@@ -442,6 +442,8 @@ class Creature:
             distance = math.sqrt(dx * dx + dy * dy)
             attack_range = (self.radius + target.radius) * self.ATTACK_RANGE_FACTOR
 
+            print(f"ATTACK: distance={distance}, attack_range={attack_range}")
+            print(f"ATTACK: target_initial_energy={target.energy}, attack_damage={self.attack_damage}")
 
             if distance > attack_range:
                 self.energy -= self.attack_cost
@@ -451,6 +453,7 @@ class Creature:
                 damage_dealt = min(target_initial_energy, self.attack_damage)
                 target.energy -= damage_dealt
 
+                print(f"ATTACK: damage_dealt={damage_dealt}, target_energy_after={target.energy}")
 
                 self.energy -= self.attack_cost
                 self.last_action = f"ATTACK→{target.id if hasattr(target, 'id') else id(target)}"

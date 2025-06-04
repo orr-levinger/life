@@ -45,7 +45,7 @@ class Creature:
             create_brain: bool = False,
             parent_id: int = None,
             generation: int = 0
-    ):
+        ):
         """
         Initialize a Creature.
 
@@ -202,7 +202,7 @@ class Creature:
                 'size': self.size,
                 'velocity': self.velocity,
                 'max_energy': self.max_energy,
-                'position': (self.x, self.y)
+                'position': (self.x, self.y),
             }
         }
 
@@ -292,7 +292,14 @@ class Creature:
         nearby_creatures = [
             (obj, dist, angle)
             for type_tag, obj, dist, angle in vision
-            if type_tag == "creature" and obj.parent_id != self.parent_id
+            if (
+                type_tag == "creature"
+                and obj.id != self.parent_id
+                and obj.parent_id != self.id
+                and not (
+                    self.parent_id != 0 and obj.parent_id == self.parent_id
+                )
+            )
         ]
         # --- 2) Check for nearby food ---
         nearby_food = [
@@ -306,7 +313,7 @@ class Creature:
             closest_creature, distance, angle = nearby_creatures[0]
             attack_range = (self.radius + closest_creature.radius) * self.ATTACK_RANGE_FACTOR
 
-            if distance <= attack_range and closest_creature.parent_id != self.parent_id:
+            if distance <= attack_range:
                 self.current_speed = self.velocity
                 self.intent = "ATTACK"
                 dx = math.cos(angle) * self.current_speed
@@ -481,9 +488,17 @@ class Creature:
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                amt = min(5, target_food.energy)
+                if target_food.energy <= 0:
+                    amt = 1.0
+                else:
+                    amt = min(1.0, target_food.energy)
                 target_food.energy -= amt
                 self.energy += amt
+                if target_food.energy <= 0:
+                    try:
+                        world.foods.remove(target_food)
+                    except ValueError:
+                        pass
                 self.last_action = f"EAT→{target_food.id if hasattr(target_food, 'id') else id(target_food)}"
 
         # --- Handle EAT_AT_CURRENT action when creature is exactly on a food source ---
@@ -499,9 +514,17 @@ class Creature:
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                amt = min(5, target_food.energy)
+                if target_food.energy <= 0:
+                    amt = 1.0
+                else:
+                    amt = min(1.0, target_food.energy)
                 target_food.energy -= amt
                 self.energy += amt
+                if target_food.energy <= 0:
+                    try:
+                        world.foods.remove(target_food)
+                    except ValueError:
+                        pass
                 self.last_action = "EAT_AT_CURRENT"
 
         # --- Handle REST action (no parameters) ---

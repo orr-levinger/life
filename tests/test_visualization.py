@@ -41,8 +41,8 @@ class TestVisualization(unittest.TestCase):
         Place a couple of creatures in the world and verify render() still runs.
         """
         w = World(5, 5, food_spawn_rate=0.0)
-        c1 = Creature(1.0, 1.0, size=1.0, energy=5.0, velocity=1.0)
-        c2 = Creature(3.0, 4.0, size=1.5, energy=3.0, velocity=0.5)
+        c1 = Creature(1.0, 1.0, size=1.0, energy=5.0)
+        c2 = Creature(3.0, 4.0, size=1.5, energy=3.0)
         w.add_creature(c1)
         w.add_creature(c2)
         viz = Visualizer(5, 5)
@@ -82,23 +82,23 @@ class TestVisualization(unittest.TestCase):
         w = World(5, 5, food_spawn_rate=0.0)
 
         # Create creatures with different intents
-        c1 = Creature(1.0, 1.0, size=1.0, energy=5.0, velocity=1.0)
+        c1 = Creature(1.0, 1.0, size=1.0, energy=5.0)
         c1.intent = "ATTACK"
         c1.intended_vector = (1.0, 0.0)  # Moving east
 
-        c2 = Creature(3.0, 3.0, size=1.0, energy=5.0, velocity=1.0)
+        c2 = Creature(3.0, 3.0, size=1.0, energy=5.0)
         c2.intent = "GO_TO_FOOD"
         c2.intended_vector = (0.0, 1.0)  # Moving north
 
-        c3 = Creature(4.0, 1.0, size=1.0, energy=5.0, velocity=1.0)
+        c3 = Creature(4.0, 1.0, size=1.0, energy=5.0)
         c3.intent = "RUN_AWAY"
         c3.intended_vector = (-1.0, 0.0)  # Moving west
 
-        c4 = Creature(1.0, 4.0, size=1.0, energy=5.0, velocity=1.0)
+        c4 = Creature(1.0, 4.0, size=1.0, energy=5.0)
         c4.intent = "WANDER"
         c4.intended_vector = (0.5, 0.5)  # Moving northeast at half speed
 
-        c5 = Creature(2.0, 2.0, size=1.0, energy=5.0, velocity=1.0)
+        c5 = Creature(2.0, 2.0, size=1.0, energy=5.0)
         c5.intent = "REST"
         c5.intended_vector = (0.0, 0.0)  # Not moving
 

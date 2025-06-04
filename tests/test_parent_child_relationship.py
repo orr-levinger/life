@@ -30,8 +30,8 @@ class TestParentChildRelationship(unittest.TestCase):
         # Split the parent to create children
         children = parent.split(world)
 
-        # Verify that the parent has children
-        self.assertTrue(len(parent.children_ids) > 0)
+        # Verify that children were created
+        self.assertEqual(len(children), 4)
 
         # Position a child close to the parent
         child = children[0]

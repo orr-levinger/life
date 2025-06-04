@@ -164,8 +164,9 @@ class TestContinuousMovement(unittest.TestCase):
         (0.5 + (-√2/2), 0.5 + (-√2/2)) clamped to (0,0). Energy drops by 1.0.
         """
         w = World(10, 10, food_spawn_rate=0.0)
-        # Set radius to 0.0 explicitly for this test to ensure clamping to 0.0
-        c = Creature(0.5, 0.5, size=1.0, energy=5.0, radius=0.0)
+        # Create creature and override radius to 0.0 for this test
+        c = Creature(0.5, 0.5, size=1.0, energy=5.0)
+        c.radius = 0.0
         w.add_creature(c)
 
         def go_sw(vision, on_food=False):

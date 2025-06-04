@@ -180,9 +180,9 @@ class NeuralNetwork:
             np.ndarray of length input_size, dtype float32
         """
         creature_state = sensory_inputs.get('creature_state', {})
+
         # Normalize creature state features
         inputs: List[float] = [
-            creature_state.get('position', (0.0, 0.0)),
             creature_state.get('energy', 0) / 100.0,
             creature_state.get('size', 1.0) / 5.0,
             creature_state.get('velocity', 1.0),
@@ -224,10 +224,13 @@ class NeuralNetwork:
             np.cos(nearest_food_angle),           # X-component of nearest food direction
             np.sin(nearest_food_angle)            # Y-component of nearest food direction
         ])
+
+        # Optionally include creature position if expected by the model
         if self.input_size >= 14:
             pos = creature_state.get('position', (0.0, 0.0))
             inputs.append(pos[0] / 10.0)
             inputs.append(pos[1] / 10.0)
+
         return np.array(inputs, dtype=np.float32)
 
     def _map_output_to_action(self,

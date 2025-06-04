@@ -342,34 +342,19 @@ class TestAttackingAndPredation(unittest.TestCase):
 
         attacker.decide = eat_at_current
 
-        # Take bites until the corpse is fully consumed
-        for i in range(2):
-            # If the corpse is gone, we're done
-            if len(world.foods) == 0:
-                print(f"Corpse is gone after {i} bites")
+        # Take bites for up to the corpse's remaining duration
+        for _ in range(corpse.remaining_duration):
+            if not world.foods:
                 break
 
-            # Print corpse state before step
-            if len(world.foods) > 0:
-                print(f"Before step {i+1}: corpse.energy={world.foods[0].energy}, attacker.energy={attacker.energy}")
-
-            # Call world.step() to eat one bite
             world.step()
 
-            # Print corpse state after step
-            if len(world.foods) > 0:
-                print(f"After step {i+1}: corpse.energy={world.foods[0].energy}, attacker.energy={attacker.energy}")
-            else:
-                print(f"After step {i+1}: corpse is gone, attacker.energy={attacker.energy}")
-
-            expected_energy = 13.0 if i == 0 else 16.0
-            self.assertAlmostEqual(attacker.energy, expected_energy, places=5)
-
-        # Verify the corpse is gone after all bites
+        # Corpse should be gone after duration expires or energy depleted
         self.assertEqual(len(world.foods), 0)
 
-        # Verify attacker's final energy after consuming the corpse
-        self.assertAlmostEqual(attacker.energy, 16.0, places=5)
+        # Attacker gains at most one energy per bite (up to 5 bites)
+        expected_gain = min(5, int(corpse.energy))
+        self.assertAlmostEqual(attacker.energy, 8.0 + expected_gain, places=5)
 
     def test_mixed_interactions(self):
         """

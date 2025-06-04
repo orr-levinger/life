@@ -94,17 +94,16 @@ class TestFoodAndEating(unittest.TestCase):
 
         creature.decide = always_eat_food
 
-        # Call world.step()
-        world.step()
+        # Simulate multiple steps to fully consume the food
+        for _ in range(5):
+            world.step()
 
         # Verify creature position hasn't changed
         self.assertAlmostEqual(creature.x, 2.0, places=5)
         self.assertAlmostEqual(creature.y, 2.0, places=5)
 
-        # Verify creature energy increased by up to 5
+        # After 5 bites the creature should gain 5 energy and the food is gone
         self.assertAlmostEqual(creature.energy, initial_energy + 5.0, places=5)
-
-        # Verify food energy decreased by up to 5 and is consumed
         self.assertEqual(food.energy, 0.0)
         self.assertNotIn(food, world.foods)
 
@@ -136,13 +135,11 @@ class TestFoodAndEating(unittest.TestCase):
 
         creature.decide = always_eat_at_current
 
-        # Call world.step()
-        world.step()
+        # Consume the food over multiple steps
+        for _ in range(5):
+            world.step()
 
-        # Verify creature energy increased by up to 5
         self.assertAlmostEqual(creature.energy, initial_energy + 5.0, places=5)
-
-        # Verify food energy decreased by up to 5 and is consumed
         self.assertEqual(food.energy, 0.0)
         self.assertNotIn(food, world.foods)
 
@@ -194,14 +191,12 @@ class TestFoodAndEating(unittest.TestCase):
         creature_a.decide = lambda vision, on_food=False: always_eat_food(creature_a, vision, on_food)
         creature_b.decide = lambda vision, on_food=False: always_eat_food(creature_b, vision, on_food)
 
-        # Call world.step()
-        world.step()
+        # Run multiple steps so both creatures finish the food
+        for _ in range(3):
+            world.step()
 
-        # Total energy gained should equal the food energy (5)
         total_gain = (creature_a.energy - initial_energy_a) + (creature_b.energy - initial_energy_b)
         self.assertAlmostEqual(total_gain, 5.0, places=5)
-
-        # Food should be consumed after this step
         self.assertEqual(food.energy, 0.0)
         self.assertNotIn(food, world.foods)
 

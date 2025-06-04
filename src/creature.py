@@ -480,10 +480,15 @@ class Creature:
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                amt = min(5, target_food.energy)
+                amt = min(1.0, target_food.energy)
                 target_food.energy -= amt
                 self.energy += amt
                 self.last_action = f"EAT→{target_food.id if hasattr(target_food, 'id') else id(target_food)}"
+                if target_food.energy <= 0:
+                    try:
+                        world.foods.remove(target_food)
+                    except ValueError:
+                        pass
 
         # --- Handle EAT_AT_CURRENT action when creature is exactly on a food source ---
         elif act_type == "EAT_AT_CURRENT":
@@ -498,10 +503,15 @@ class Creature:
                 self.energy -= eat_miss_cost
                 self.last_action = "EAT_MISS"
             else:
-                amt = min(5, target_food.energy)
+                amt = min(1.0, target_food.energy)
                 target_food.energy -= amt
                 self.energy += amt
                 self.last_action = "EAT_AT_CURRENT"
+                if target_food.energy <= 0:
+                    try:
+                        world.foods.remove(target_food)
+                    except ValueError:
+                        pass
 
         # --- Handle REST action (no parameters) ---
         else:  # "REST"

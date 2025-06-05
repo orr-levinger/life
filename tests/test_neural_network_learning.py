@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.neural_network import NeuralNetwork
 
 logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -44,31 +45,33 @@ class TestNeuralNetworkLearning(unittest.TestCase):
         train_pairs = [((0.0, 0.0), (6.0, 0.0)), ((-4.0, 2.0), (1.0, 2.0))]
         logger.info("Training on scenarios: %s", train_pairs)
 
-        for i in range(300):
-            for start, food in train_pairs:
-                pos = np.array(start)
-                energy = 10.0
-                for _ in range(10):
-                    state = build_state(pos, food, energy)
-                    dist = np.hypot(food[0] - pos[0], food[1] - pos[1])
-                    if dist < 0.5:
-                        vec = nn._process_sensory_inputs(state)
-                        nn.train_supervised(vec, 2)  # EAT
-                        break
-                    vec = nn._process_sensory_inputs(state)
-                    nn.train_supervised(vec, 0)  # MOVE
-                    step = np.array(
-                        [
-                            np.cos(
-                                angle := np.arctan2(food[1] - pos[1], food[0] - pos[0])
-                            ),
-                            np.sin(angle),
-                        ]
-                    )
-                    pos += step
-                    energy -= 0.1
-            if (i + 1) % 100 == 0:
-                logger.info("Completed %d training iterations", i + 1)
+        for _ in range(10):
+            for i in range(300):
+                for start, food in train_pairs:
+                    pos = np.array(start)
+                    energy = 10.0
+                    for _ in range(10):
+                        for step_idx in range(10):
+                            state = build_state(pos, food, energy)
+                            dist = np.hypot(food[0] - pos[0], food[1] - pos[1])
+                            if dist < 0.5:
+                                vec = nn._process_sensory_inputs(state)
+                                nn.train_supervised(vec, 2)  # EAT
+                                break
+                            vec = nn._process_sensory_inputs(state)
+                            nn.train_supervised(vec, 0)  # MOVE
+                            step = np.array(
+                                [
+                                    np.cos(
+                                        angle := np.arctan2(food[1] - pos[1], food[0] - pos[0])
+                                    ),
+                                    np.sin(angle),
+                                ]
+                            )
+                            pos += step
+                            energy -= 0.1
+                if (i + 1) % 100 == 0:
+                    logger.info("Completed %d training iterations", i + 1)
 
         # Evaluation on unseen scenario
         pos = np.array([3.0, -3.0])
@@ -83,11 +86,10 @@ class TestNeuralNetworkLearning(unittest.TestCase):
             probs = tf.nn.softmax(logits, axis=-1).numpy().flatten()
             act = int(np.argmax(probs[:6]))
             logger.info(
-                "Eval step: pos=%s action=%d prob_move=%.3f prob_eat=%.3f",
+                "Eval step: pos=%s action=%d probs=%s",
                 pos,
                 act,
-                probs[0],
-                probs[2],
+                np.array2string(probs, precision=3),
             )
             if act == 2 and np.hypot(*(food - pos)) < 0.5:
                 success = True

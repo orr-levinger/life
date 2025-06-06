@@ -151,7 +151,7 @@ class Visualizer:
                 self.ax.text(
                     c.x,
                     c.y - c.radius - 0.2,   # Position text slightly below the bottom of the circle
-                    f"{c.steps_without_reward}",  # Display as integer
+                    f"{c.generation}",  # Display as integer
                     color='white',
                     fontsize=6,            # Smaller font so it doesn't clutter
                     ha='center',

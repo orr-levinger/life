@@ -3,6 +3,7 @@ import random               # For random number generation
 import math                 # For trigonometric functions and distance calculations
 import os                   # For filesystem operations when saving brains
 import pickle               # For serializing (saving) neural network objects to disk
+import numpy as np          # For storing episode state/action sequences
 
 if TYPE_CHECKING:
     from .world import World
@@ -64,6 +65,11 @@ class Creature:
 
         from .sensors import ProximitySensor
         self.sensors: Tuple['Sensor', ...] = (ProximitySensor(sense_range=self.SENSE_RANGE),)
+
+        # Buffer of (input_vec, action_idx) for the current short episode.
+        # Used so the network can learn from the entire sequence leading to a
+        # reward rather than only the final action.
+        self.episode_memory: List[Tuple[np.ndarray, int]] = []
 
     def _action_to_index(self, action_type: str) -> Optional[int]:
         if action_type in self.ACTION_TYPES:
@@ -127,6 +133,16 @@ class Creature:
             }
         }
         action_type, action_params = self.brain.decide(sensory_inputs)
+        # Keep a record of the state/action so we can train on the entire
+        # sequence once a reward is observed.
+        if (
+            self.brain._last_input is not None
+            and self.brain._last_action_idx is not None
+        ):
+            self.episode_memory.append(
+                (self.brain._last_input[0], int(self.brain._last_action_idx))
+            )
+
         self._set_intent_and_vector(action_type, action_params, vision)
         return action_type, action_params
 
@@ -381,6 +397,15 @@ class Creature:
 
         if self.brain is not None:
             self.brain.apply_reward(energy_change if terminal else 0.0, terminal)
+
+        # If this step ended the short episode (e.g. successful eat or death),
+        # train on the entire sequence that led to this outcome so that the
+        # creature learns long-term strategies rather than only the final action.
+        if self.brain is not None and terminal and self.episode_memory:
+            reward = 1.0 if energy_change > 0 else -1.0
+            for input_vec, action_idx in self.episode_memory:
+                self.brain.train_reinforce(input_vec, action_idx, reward)
+            self.episode_memory.clear()
 
         if self.brain is not None and self.get_nn_score() >= 80 and not self.brain_saved:
             self._save_brain()

@@ -19,7 +19,7 @@ else:
 
 def main() -> None:
     # Configuration for Stage 1.5
-    WIDTH, HEIGHT = 30, 30
+    WIDTH, HEIGHT = 50, 30
     FOOD_RATE = 0.002          # Reduced food spawn rate to prevent screen filling
     INITIAL_CREATURES = 1     # Start with 10 creatures
     NUM_STEPS = 10000            # Run 100 steps for demonstration

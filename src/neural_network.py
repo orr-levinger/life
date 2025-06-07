@@ -86,6 +86,38 @@ class NeuralNetwork:
         action_type, action_params = self._map_output_to_action(probs_np, sensory_inputs, action_idx)
         return action_type, action_params
 
+    def train_supervised_full(
+            self,
+            input_vec: np.ndarray,
+            action_idx: int,
+            cont_targets: Optional[Tuple[float, float]] = None,  # (angle_0-1, speed_0-1)
+            lambda_cont: float = 0.3,                            # weight for MSE part
+    ) -> None:
+        """
+        Cross-entropy on the discrete head + (optionally) MSE on the 2 continuous heads.
+        """
+        x = np.expand_dims(input_vec, 0).astype(np.float32)
+        y_action = tf.convert_to_tensor([action_idx], dtype=tf.int32)
+
+        with tf.GradientTape() as tape:
+            logits = self.model(x)                 # shape (1, 8)
+            loss_disc = tf.keras.losses.sparse_categorical_crossentropy(
+                y_action, logits[:, :6], from_logits=True
+            )
+            loss_disc = tf.reduce_mean(loss_disc)
+
+            if cont_targets is not None:
+                y_cont = tf.convert_to_tensor([cont_targets], dtype=tf.float32)  # (1, 2)
+                pred_cont = tf.nn.softmax(logits)[:, 6:8]                        # (1, 2)
+                loss_cont = tf.reduce_mean(tf.square(pred_cont - y_cont))
+            else:
+                loss_cont = 0.0
+
+            loss = loss_disc + lambda_cont * loss_cont
+
+        grads = tape.gradient(loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+
     def apply_reward(self, reward: float, terminal: bool) -> None:
         """
         After the environment has been updated and energy change (reward) is known,

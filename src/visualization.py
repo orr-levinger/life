@@ -180,7 +180,7 @@ class Visualizer:
                     arrow_color = 'blue'      # Blue for fleeing
 
                 # Draw the arrow
-                arrow_scale = 2.0  # Adjust to make arrows visible but not too large
+                arrow_scale = 1.0  # Adjust to make arrows visible but not too large
                 self.ax.arrow(
                     cx, cy,                     # Start at creature center
                     dx * arrow_scale, dy * arrow_scale,  # Scaled intended vector

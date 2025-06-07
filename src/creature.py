@@ -15,7 +15,7 @@ class Creature:
     SENSE_RANGE = 3.0
     ATTACK_RANGE_FACTOR = 3.0
     EAT_RANGE_FACTOR = 3.0
-    MIN_GENEARTIONS = 5
+    MIN_STEPS = 500
     INPUT_SIZE = 12
     HIDDEN_SIZES = [8, 8]
     OUTPUT_SIZE = 8
@@ -70,10 +70,10 @@ class Creature:
             return self.ACTION_TYPES.index(action_type)
         return None
 
-    def decide(self, vision: List[Tuple[str, Any, float, float]], on_food: bool = False) -> Tuple[str, Any]:
+    def decide(self, vision: List[Tuple[str, Any, float, float]], on_food: bool = False, step: int = 0) -> Tuple[str, Any]:
         self.nn_total_steps += 1
 
-        if self.generation < self.MIN_GENEARTIONS:
+        if step < self.MIN_STEPS:
             if self.brain is not None:
                 self.nn_fallback_count += 1
 
@@ -94,9 +94,19 @@ class Creature:
                     }
                 }
                 input_vec = self.brain._process_sensory_inputs(sensory_inputs)
-                action_idx = self._action_to_index(action_type)
-                if action_idx is not None:
-                    self.brain.train_supervised(input_vec, action_idx)
+                idx = self._action_to_index(action_type)
+
+                # -------- NEW: build targets for the 2 continuous heads --------
+                cont_targets = None
+                if action_type in ("MOVE", "FLEE"):
+                    dx, dy = action_params
+                    angle_01 = (math.atan2(dy, dx) % (2 * math.pi)) / (2 * math.pi)
+                    speed_01 = min(math.hypot(dx, dy) / self.velocity, 1.0)
+                    cont_targets = (angle_01, speed_01)
+                # ----------------------------------------------------------------
+
+                if idx is not None:
+                    self.brain.train_supervised_full(input_vec, idx, cont_targets)
 
             return action_type, action_params
 
@@ -426,7 +436,7 @@ class Creature:
                 mutated_brain = self.brain.mutate(mutation_rate, mutation_scale)
 
             size_mutation_factor = 1.0 + random.uniform(-0.5, 0.5)
-            mutated_size = min(max(self.size * size_mutation_factor, 0.1), 2.0)
+            mutated_size = min(max(self.size * size_mutation_factor, 0.5), 2.0)
 
             mutated_child = Creature(
                 x=self.x + random.uniform(-1.0, 1.0),

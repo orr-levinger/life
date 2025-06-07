@@ -168,7 +168,7 @@ class World:
                     break
 
             # Decide action
-            action = creature.decide(vision, on_food)
+            action = creature.decide(vision, on_food, self.step_count)
             decisions.append((creature, action))
 
         # 4a) Apply all ATTACK actions first
@@ -189,7 +189,7 @@ class World:
         # 5.5) Check if any creatures should split and perform the split
         # We need to make a copy of the list because we'll be modifying it
         for creature in list(self.creatures):
-            if creature.should_split():
+            if creature.should_split() and len(self.creatures) <= 40:
                 # Split the creature into 4 (1 parent + 3 children)
                 children = creature.split(self)
                 print(f"Creature split into 4! Parent energy: {creature.energy}, size: {creature.size}, Children: {len(children)}")

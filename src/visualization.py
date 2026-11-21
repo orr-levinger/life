@@ -23,7 +23,6 @@ class Visualizer:
     Usage:
         viz = Visualizer(world_width, world_height)
         viz.render(world)       # to draw the current state
-        plt.pause(0.1)           # pause briefly so the figure updates
     """
 
     def __init__(self, width: int, height: int, cell_size: float = 1.0, debug: bool = False):
@@ -56,12 +55,10 @@ class Visualizer:
     def render(self, world: World) -> None:
         """
         Draw the current state of `world`:
-         - Creatures as circles colored by their brain usage (purple/green).
+         - Creatures as circles: purple for brains, green for baselines.
          - Food as red circles with radius proportional to its energy.
-         - Overlay text: energy, NN score, steps without reward.
-         - Also display total creatures, max NN score, and current simulation step.
-
-        After calling render(), call plt.pause() to let the figure update.
+         - Overlay text: energy above, food eaten inside, generation below.
+         - Corner: step, creatures, most food eaten, level.
         """
         # Clear existing artists:
         self.ax.cla()
@@ -136,11 +133,11 @@ class Visualizer:
                     va='bottom'
                 )
 
-                # Show NN score in the middle of the creature
+                # Show the food eaten in its life in the middle of the creature
                 self.ax.text(
                     c.x,
                     c.y,
-                    f"{c.get_nn_score():.0f}",  # Red number indicating NN score (0–100)
+                    f"{c.food_eaten:.0f}",
                     color='red',
                     fontsize=6,
                     ha='center',
@@ -191,26 +188,16 @@ class Visualizer:
                     alpha=0.8
                 )
 
-        # 3) Compute and display global statistics: total creatures, max NN score, current step
+        # 3) Global statistics: step, creatures, most food eaten by a living creature, level
         total_creatures = len(world.creatures)
-        # Determine maximum NN score among all creatures (or 0 if no creatures)
-        max_brain_score = 0.0
-        if total_creatures > 0:
-            # Use get_nn_score() to retrieve each creature's score and take the maximum
-            max_brain_score = max(c.get_nn_score() for c in world.creatures)
-
-        # Attempt to get the current simulation step from the world
-        # We expect the World class to maintain a counter like world.step_count
-        # If it doesn't exist, default to 0 to avoid an AttributeError
-        step_number = getattr(world, 'step_count', None)
-        if step_number is None:
-            step_number = getattr(world, 'current_step', 0)
+        max_eaten = max((c.food_eaten for c in world.creatures), default=0.0)
 
         # Draw the text in the top-left corner (inside the plotting area)
         self.ax.text(
             0.5,                            # x-coordinate (slightly right of left edge)
             self.height - 0.5,              # y-coordinate (slightly below top edge)
-            f"Step: {step_number}   Creatures: {total_creatures}   MaxScore: {max_brain_score:.0f}",
+            f"Step: {world.step_count}   Creatures: {total_creatures}   MaxScore: {max_eaten:.0f}"
+            f"   Level: {world.level.number}",
             color='white',
             fontsize=10,
             ha='left',

@@ -10,10 +10,7 @@ from src.senses import display_intent, sense
 
 
 def creature(x: float, y: float, size: float = 1.25, id_: int = 1, parent_id: int = 0) -> Creature:
-    c = Creature(x, y, size, size * 50.0)
-    c.id = id_
-    c.parent_id = parent_id
-    return c
+    return Creature(id_, x, y, size, size * 50.0, "random", parent_id=parent_id)
 
 
 def food(x: float, y: float) -> Food:

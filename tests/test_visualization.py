@@ -1,151 +1,35 @@
-# tests/test_visualization.py
-
+import io
 import unittest
-import matplotlib
-# Use a non-GUI backend so tests don't actually pop up a window:
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import sys
-import os
-import math
 
-# Add the parent directory to the path so we can import the modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.world import World
-from src.creature import Creature
+import matplotlib
+
+matplotlib.use("Agg")  # no window in tests
+
 from src.food import Food
 from src.visualization import Visualizer
+from tests.helpers import add, fixed_brain, make_world
+
 
 class TestVisualization(unittest.TestCase):
     def test_render_empty_world(self):
-        """
-        Verify that rendering an empty world (no creatures or food) does not crash.
-        """
-        w = World(10, 10, food_spawn_rate=0.0)
-        viz = Visualizer(10, 10)
-        # Should not raise any exceptions:
+        viz = Visualizer(50, 30)
+        viz.render(make_world())
+        viz.fig.savefig(io.BytesIO(), format="png")
+
+    def test_render_with_creatures_and_food(self):
+        w = make_world()
+        add(w, 10, 10, policy="brain", brain=fixed_brain([1, 0, -1, -1]))
+        w.foods.append(Food(20, 20, remaining_duration=-1, energy=10.0))
+        w.step()
+        viz = Visualizer(50, 30)
         viz.render(w)
-        # We can also save to a buffer or file to ensure something was drawn:
-        fig = viz.fig
-        # Save to a temporary in-memory buffer (not on disk)
-        buf = None
-        try:
-            import io
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png')
-        except Exception as e:
-            self.fail(f"Saving figure failed with exception: {e}")
+        self.assertGreaterEqual(len(viz.ax.patches), 2)
 
-    def test_render_with_creatures(self):
-        """
-        Place a couple of creatures in the world and verify render() still runs.
-        """
-        w = World(5, 5, food_spawn_rate=0.0)
-        c1 = Creature(1.0, 1.0, size=1.0, energy=5.0)
-        c2 = Creature(3.0, 4.0, size=1.5, energy=3.0)
-        w.add_creature(c1)
-        w.add_creature(c2)
-        viz = Visualizer(5, 5)
-        viz.render(w)
-        # Again, attempt to save to buffer
-        fig = viz.fig
-        try:
-            import io
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png')
-        except Exception as e:
-            self.fail(f"Saving figure with creatures failed: {e}")
+    def test_corner_shows_level(self):
+        viz = Visualizer(50, 30)
+        viz.render(make_world())
+        self.assertTrue(any("Level: 1" in t.get_text() for t in viz.ax.texts))
 
-    def test_render_with_food(self):
-        """
-        Place food in the world and verify render() draws it correctly.
-        """
-        w = World(5, 5, food_spawn_rate=0.0)
-        # Add a food item with energy = 5.0
-        food = Food(x=2.5, y=2.5, remaining_duration=-1, energy=5.0)
-        w.foods.append(food)
-        viz = Visualizer(5, 5)
-        viz.render(w)
-        # Save to buffer
-        fig = viz.fig
-        try:
-            import io
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png')
-        except Exception as e:
-            self.fail(f"Saving figure with food failed: {e}")
 
-    def test_render_with_arrows(self):
-        """
-        Place creatures with different intents and verify render() draws arrows correctly.
-        """
-        w = World(5, 5, food_spawn_rate=0.0)
-
-        # Create creatures with different intents
-        c1 = Creature(1.0, 1.0, size=1.0, energy=5.0)
-        c1.intent = "ATTACK"
-        c1.intended_vector = (1.0, 0.0)  # Moving east
-
-        c2 = Creature(3.0, 3.0, size=1.0, energy=5.0)
-        c2.intent = "GO_TO_FOOD"
-        c2.intended_vector = (0.0, 1.0)  # Moving north
-
-        c3 = Creature(4.0, 1.0, size=1.0, energy=5.0)
-        c3.intent = "RUN_AWAY"
-        c3.intended_vector = (-1.0, 0.0)  # Moving west
-
-        c4 = Creature(1.0, 4.0, size=1.0, energy=5.0)
-        c4.intent = "WANDER"
-        c4.intended_vector = (0.5, 0.5)  # Moving northeast at half speed
-
-        c5 = Creature(2.0, 2.0, size=1.0, energy=5.0)
-        c5.intent = "REST"
-        c5.intended_vector = (0.0, 0.0)  # Not moving
-
-        w.add_creature(c1)
-        w.add_creature(c2)
-        w.add_creature(c3)
-        w.add_creature(c4)
-        w.add_creature(c5)
-
-        viz = Visualizer(5, 5)
-        viz.render(w)
-
-        # Save to buffer
-        fig = viz.fig
-        try:
-            import io
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png')
-        except Exception as e:
-            self.fail(f"Saving figure with arrows failed: {e}")
-
-    def test_food_radius_scaling(self):
-        """
-        Test that food is drawn with radius proportional to its energy.
-        """
-        w = World(5, 5, food_spawn_rate=0.0)
-
-        # Add a food item with energy = 5.0
-        food1 = Food(x=1.0, y=1.0, remaining_duration=-1, energy=5.0)
-
-        # Add a food item with energy = 2.5 (half of the first food)
-        food2 = Food(x=3.0, y=3.0, remaining_duration=-1, energy=2.5)
-
-        w.foods.append(food1)
-        w.foods.append(food2)
-
-        viz = Visualizer(5, 5)
-        viz.render(w)
-
-        # Save to buffer
-        fig = viz.fig
-        try:
-            import io
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png')
-        except Exception as e:
-            self.fail(f"Saving figure with scaled food failed: {e}")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

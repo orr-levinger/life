@@ -1,22 +1,15 @@
 # src/sensors.py
 
-from typing import Any, List, Tuple, Union
-import sys
-import os
-import math
+from __future__ import annotations
 
-# Handle both being imported as a module and being run directly
-if __name__ == "__main__":
-    # When run directly, use absolute imports
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from src.world import World
-    from src.creature import Creature
-    from src.food import Food
-else:
-    # When imported as a module, use relative imports
-    from .world import World
+import math
+from typing import TYPE_CHECKING, Any, List, Tuple, Union
+
+if TYPE_CHECKING:  # type hints only: importing these at run time would make an import cycle
     from .creature import Creature
     from .food import Food
+    from .world import World
+
 
 class Sensor:
     """

@@ -67,13 +67,13 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
   `copy() -> Brain`; `mutate(rng, rate: float, scale: float) -> Brain` (new brain; each weight and bias, with
   probability `rate`, gets `+ N(0, scale)`); `save(path) -> None` and `Brain.load(path) -> Brain` (`.npz`).
 
-- [ ] **Step 1: Recreate the venv from the new requirements**
+- [x] **Step 1: Recreate the venv from the new requirements**
 
   Write `requirements.txt` and `.gitignore` as above. Run:
   `rm -rf /c/Users/Administrator/.venvs/life && "/c/Program Files/Python312/python" -m venv /c/Users/Administrator/.venvs/life && $PY -m pip install -q -r requirements.txt && $PY -c "import numpy, matplotlib; print(numpy.__version__, matplotlib.__version__)"`
   Expected: `2.1.3 3.10.3`, exit 0.
 
-- [ ] **Step 2: Write the failing tests** in `tests/test_brain.py`:
+- [x] **Step 2: Write the failing tests** in `tests/test_brain.py`:
   - `test_forward_shape_and_range`: `Brain.random(np.random.default_rng(0)).forward(np.ones(12))` has shape `(4,)`, every
     value in `[-1, 1]`.
   - `test_random_is_seeded`: two `Brain.random(default_rng(7))` give equal `forward` on the same input.
@@ -84,19 +84,19 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
   - `test_save_load_round_trip`: saved to a temp folder and loaded, `forward` is equal.
   - `test_wrong_input_size_raises`: `forward(np.ones(11))` raises `ValueError`.
 
-- [ ] **Step 3: Run them to see them fail**
+- [x] **Step 3: Run them to see them fail**
   Run: `$PY -m unittest tests.test_brain -v` · Expected: `ModuleNotFoundError: No module named 'src.brain'`.
 
-- [ ] **Step 4: Implement `src/brain.py`** with the interface above.
+- [x] **Step 4: Implement `src/brain.py`** with the interface above.
 
-- [ ] **Step 5: Run them to see them pass**
+- [x] **Step 5: Run them to see them pass**
   Run: `$PY -m unittest tests.test_brain -v` · Expected: `Ran 6 tests … OK`.
 
-- [ ] **Step 6: Measure the brain's speed**
+- [x] **Step 6: Measure the brain's speed**
   Run: `$PY -m timeit -s "import numpy as np; from src.brain import Brain; b=Brain.random(np.random.default_rng(0)); x=np.ones(12)" "b.forward(x)"`
   Expected: a time per call, kept for the report (TensorFlow today: about 12 ms per creature-step, spec §"What we found").
 
-- [ ] **Step 7: Commit** `requirements.txt .gitignore src/brain.py tests/test_brain.py` as
+- [x] **Step 7: Commit** `requirements.txt .gitignore src/brain.py tests/test_brain.py` as
   `feat: NumPy brain, Windows-installable requirements`. Check: `git show --stat HEAD` lists exactly those 4 files.
 
 ### Task 2: Levels
@@ -111,20 +111,20 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
   constants `HUNTER_SHARE = 0.8`, `MAX_AGE = 3000`, `EAT_MISS_COST = 0.2` (today's cost of eating where there is no food;
   Claude's pick of the two costs, spec "Left to the builder").
 
-- [ ] **Step 1: Write the failing tests** in `tests/test_levels.py`:
+- [x] **Step 1: Write the failing tests** in `tests/test_levels.py`:
   - `test_five_levels_in_order`: `[l.number for l in LEVELS] == [1, 2, 3, 4, 5]`.
   - `test_level_one_matches_spec`: `level(1)` has `food_energy == (20, 40)`, `max_food == 200`, `move_cost == 0.5`,
     `step_cost == 0.05`, `attacks is False`.
   - `test_attacks_from_level_four`: `[l.attacks for l in LEVELS] == [False, False, False, True, True]`.
   - `test_unknown_level_raises`: `level(0)` and `level(6)` raise `ValueError`.
 
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_levels -v` · Expected: `ModuleNotFoundError`.
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_levels -v` · Expected: `ModuleNotFoundError`.
 
-- [ ] **Step 3: Implement `src/levels.py`** with the interface and the spec's table.
+- [x] **Step 3: Implement `src/levels.py`** with the interface and the spec's table.
 
-- [ ] **Step 4: Run them to see them pass** · Expected: `Ran 4 tests … OK`.
+- [x] **Step 4: Run them to see them pass** · Expected: `Ran 4 tests … OK`.
 
-- [ ] **Step 5: Commit** `src/levels.py tests/test_levels.py` as `feat: levels from forgiving to harsh`.
+- [x] **Step 5: Commit** `src/levels.py tests/test_levels.py` as `feat: levels from forgiving to harsh`.
   Check: `git show --stat HEAD` lists exactly those 2 files.
 
 ### Task 3: Senses
@@ -148,7 +148,7 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
     within 45° of `senses.food`; `"RUN_AWAY"` when moving away from an `other` at least 1.5 × bigger; `"REST"` for a
     zero move or a bite; else `"WANDER"`.
 
-- [ ] **Step 1: Write the failing tests** in `tests/test_senses.py` (the world is a
+- [x] **Step 1: Write the failing tests** in `tests/test_senses.py` (the world is a
   `types.SimpleNamespace(creatures=[…], foods=[…])`, all that `sense` reads; foods are built with an explicit energy):
   - `test_nothing_seen`: a lone creature of size 1.25 and energy half its maximum: `vector[0] == 0.5`, `vector[1] == 0`,
     `vector[2:] ` all 0.
@@ -160,15 +160,15 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
   - `test_display_intent_toward_food` and `test_display_intent_run_away`: the labels above.
   - `test_is_family`: parent–child and siblings true; strangers and two creatures with `parent_id == 0` false.
 
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_senses -v` · Expected:
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_senses -v` · Expected:
   `ModuleNotFoundError: No module named 'src.senses'`.
 
-- [ ] **Step 3: Implement** `src/senses.py`, `is_family` and `can_reach`; delete `VisionSensor`.
+- [x] **Step 3: Implement** `src/senses.py`, `is_family` and `can_reach`; delete `VisionSensor`.
 
-- [ ] **Step 4: Run them to see them pass** · Expected: `Ran 9 tests … OK`. Then
+- [x] **Step 4: Run them to see them pass** · Expected: `Ran 9 tests … OK`. Then
   `grep -rn VisionSensor src tests` · Expected: no output.
 
-- [ ] **Step 5: Commit** `src/senses.py src/sensors.py src/creature.py tests/test_senses.py` as
+- [x] **Step 5: Commit** `src/senses.py src/sensors.py src/creature.py tests/test_senses.py` as
   `feat: senses for the brain`. Check: `git show --stat HEAD` lists exactly those 4 files.
 
 ### Task 4: Policies, world rules, and the TensorFlow brain removed
@@ -212,7 +212,7 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
     `deaths: collections.Counter` (`"hunger"`, `"attack"`, `"age"`), `total_bites`, `creature_steps`;
     `dead_this_step: list[Creature]`. With `evolving=False`: no splits, no deaths, no aging.
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - `tests/test_policies.py` (a `Brain` built with zero weights and chosen output biases gives fixed outputs):
     `test_brain_move_vector` (outputs 0.6, 0.8, −1, −1 → `("MOVE", (0.6v, 0.8v))`), `test_brain_move_capped` (1, 1 →
     length `v`), `test_brain_eat_in_reach`, `test_brain_eat_miss_when_nothing_in_reach` (→ `("EAT", None)`),
@@ -234,17 +234,17 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
   - `tests/test_visualization.py` (Agg backend): `test_render_empty_world`, `test_render_with_creatures_and_food`,
     `test_corner_shows_level`.
 
-- [ ] **Step 2: Run them to see them fail** ·
+- [x] **Step 2: Run them to see them fail** ·
   `$PY -m unittest tests.test_policies tests.test_rules_policy tests.test_world_rules tests.test_visualization -v` ·
   Expected: `ModuleNotFoundError: No module named 'src.policies'` and failures in the visualization tests.
 
-- [ ] **Step 3: Implement** `src/policies.py`, the new `Creature` and `World`, `Food` with required energy, the
+- [x] **Step 3: Implement** `src/policies.py`, the new `Creature` and `World`, `Food` with required energy, the
   visualizer change; delete the files listed above.
 
-- [ ] **Step 4: Run them, then the whole suite** · `$PY -m unittest discover tests` · Expected: `OK`, no failures or
+- [x] **Step 4: Run them, then the whole suite** · `$PY -m unittest discover tests` · Expected: `OK`, no failures or
   errors. Then `grep -rn "tensorflow\|neural_network\|nn_score\|MIN_STEPS" src tests` · Expected: no output.
 
-- [ ] **Step 5: Commit** every file of this task as `feat: brain-only creatures, world rules, TensorFlow removed`.
+- [x] **Step 5: Commit** every file of this task as `feat: brain-only creatures, world rules, TensorFlow removed`.
   Check: `git show --stat HEAD` lists exactly the files above.
 
 ### Task 5: Scoreboard
@@ -262,19 +262,19 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
   moves of length > 0 with food seen; flee = share of steps with an `other` ≥ 1.5 × bigger where the creature moved away
   (dot product < 0); direction concentration = length of the mean unit move vector.
 
-- [ ] **Step 1: Write the failing tests** in `tests/test_scoreboard.py`: `test_straight_at_food_scores_one`,
+- [x] **Step 1: Write the failing tests** in `tests/test_scoreboard.py`: `test_straight_at_food_scores_one`,
   `test_sideways_scores_zero`, `test_flee_counts_moving_away`, `test_eating_beside_a_hunter_is_not_fleeing`,
   `test_concentration_one_direction_is_one`, `test_concentration_four_directions_is_zero`, `test_no_samples_is_none`,
   `test_row_resets_window`, `test_row_has_exact_keys`.
 
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_scoreboard -v` · Expected:
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_scoreboard -v` · Expected:
   `ModuleNotFoundError`.
 
-- [ ] **Step 3: Implement `src/scoreboard.py`.**
+- [x] **Step 3: Implement `src/scoreboard.py`.**
 
-- [ ] **Step 4: Run them to see them pass** · Expected: `Ran 9 tests … OK`.
+- [x] **Step 4: Run them to see them pass** · Expected: `Ran 9 tests … OK`.
 
-- [ ] **Step 5: Commit** `src/scoreboard.py tests/test_scoreboard.py` as `feat: scoreboard`. Check: `git show --stat
+- [x] **Step 5: Commit** `src/scoreboard.py tests/test_scoreboard.py` as `feat: scoreboard`. Check: `git show --stat
   HEAD` lists exactly those 2 files.
 
 ### Task 6: Exam and hall of fame
@@ -294,19 +294,19 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
   - `class HallOfFame(size: int = 10)`: `offer(brain, food_eaten: float)`, `brains() -> list[Brain]` (best first),
     `save(folder: Path)` (`best_00.npz` …).
 
-- [ ] **Step 1: Write the failing tests.** `tests/test_exam.py`: `test_copies_start_identical` (same food positions and
+- [x] **Step 1: Write the failing tests.** `tests/test_exam.py`: `test_copies_start_identical` (same food positions and
   creature spots), `test_same_seed_same_result`, `test_ratio_none_when_walkers_never_bite` (a level with
   `max_food = 0`), `test_exam_leaves_brains_unchanged`. `tests/test_hall_of_fame.py`: `test_keeps_best_ten_of_fifteen`,
   `test_empty_is_empty_list`, `test_save_writes_files`.
 
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_exam tests.test_hall_of_fame -v` · Expected:
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_exam tests.test_hall_of_fame -v` · Expected:
   `ModuleNotFoundError`.
 
-- [ ] **Step 3: Implement** `src/exam.py` and `src/hall_of_fame.py`.
+- [x] **Step 3: Implement** `src/exam.py` and `src/hall_of_fame.py`.
 
-- [ ] **Step 4: Run them to see them pass** · Expected: `Ran 7 tests … OK`.
+- [x] **Step 4: Run them to see them pass** · Expected: `Ran 7 tests … OK`.
 
-- [ ] **Step 5: Commit** the 4 files as `feat: exam against random walkers, hall of fame`. Check: `git show --stat HEAD`
+- [x] **Step 5: Commit** the 4 files as `feat: exam against random walkers, hall of fame`. Check: `git show --stat HEAD`
   lists exactly those 4 files.
 
 ### Task 7: Runner, window and visualizer
@@ -332,30 +332,30 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
     creatures of their policy); hall of fame saved at the end.
   - `main(argv: list[str] | None = None) -> None`.
 
-- [ ] **Step 1: Write the failing tests.** `tests/test_evolve.py`: `test_short_run_writes_two_rows` (seed 1, 2,000 steps
+- [x] **Step 1: Write the failing tests.** `tests/test_evolve.py`: `test_short_run_writes_two_rows` (seed 1, 2,000 steps
   → 2 rows with the Task 5 keys), `test_same_seed_same_csv` (seed 3, 1,000 steps, twice → identical files),
   `test_unlock_rule` (`[1.6, 1.7]`, 10 alive → True; `[1.6, 1.4]` → False; `[None, 1.6]` → False; 9 alive → False;
   `level == max_level` → False), `test_extinction_restarts_from_hall_of_fame` (a test level with no food and high costs:
   `restarts ≥ 1` and 20 alive after the restart), `test_baseline_never_unlocks` (random policy, 4,000 steps, level stays
   1).
 
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_evolve -v` · Expected:
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_evolve -v` · Expected:
   `ModuleNotFoundError: No module named 'src.evolve'`.
 
-- [ ] **Step 3: Implement** `src/evolve.py` and `src/main.py`.
+- [x] **Step 3: Implement** `src/evolve.py` and `src/main.py`.
 
-- [ ] **Step 4: Run them, then the whole suite** · `$PY -m unittest discover tests` · Expected: `OK`, no failures or
+- [x] **Step 4: Run them, then the whole suite** · `$PY -m unittest discover tests` · Expected: `OK`, no failures or
   errors. Then `grep -rn "pause\|sleep" src` · Expected: no output.
 
-- [ ] **Step 5: Measure speed** · `time $PY -m src.evolve --seed 1 --steps 10000` · Expected: 10 rows printed and the
+- [x] **Step 5: Measure speed** · `time $PY -m src.evolve --seed 1 --steps 10000` · Expected: 10 rows printed and the
   elapsed time kept for the report. **If 10,000 steps take over 3 minutes** (so 100,000 over 30): stop and propose to the
   owner a task that vectorizes the senses with NumPy (spec "Left to the builder"); it is added to this plan only once the
   owner agrees.
 
-- [ ] **Step 6: Commit** the task's files as `feat: zero-delay runner and scoreboard CSV`. Check:
+- [x] **Step 6: Commit** the task's files as `feat: zero-delay runner and scoreboard CSV`. Check:
   `git show --stat HEAD` lists exactly those files.
 
-- [ ] **Step 7: Show the owner** the 10 scoreboard rows of Step 5 (random brains at level 1: the starting line).
+- [x] **Step 7: Show the owner** the 10 scoreboard rows of Step 5 (random brains at level 1: the starting line).
 
 ### Task 8: Proof checker
 
@@ -372,19 +372,19 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
   flee over its rows at level ≥ 4 ≥ 0.70; (4) per seed, population > 0 in the last row and `restarts` unchanged over the
   last 20 rows; (5) the rules' bites per creature-step per level.
 
-- [ ] **Step 1: Write the failing tests** with small synthetic CSVs: `test_all_pass`, one failing test per criterion
+- [x] **Step 1: Write the failing tests** with small synthetic CSVs: `test_all_pass`, one failing test per criterion
   (`test_low_exam_ratio_fails`, `test_flat_exam_ratio_fails`, `test_low_toward_food_fails`,
   `test_three_seeds_at_level_four_fails`, `test_low_flee_fails`, `test_late_restart_fails`, `test_extinct_at_end_fails`),
   `test_rules_reported_not_judged`.
 
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_check_proof -v` · Expected:
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_check_proof -v` · Expected:
   `ModuleNotFoundError`.
 
-- [ ] **Step 3: Implement `src/check_proof.py`.**
+- [x] **Step 3: Implement `src/check_proof.py`.**
 
-- [ ] **Step 4: Run them to see them pass** · Expected: `Ran 9 tests … OK`.
+- [x] **Step 4: Run them to see them pass** · Expected: `Ran 9 tests … OK`.
 
-- [ ] **Step 5: Commit** the 2 files as `feat: proof checker`. Check: `git show --stat HEAD` lists exactly those 2 files.
+- [x] **Step 5: Commit** the 2 files as `feat: proof checker`. Check: `git show --stat HEAD` lists exactly those 2 files.
 
 ### Task 9: Tune the levels and old age by measurement
 
@@ -392,7 +392,7 @@ of fame (`src/hall_of_fame.py`) and restarts after extinction. `src/check_proof.
 - Modify: `src/levels.py` (level values, `MAX_AGE`; each value's measurement in a comment), `tests/test_levels.py`
   (`test_level_one_matches_spec` updated to the tuned values, with the measurement named)
 
-- [ ] **Step 1: Measure random walkers at every level**
+- [x] **Step 1: Measure random walkers at every level**
   Run: `$PY -c "from src.exam import walker_score; from src.levels import LEVELS; print([round(walker_score(l, 1), 3) for l in LEVELS])"`
   Expected after tuning: every value ≤ 0.3 (spec tuning target). While any is above, lower that level's `max_food` or
   `food_energy` and run again; each value tried and its result go in the report.

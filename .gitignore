@@ -1,2 +1,5 @@
 .venv
 .idea
+runs/
+saved_brains/
+__pycache__/

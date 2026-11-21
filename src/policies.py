@@ -6,7 +6,7 @@ import random
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 from .creature import is_family
-from .senses import Senses
+from .senses import THREAT_RATIO, Senses
 from .sensors import ProximitySensor
 
 if TYPE_CHECKING:
@@ -53,7 +53,6 @@ def random_action(creature: Creature, senses: Senses, rng: random.Random) -> Act
 
 
 _RULES_SENSOR = ProximitySensor()
-THREAT_RATIO = 1.5
 
 
 def rules_action(creature: Creature, world: World, rng: random.Random) -> Action:

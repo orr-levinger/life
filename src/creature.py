@@ -10,6 +10,11 @@ if TYPE_CHECKING:
     from .food import Food
     from .neural_network import NeuralNetwork
 
+def is_family(a: 'Creature', b: 'Creature') -> bool:
+    """Parent, child, or the same non-zero parent: family can never be attacked."""
+    return a.id == b.parent_id or b.id == a.parent_id or (a.parent_id != 0 and a.parent_id == b.parent_id)
+
+
 class Creature:
     RADIUS_FACTOR = 0.2
     SENSE_RANGE = 3.0
@@ -64,6 +69,11 @@ class Creature:
 
         from .sensors import ProximitySensor
         self.sensors: Tuple['Sensor', ...] = (ProximitySensor(sense_range=self.SENSE_RANGE),)
+
+    def can_reach(self, food: 'Food') -> bool:
+        """The one eat-range rule: close enough to take a bite."""
+        reach = (self.radius + food.radius) * self.EAT_RANGE_FACTOR
+        return math.hypot(food.x - self.x, food.y - self.y) <= reach
 
     def _action_to_index(self, action_type: str) -> Optional[int]:
         if action_type in self.ACTION_TYPES:

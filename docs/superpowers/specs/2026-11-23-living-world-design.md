@@ -55,6 +55,24 @@ was born with, every generation would start over and learning could never build 
 makes "reinforcement learning that improves from generation to generation" possible. Strict-genes inheritance (the
 parent's born brain only) stays as an option (`--inherit inborn`) to compare.
 
+### The brain's size evolves (added 2026-11-23, approved by the owner: "Ok")
+
+The owner: "Even the size should be dynamic. Like evolution should decide to add layer, remove layer, add a neuron,
+remove a neuron. This also an evolution step."
+
+- A learning animal's brain has room for up to 3 layers of 64 neurons. Genes say how many layers and how many neurons
+  per layer are switched on; the first animals have 1 layer of 32 (today's size).
+- At birth a mutation may switch one neuron on or off (5 % each) or one layer on or off (1 % each). These rates are
+  not measured; they are tuned in the plan.
+- A new neuron or layer starts silent: the baby behaves exactly like its parent at birth, and learning and later
+  mutations put the new part to use. Removing one is a real change.
+- **A brain costs energy:** each active neuron costs 0.0005 energy per step (not measured; 32 neurons cost about a
+  third of the Garden's cost of living). Without a cost, size would drift upward for no reason.
+- The scoreboard and the live page show the average number of neurons and layers.
+- The instinct yardstick keeps its fixed brain. The critic (a training aid, not the brain) keeps its fixed size.
+- This is built only after the Garden check has shown that learning works with the fixed brain, so that a failure there
+  cannot be confused with the size machinery.
+
 ### Easy first, harder as they get smarter
 
 Stages change only when the creatures pass the intelligence exam, never by the clock, and never go back.
@@ -123,6 +141,8 @@ Learning animals, seeds 1–5:
 4. **Smarter from generation to generation:** the exam score over the last 5 exams is at least 2 and above the first 5.
 5. **They steer to food:** steering score over the last 10,000 steps at least 0.7.
 6. **They flee hunters:** at least 4 of 5 seeds reach the Hunters stage, fleeing at least 70 % of the time there.
+7. **Brain size evolves:** the average number of active neurons at the end differs from the start in every seed, and
+   adding the size machinery does not lower the Garden check's exam score.
 Then two comparisons: learning animals against instinct animals, and learned against strict-genes inheritance.
 The thresholds are Claude's call, not measured. A failed criterion is reported as failed, with its numbers.
 

@@ -147,7 +147,38 @@ food, per-run progress.
 - [ ] **Step 3:** Show the owner the numbers. **If the check fails, stop:** report it with what was measured and a
   proposal; nothing after this task is run until the owner decides.
 
-### Task 5: Tune the stages by measurement
+### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
+
+Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.
+
+**Files:** Modify: `src/learner.py` (room for 3 layers of 64 neurons, size genes, silent growth), `src/world.py` (a
+learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the rates and the cost), `src/scoreboard.py`
+(columns `neurons`, `layers`), `src/viewer.html`, tests (`test_learner`, `test_world_rules`, `test_scoreboard`,
+`test_viewer`).
+
+**Interfaces:**
+- `NetWeights` gains `layers: int` (1–3) and `neurons: tuple[int, int, int]` (1–64 active per layer); weights have room
+  for `MAX_LAYERS = 3` × `MAX_NEURONS = 64`. Layer 1 reads the senses; layers 2 and 3 add to what they receive
+  (`h + s · tanh(h·W + b)`), with `s` zero when a layer is switched on.
+- `NetWeights.mutate_size(rng) -> NetWeights`: with `NEURON_CHANGE = 0.05` each, one neuron on or off; with
+  `LAYER_CHANGE = 0.01` each, one layer on or off; a new neuron's outgoing weights and a new layer's `s` are zero.
+- `Learner.active_neurons(slot) -> int`; a learner creature pays `NEURON_COST = 0.0005` × its active neurons per step.
+- The first animals: 1 layer of 32 neurons.
+
+- [ ] **Step 1: Write the failing tests:** `test_new_neuron_is_silent_at_birth` and `test_new_layer_is_silent_at_birth`
+  (the baby's outputs equal the parent's for 100 random senses), `test_removed_neuron_changes_behavior`,
+  `test_size_genes_stay_in_bounds` (1,000 mutations), `test_bigger_brain_costs_more_energy`,
+  `test_learns_toy_task` (unchanged bar: ≥ 0.8, on a 1 × 32 brain), `test_scoreboard_reports_brain_size`.
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: failures naming
+  `mutate_size`, `active_neurons` and the new columns.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run them to see them pass** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [ ] **Step 5: The Garden check again** · Task 4 Step 1's run, with the viewer open · Expected: the exam score of the
+  last 3 exams is not below Task 4's. If it is, stop and report both sets of numbers.
+- [ ] **Step 6: Commit** as `feat: the brain's size evolves`; `git show --stat HEAD` lists exactly this task's files.
+  Show the owner the Garden check's numbers beside Task 4's.
+
+### Task 6: Tune the stages by measurement
 
 **Files:** Modify: `src/stages.py` (values and their measurements in comments), `tests/test_stages.py` (the tuned values).
 
@@ -159,7 +190,7 @@ food, per-run progress.
 - [ ] **Step 3:** `$PY -m unittest discover tests` · Expected: `OK`.
 - [ ] **Step 4: Commit** the 2 files as `tune: stage values, measured`. Show the owner the settled populations.
 
-### Task 6: Let it run, and judge it
+### Task 7: Let it run, and judge it
 
 - [ ] **Step 1:** Measure the time of `--species learning` for 10,000 steps; with the viewer open, run seeds 1–5 ×
   100,000 steps for `learning` (inherit learned), and seeds 1–5 for `instinct` (background, two at a time). If the
@@ -176,7 +207,8 @@ food, per-run progress.
 2. **No program-made selection is left:** `grep -rn "rounds\|next_generation\|--team" src tests` → no output.
 3. **The Garden check ran first** and its numbers were shown to the owner (Task 4), before any long run.
 4. **Food never increases stage to stage:** `test_food_never_increases` passes on the tuned values.
-5. **Every long run was watched live:** the viewer was open in the app's browser before Task 4 and Task 6 runs.
-6. **The proof was judged:** Task 6 Step 3's output is shown to the owner; every failed criterion is reported as failed,
+5. **Every long run was watched live:** the viewer was open in the app's browser before the Task 4, Task 5 and Task 7 runs.
+6. **Brain size evolves:** `test_new_neuron_is_silent_at_birth` and `test_new_layer_is_silent_at_birth` pass, and Task 5 Step 5 showed the Garden exam score not below Task 4's.
+7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,
    first, with its numbers.
-7. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3 and 5.
+8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 5 and 6.

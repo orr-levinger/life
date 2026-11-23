@@ -10,6 +10,11 @@ In the owner's words (2026-11-23):
 
 > "I want it to be real evolution! Real life simulator! To really mimic biology!"
 
+> "What is critical to make sure is that the learning algorithm, the reinforcement learning, sees the penalties, sees
+> the rewards, sees the steps it took so far, and learns. We must make sure that the learning algorithm is the best we
+> can use for this life simulation. … Even the size should be dynamic. Like evolution should decide to add layer, remove
+> layer, add a neuron, remove a neuron. This also an evolution step."
+
 Everything in this repo serves that goal. A change that raises a score but moves away from it is wrong.
 
 ## What the goal means: the rules of this project
@@ -20,6 +25,8 @@ Everything in this repo serves that goal. A change that raises a score but moves
      good, wasting energy is bad, and the whole walk that led to food gets the credit, not only the last step.
    - **Evolution across generations:** a baby inherits its parent's brain with small mutations. Creatures that do well
      have more babies, so good brains spread and get better from generation to generation.
+   - **The brain's size evolves too:** a mutation can add or remove a neuron or a layer. A bigger brain costs a little
+     more energy every step, as in nature, so evolution finds the size that pays.
 3. **Nature selects, never a program.** A creature that gathers enough energy has a baby. No program ranks creatures,
    restarts the world, or picks parents.
 4. **The world starts easy and gets harder only as the creatures get smarter.** At the start nobody dies. Once the
@@ -43,6 +50,10 @@ These are Claude's calls; each can be overruled.
   how good each moment is).
 - **A primordial soup:** while very few creatures live, random newcomers keep appearing. Once life sustains itself,
   none are needed, and that moment is part of the proof.
+- **A brain costs energy:** each active neuron costs a tiny amount per step (approved by the owner, 2026-11-23). Without
+  a cost, brain size would drift upward for no reason.
+- **Not built yet, proposed for later: memory.** Today a creature decides from what it senses this moment; its learning
+  uses its past steps, but its acting does not. A brain with memory would let it remember food that left its view.
 
 ## Where things stand (2026-11-23)
 

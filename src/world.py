@@ -4,15 +4,18 @@ from __future__ import annotations
 import math
 import random
 from collections import Counter
-from typing import Callable, List, Optional, Set
+from typing import TYPE_CHECKING, Callable, List, Optional, Set
 
 import numpy as np
 
 from .creature import Creature
 from .food import Food
 from .levels import Level
-from .policies import Action, decide
+from .policies import Action, decide_all
 from .senses import Senses, display_intent, sense
+
+if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to it
+    from .learner import Learner
 
 Observer = Callable[[Creature, Senses, Action], None]
 
@@ -23,8 +26,10 @@ class World:
     PREFILL_STEPS = 100  # food spawn rounds before a fresh world starts, so it doesn't begin empty
 
     def __init__(self, width: int, height: int, level: Level, rng: random.Random, np_rng: np.random.Generator,
-                 food_rng: random.Random, evolving: bool = True) -> None:
-        """`evolving=False` is an exam world: nobody dies, and food is placed without looking at creatures."""
+                 food_rng: random.Random, evolving: bool = True, learner: Optional[Learner] = None) -> None:
+        """`evolving=False` is an exam world: nobody dies, nobody learns, and food is placed without looking at
+        creatures. `learner` holds the networks of the world's learner creatures."""
+        self.learner = learner
         self.width = width
         self.height = height
         self.level = level
@@ -89,19 +94,19 @@ class World:
         self.dead_this_step = []
         self.spawn_food()
 
-        decisions = []
-        for creature in self.creatures:
-            senses = sense(creature, self)
-            action = decide(creature, self, senses, self.rng)
-            creature.intent = display_intent(creature, action, senses)
+        acting = list(self.creatures)
+        senses = [sense(creature, self) for creature in acting]
+        actions = decide_all(self, acting, senses)
+        for creature, sensed, action in zip(acting, senses, actions):
+            creature.intent = display_intent(creature, action, sensed)
             creature.intended_vector = action[1] if action[0] == "MOVE" else (0.0, 0.0)
             if observer is not None:
-                observer(creature, senses, action)
-            decisions.append((creature, action))
-        self.creature_steps += len(decisions)
+                observer(creature, sensed, action)
+        self.creature_steps += len(acting)
+        energy_before = [creature.energy for creature in acting]
 
         for phase in ("ATTACK", "EAT", "MOVE"):
-            for creature, action in decisions:
+            for creature, action in zip(acting, actions):
                 if action[0] == phase and creature in self.creatures:
                     creature.apply_action(action, self)
 
@@ -113,7 +118,17 @@ class World:
             else:
                 creature.energy = 0.0
 
+        if self.learner is not None and self.evolving:
+            self._teach(acting, energy_before)
         self._decay_food()
+
+    def _teach(self, acting: List[Creature], energy_before: List[float]) -> None:
+        """Each learner creature's reward for this step is its change in energy; dying ends its experience."""
+        alive = set(map(id, self.creatures))
+        for creature, before in zip(acting, energy_before):
+            if creature.policy == "learner":
+                self.learner.record(creature.slot, creature.energy - before, id(creature) not in alive)
+        self.learner.update()
 
     def _decay_food(self) -> None:
         kept = []

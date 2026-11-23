@@ -20,6 +20,7 @@ N_HIDDEN = 32
 N_CHOICES = 3  # 0 move, 1 eat, 2 attack
 ATTACK = 2
 ROLLOUT = 64
+LEARNING_RATE = 3e-4  # the Learning team's rate, and the first generation's in the Both team
 GAMMA = 0.99
 LAM = 0.95
 CLIP = 0.2

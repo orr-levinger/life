@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import math
 import random
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
+
+import numpy as np
 
 from .creature import is_family
 from .senses import THREAT_RATIO, Senses
@@ -88,9 +90,36 @@ def rules_action(creature: Creature, world: World, rng: random.Random) -> Action
     return ("MOVE", (0.0, 0.0))
 
 
+def learner_action(creature: Creature, senses: Senses, choice: int, move: Tuple[float, float]) -> Action:
+    """A learner's choice (0 move, 1 eat, 2 attack) and move as an action; an attack with nobody in view does nothing."""
+    if choice == 1:
+        return ("EAT", _reachable_food(creature, senses))
+    if choice == 2:
+        return ("ATTACK", senses.other) if senses.other is not None else ("MOVE", (0.0, 0.0))
+    return ("MOVE", _capped(move[0] * creature.velocity, move[1] * creature.velocity, creature.velocity))
+
+
 def decide(creature: Creature, world: World, senses: Senses, rng: random.Random) -> Action:
     if creature.policy == "brain":
         return brain_action(creature, senses, world.level.attacks)
     if creature.policy == "random":
         return random_action(creature, senses, rng)
-    return rules_action(creature, world, rng)
+    if creature.policy == "rules":
+        return rules_action(creature, world, rng)
+    raise ValueError(f"{creature.policy!r} creatures decide together, through decide_all")
+
+
+def decide_all(world: World, creatures: Sequence[Creature], senses: Sequence[Senses]) -> List[Action]:
+    """Every creature's action: the learners in one call to the world's learner, the others one by one."""
+    actions: List[Optional[Action]] = [None] * len(creatures)
+    learners = [i for i, creature in enumerate(creatures) if creature.policy == "learner"]
+    if learners:
+        outputs = world.learner.act([creatures[i].slot for i in learners],
+                                    np.stack([senses[i].vector for i in learners]),
+                                    world.level.attacks, learning=world.evolving)
+        for i, (choice, move) in zip(learners, outputs):
+            actions[i] = learner_action(creatures[i], senses[i], choice, move)
+    for i, creature in enumerate(creatures):
+        if actions[i] is None:
+            actions[i] = decide(creature, world, senses[i], world.rng)
+    return actions

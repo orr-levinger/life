@@ -1,10 +1,12 @@
 import unittest
 from dataclasses import replace
+from unittest import mock
 
 import numpy as np
 
 from src.brain import Brain
 from src.exam import exam_worlds, run_exam
+from src.learner import NetWeights
 from src.levels import LEVELS
 
 
@@ -44,6 +46,15 @@ class TestExam(unittest.TestCase):
         for b, original in zip(sitters, before):
             for name in ("w1", "b1", "w2", "b2"):
                 np.testing.assert_array_equal(getattr(b, name), getattr(original, name))
+
+    def test_exam_leaves_learners_unchanged(self):
+        rng = np.random.default_rng(0)
+        nets = [NetWeights.random(rng) for _ in range(3)]
+        with mock.patch("src.learner.Learner.update") as update, mock.patch("src.learner.Learner.record") as record:
+            result = run_exam(nets, [1.0, 1.5, 0.5], LEVELS[0], seed=2, steps=50)
+        update.assert_not_called()
+        record.assert_not_called()
+        self.assertIsInstance(result.brain_bites_per_step, float)
 
 
 if __name__ == "__main__":

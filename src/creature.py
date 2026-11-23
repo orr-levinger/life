@@ -22,19 +22,23 @@ class Creature:
     SENSE_RANGE = 3.0
     ATTACK_RANGE_FACTOR = 3.0
     EAT_RANGE_FACTOR = 3.0
-    POLICIES = ("brain", "random", "rules")
+    POLICIES = ("brain", "learner", "random", "rules")
     MIN_SIZE = 0.5
     MAX_SIZE = 2.0
     CORPSE_ENERGY_PER_SIZE = 8.0
     CORPSE_STEPS = 5
 
     def __init__(self, id: int, x: float, y: float, size: float, energy: float, policy: str,
-                 brain: Optional[Brain] = None, parent_id: int = 0, generation: int = 0) -> None:
+                 brain: Optional[Brain] = None, parent_id: int = 0, generation: int = 0,
+                 slot: Optional[int] = None) -> None:
         if policy not in self.POLICIES:
             raise ValueError(f"policy must be one of {self.POLICIES}, got {policy!r}")
         if policy == "brain" and brain is None:
             raise ValueError("a brain creature needs a brain")
+        if policy == "learner" and slot is None:
+            raise ValueError("a learner creature needs its slot in the world's learner")
         self.id = id
+        self.slot = slot  # where a learner creature's network lives in the world's learner
         self.x = float(x)
         self.y = float(y)
         self.size = size

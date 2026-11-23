@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -23,21 +23,32 @@ class ExamResult:
     ratio: Optional[float]  # None when the walkers never bite
 
 
-def _exam_world(policy: str, brains: Sequence[Optional[Brain]], sizes: Sequence[float], level: Level,
-                seed: int) -> World:
+def _exam_world(policy: str, brains: Sequence[Any], sizes: Sequence[float], level: Level, seed: int) -> World:
+    """`brains` are Brains for policy "brain", NetWeights for "learner" (their learning is paused), None otherwise."""
+    learner = None
+    if policy == "learner":
+        from .learner import Learner  # imported only when learner networks are examined: TensorFlow stays out otherwise
+
+        learner = Learner(len(sizes), seed)
+        for slot, weights in enumerate(brains):
+            learner.install(slot, weights, lr=0.0)
     world = World(WIDTH, HEIGHT, level, random.Random(seed + 2), np.random.default_rng(seed), random.Random(seed + 1),
-                  evolving=False)
+                  evolving=False, learner=learner)
     world.prefill_food()
     spots = random.Random(seed)
-    for brain, size in zip(brains, sizes):
+    for slot, (brain, size) in enumerate(zip(brains, sizes)):
         x, y = spots.uniform(1.0, WIDTH - 1.0), spots.uniform(1.0, HEIGHT - 1.0)
-        world.add_creature(Creature(world.next_id(), x, y, size, size * 100.0 * START_ENERGY_SHARE, policy, brain))
+        world.add_creature(Creature(world.next_id(), x, y, size, size * 100.0 * START_ENERGY_SHARE, policy,
+                                    brain if policy == "brain" else None,
+                                    slot=slot if policy == "learner" else None))
     return world
 
 
-def exam_worlds(brains: List[Brain], sizes: List[float], level: Level, seed: int) -> Tuple[World, World]:
-    """The brains in one copy; random walkers of the same sizes at the same spots in the other; the same food."""
-    return (_exam_world("brain", brains, sizes, level, seed),
+def exam_worlds(brains: Sequence[Any], sizes: List[float], level: Level, seed: int) -> Tuple[World, World]:
+    """The brains (Brains or learner NetWeights) in one copy; random walkers of the same sizes at the same spots in
+    the other; the same food."""
+    policy = "brain" if all(isinstance(brain, Brain) for brain in brains) else "learner"
+    return (_exam_world(policy, brains, sizes, level, seed),
             _exam_world("random", [None] * len(sizes), sizes, level, seed))
 
 
@@ -47,7 +58,7 @@ def _bites_per_step(world: World, steps: int) -> float:
     return world.total_bites / world.creature_steps if world.creature_steps else 0.0
 
 
-def run_exam(brains: List[Brain], sizes: List[float], level: Level, seed: int, steps: int = 500) -> ExamResult:
+def run_exam(brains: Sequence[Any], sizes: List[float], level: Level, seed: int, steps: int = 500) -> ExamResult:
     with_brains, with_walkers = exam_worlds(brains, sizes, level, seed)
     brains_score = _bites_per_step(with_brains, steps)
     walkers_score = _bites_per_step(with_walkers, steps)

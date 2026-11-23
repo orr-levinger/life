@@ -199,6 +199,24 @@ world simulation A at step 16k for example, I should be able to" · "we need als
 - **Size,** measured 2026-11-23: a learning animal's network has 1,032 numbers; a learning world's save is about
   1.3 MB before compression (80 animals × 4 copies × 4 bytes), so 100,000 steps of saves is about 65 MB.
 
+### History: one row per world, with its scores (the owner, 2026-11-23)
+
+The owner: "what are the numbers, what was the score, this view gives very little value and info" · on the mockup:
+"yes, row per run, hovering over a number should explain it, I have no idea what 0.9x random means".
+
+- **One row per past world**, best first ("Smartest first"; also "Hardest world survived" and "Newest first"); the
+  smartest has a "Smartest" mark. A click opens its charts and its saves below, as today.
+- **Each row:** the world (animals, seed, when it started, where it was resumed from), how many steps, **hardest
+  difficulty survived** (and where it ended), **intelligence × random** (and where it started), **steers to food**,
+  the deepest generation, how many were alive and how well fed at the end, Auto or Manual, and how many saves.
+- **Intelligence × random** = the creatures' energy earned ÷ spent in the test, divided by the random wanderers' in
+  the same test (the last exam; "was" = the first exam). Above 1× they get more out of each bit of energy than
+  wandering would; below 1× less. Steering is averaged over the last 1,000 steps.
+- **Every number explains itself on hover,** in plain words with that world's own numbers, for example: "In the test,
+  these creatures got 0.35 energy back for each 1 they spent; creatures wandering at random got 0.40. That is 0.9×:
+  10 % worse than wandering at random. Above 1× means smarter than random." Good numbers are green, bad ones red.
+- The same explanations on the numbers of a running world's card in Live.
+
 ### The intelligence exam
 
 The owner: "At the end, whoever survives is smart in nature." · "Intelligence should be rewards / waste or something

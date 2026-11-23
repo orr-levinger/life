@@ -466,6 +466,31 @@ Resume from here), their tests, `README.md`.
 - [x] **Step 7: Commit** as `feat: a save every 2,000 steps, resume from any save, and Pause`; `git show --stat HEAD`
   lists exactly this task's files. Tell the owner it is ready.
 
+### Task 4k: History rows with their scores, explained on hover (added 2026-11-23; the owner: "yes, row per run, hovering over a number should explain it")
+
+Spec: "History: one row per world, with its scores". The owner approved the mockup with those two changes.
+
+**Files:** Modify: `src/viewer.py` (each run says how many saves it has), `src/viewer.html` (the History rows, their
+sort, the explanations on hover, the same explanations on a running world's card), `tests/test_viewer.py`.
+
+**Interfaces:**
+- `viewer.runs()` gives each run `saves: int` (`len(saves_of(run))`).
+- In the page: `scores(run) -> {steps, hardest, ended, smart, smartWas, brains, wanderers, steer, generation, alive,
+  fed}` from the run's rows, and `explain(kind, scores) -> str` the plain words for each number.
+
+- [ ] **Step 1: Write the failing tests:** `test_runs_say_how_many_saves`, `test_page_has_the_history_rows` (the
+  words Smartest first, Hardest survived, Intelligence, × random, Steers to food).
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_viewer` · Expected: `KeyError: 'saves'` and
+  the missing words.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [ ] **Step 5: Look at it** in the app's browser: History shows one row per world with the numbers the scoreboards
+  hold (checked against a script reading the same scoreboards), best first; hovering intelligence on the 18:36 world
+  explains 0.71 vs 0.41; the sort changes the order; a click opens the charts and saves; a running world's card
+  explains its numbers too. No errors in the browser's console. Each in the ledger.
+- [ ] **Step 6: Commit** as `feat: History rows with their scores, explained on hover`; `git show --stat HEAD` lists
+  exactly this task's files. Tell the owner it is ready.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.
@@ -538,4 +563,4 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
    Step 5 showed intelligence and the level reached not below Task 4d's.
 7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,
    first, with its numbers.
-8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 4j, 5 and 6.
+8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 4j, 4k, 5 and 6.

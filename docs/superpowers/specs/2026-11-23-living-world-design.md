@@ -77,39 +77,39 @@ remove a neuron. This also an evolution step."
 - This is built only after the Garden check has shown that learning works with the fixed brain, so that a failure there
   cannot be confused with the size machinery.
 
-### Easy first, harder as they get smarter
+### The difficulty dial (replaces the five stages; the owner, 2026-11-23)
 
-Stages change only when the creatures pass the intelligence exam, never by the clock, and never go back.
+The owner: "Only animals with low energy should die." · "When no creature dies, that's the signal that we can increase
+the difficulty level, either by lowering lifespan, lowering food value, making less food." · "Maybe one at a time. If we
+see that when we reduce something, the survival rate goes down too far, we should increase it again. … nudge the
+parameters of difficulty very delicately and be prepared to raise them when they die too much. The hardness of survival
+is supposed to drive intelligence. Okay."
 
-| Stage | What can kill | Food | Moving and living cost | Hunting |
-|---|---|---|---|---|
-| 0 Garden | old age only: nobody starves | plenty, rich | cheap | off |
-| 1 Mortal | hunger, old age | plenty, rich | cheap | off |
-| 2 Scarcity | hunger, old age | less, poorer | double | off |
-| 3 Hunters | hunger, old age, hunters | less, poorer | double | on |
-| 4 Harsh | hunger, old age, hunters | little, poor | triple | on |
-
-- **Garden:** a creature at zero energy simply stays at zero: nobody starves. Lives are long, so there is time to
-  learn.
-- **Old age is there from the first step** (changed 2026-11-23, approved by the owner: "Ok"). The first Garden run
-  showed why: with no deaths at all the world filled to its limit of 80 by step 1,000 and not one baby was born in the
-  next 14,000 steps (measured, `runs/1-learning`), so there was learning but no evolution. Each death of old age frees
-  a place for a baby of a creature that has gathered the energy. It starts at 5,000 steps (not measured; tuned in the
-  plan).
-- **Starting numbers** (not measured; tuned in the plan): food pieces at most 200, 200, 100, 100, 50; food energy 20–40,
-  20–40, 10–25, 10–25, 5–15; cost per unit moved 0.5, 0.5, 1.0, 1.0, 1.5; cost per step 0.05, 0.05, 0.10, 0.10, 0.15.
-  Two rules hold through any tuning: food never increases from one stage to the next, and each mortal stage settles
-  between 30 and 60 creatures by food alone.
-- **How many can live:** food decides. A safety limit of 80 pauses births only to keep the simulation fast.
-- **Primordial soup:** at every stage, while fewer than 10 creatures live, one random newcomer appears each step.
-  Newcomers are counted; when life sustains itself, the count stops.
+- **Who dies:** only a creature with low energy. It dies when its energy runs out ("hunger"), or when it is past its
+  own lifespan and its energy is below 30 % of its maximum ("old age"). A well-fed creature never dies. Hunters, once
+  they exist, kill by taking energy.
+- **A lifespan is a range, not one number** ("Life span should be in a range"): each creature draws its own when it is
+  born, between 4,000 and 6,000 steps at the start.
+- **The world's settings** start easy: at most 200 food pieces of energy 20–40, 3 new food candidates per step, moving
+  costs 0.5 per unit, living costs 0.05 per step, no hunters.
+- **The dial:** every 1,000 steps the world looks at who died in that window.
+  - **Nobody died:** survival is too easy. One setting is nudged about 5 % harder, one setting at a time, in turn: less
+    food at once, less energy per food, costlier moves, costlier living, shorter lifespans, less new food. After 24
+    nudges the next one switches hunters on.
+  - **Too many died** (more than a quarter of the creatures alive, or random newcomers had to be added): the last nudge
+    is taken back. If it happens again, the one before it, and so on down to the easy start.
+  - **Some died, not too many:** nothing changes. This is where survival is hard enough to select.
+- The dial's level (how many nudges are in force) and every setting are on the scoreboard and the live page.
+- All numbers here (5 %, 1,000 steps, a quarter, 30 %, 24, the starting settings and each setting's limits) are
+  Claude's starting values, not measured; the plan tunes them by measurement.
+- **Primordial soup:** while fewer than 10 creatures live, one random newcomer appears each step.
 
 ### The intelligence exam
 
 Every 2,000 steps, up to 20 living creatures' brains (learning paused) and the same number of random wanderers each
 spend 500 steps in identical copies of a **fixed test world that never changes** (80 food pieces of energy 10–25; there,
 random wanderers score 0.24 bites per step, measured 2026-11-21 with `walker_score`). The score is the brains' bites ÷
-the wanderers'. A stage is passed at 1.5 or more, twice in a row, with at least 10 alive.
+the wanderers'. The exam only measures; it does not change the world.
 
 ### Two kinds of animal, for comparison
 

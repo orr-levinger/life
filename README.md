@@ -31,12 +31,18 @@ Everything in this repo serves that goal. A change that raises a score but moves
      more energy every step, as in nature, so evolution finds the size that pays.
 3. **Nature selects, never a program.** A creature that gathers enough energy has a baby. No program ranks creatures,
    restarts the world, or picks parents.
-4. **The world starts easy and gets harder only as the creatures get smarter.** At the start nobody starves and
-   nobody is hunted; creatures die only of old age, so that babies can be born and evolution runs from the first step
-   (the owner, 2026-11-23: "when none dies there is 0 evolution only learning"). Once the creatures pass an
-   intelligence test, hunger appears; later scarcer food, and hunters.
+4. **The hardness of survival drives intelligence, and it is tuned delicately.** The owner, 2026-11-23:
+   > "Only animals with low energy should die. … When no creature dies, that's the signal that we can increase the
+   > difficulty level, either by lowering lifespan, lowering food value, making less food … slowly make survival
+   > harder. … Maybe one at a time. If we see that when we reduce something, the survival rate goes down too far, we
+   > should increase it again. … We should nudge the parameters of difficulty very delicately and be prepared to raise
+   > them when they die too much. The hardness of survival is supposed to drive intelligence."
+
+   So: the world starts easy. Only a creature with low energy dies (its energy ran out, or it is past its lifespan
+   and its energy is low). Whenever nobody is dying, one setting of the world is nudged a little harder, one setting at
+   a time. If too many die after a nudge, that nudge is taken back. There are no fixed stages and no exam gate.
 5. **Intelligence is measured, not guessed:** a standard exam against creatures that wander randomly, in a fixed test
-   world that never changes.
+   world that never changes. The exam only measures; it does not change the world.
 6. **Every long run is watched live** as graphs that update while it runs.
 
 ## Decisions made on the owner's behalf

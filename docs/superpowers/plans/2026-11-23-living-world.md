@@ -57,7 +57,7 @@ works."). The goal: `README.md`. Rules of work: `CLAUDE.md`.
 **Interfaces:**
 - `Stage(number, name, mortal: bool, food_energy, max_food, food_per_step, move_cost, step_cost, attacks: bool)`;
   `STAGES` (0 Garden … 4 Harsh, the spec's starting numbers); `stage(number)`; `TEST_WORLD: Stage` (the exam's fixed
-  world); constants `BIRTH_AT = 0.7`, `BABY_SHARE = 0.4`, `MAX_AGE = 5000`, `MAX_CREATURES = 80`, `SOUP_MIN = 10`,
+  world); constants `BIRTH_AT = 0.7`, `BABY_SHARE = 0.4`, `LIFESPAN = (4000, 6000)`, `MAX_CREATURES = 80`, `SOUP_MIN = 10`,
   `HUNTER_SHARE = 0.8`, `MUTATION_RATE = 0.1`, `MUTATION_SCALE = 0.2`, `SIZE_MUTATION = 0.2`, `LR_MUTATION = 0.2`.
 - `Brain`: `N_OUT = 3` (move x, move y, attack). Actions are `("MOVE", (dx, dy))` and `("ATTACK", Creature)` only.
 - `World(width, height, stage: Stage, species: str, rng, np_rng, food_rng, evolving=True, learner=None,
@@ -165,11 +165,11 @@ yardstick eat whenever food is within reach.
 
 ### Task 4: The check that could prove the design wrong (the Garden)
 
-- [ ] **Step 1:** With the viewer open: `$PY -m src.evolve --seed 1 --steps 30000 --species learning --max-stage 0`
+- [x] **Step 1:** With the viewer open: `$PY -m src.evolve --seed 1 --steps 30000 --species learning --max-stage 0`
   (background).
-- [ ] **Step 2: Check:** the mean exam score of the last 3 exams is above the first 3, and the steering score of the
+- [x] **Step 2: Check:** the mean exam score of the last 3 exams is above the first 3, and the steering score of the
   last 5 rows is above the first 5.
-- [ ] **Step 3:** Show the owner the numbers. **If the check fails, stop:** report it with what was measured and a
+- [x] **Step 3:** Show the owner the numbers. **If the check fails, stop:** report it with what was measured and a
   proposal; nothing after this task is run until the owner decides.
 
 ### Task 4b: Old age in the Garden (added 2026-11-23; the owner: "when none dies there is 0 evolution only learning" · "Ok")
@@ -178,16 +178,69 @@ yardstick eat whenever food is within reach.
 (old age and the soup at every stage; hunger only where `stage.hunger`), `src/viewer.html` (the Garden's note), tests
 (`test_stages`, `test_world_rules`, `tests/helpers.py`).
 
-- [ ] **Step 1: Write the failing tests:** `test_only_the_garden_cannot_starve`, `test_garden_never_starves`,
+- [x] **Step 1: Write the failing tests:** `test_only_the_garden_cannot_starve`, `test_garden_never_starves`,
   `test_old_age_kills_in_the_garden`, `test_a_death_of_old_age_makes_room_for_a_baby`, `test_soup_also_in_the_garden`.
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_stages tests.test_world_rules` · Expected:
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_stages tests.test_world_rules` · Expected:
   failures naming `hunger` and old age in the Garden.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 5: Commit** as `feat: old age in the Garden, so evolution runs from the first step`.
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 5: Commit** as `feat: old age in the Garden, so evolution runs from the first step`.
 - [ ] **Step 6: The Garden run again**, with the viewer open: `$PY -m src.evolve --seed 1 --steps 30000 --species
   learning --max-stage 0 --out runs/2-learning` · Expected: births and deaths of old age after step 5,000, the deepest
   generation rising, and an exam score not below Task 4's. Show the owner both runs side by side.
+
+### Task 4c: A lifespan is a range (added 2026-11-23; the owner: "Life span should be in a range")
+
+**Files:** Modify: `src/stages.py` (`LIFESPAN = (4000, 6000)` replaces `MAX_AGE`), `src/creature.py` (`lifespan`),
+`src/world.py` (a newcomer's and a baby's lifespan is drawn from the range; a creature dies at its own),
+`tests/test_world_rules.py`.
+
+- [x] **Step 1: Write the failing tests:** `test_every_creature_has_its_own_lifespan`,
+  `test_a_creature_dies_at_its_own_lifespan`; the old-age tests set a creature's own lifespan.
+- [x] **Step 2: Run them to see them fail** · Expected: `cannot import name 'LIFESPAN'`.
+- [x] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`. `grep -rn MAX_AGE src tests` · no output.
+- [ ] **Step 5: Commit** as `feat: every creature has its own lifespan`.
+
+### Task 4d: The difficulty dial (added 2026-11-23; the owner: "nudge the parameters of difficulty very delicately … Okay")
+
+Replaces the five stages and the exam gate (spec, "The difficulty dial").
+
+**Files:**
+- Create: `src/dial.py`, `tests/test_dial.py`
+- Modify: `src/stages.py` (becomes the world's settings: `Settings`, `START`, `TEST_WORLD`, the dial's numbers; the
+  `STAGES` table and `stage()` go), `src/world.py` (deaths: energy out, or past lifespan with low energy; lifespans from
+  the settings; fractional food per step), `src/evolve.py` (the dial reviews each 1,000-step window; `--level`,
+  `--max-level`; the exam only measures; `should_unlock` goes), `src/scoreboard.py` (columns `level` and the
+  settings), `src/check_proof.py`, `src/compare.py`, `src/viewer.py`, `src/viewer.html`, `src/visualization.py`, their
+  tests and `tests/helpers.py`.
+
+**Interfaces:**
+- `Settings(max_food: float, food_energy: tuple[float, float], food_per_step: float, move_cost: float, step_cost: float,
+  lifespan: tuple[float, float], attacks: bool)` (frozen); `START` (the easy start); `TEST_WORLD` (the exam's);
+  `LOW_ENERGY = 0.3`.
+- `Dial(start: Settings = START)`: `level -> int` (nudges in force), `settings -> Settings`,
+  `review(deaths: int, alive: int, newcomers: int) -> str` returning `"harder"`, `"easier"` or `"hold"` and changing
+  `settings` accordingly; `nudged(settings, n) -> Settings` (the n-th nudge: one setting, about 5 %, within its limits;
+  the 25th switches hunters on); `at_level(n) -> Settings` for yardstick worlds held at one level.
+- `World(width, height, settings, species, …)`; `world.settings` replaces `world.stage`.
+- Scoreboard columns: `step, level, population, births, newcomers, generation, bites_per_creature_step, toward_food,
+  flee, direction_concentration, exam_ratio, deaths_hunger, deaths_attack, deaths_age, max_food, food_energy,
+  food_per_step, move_cost, step_cost, lifespan, hunters`.
+
+- [ ] **Step 1: Write the failing tests:** `test_dial`: `test_no_deaths_nudges_exactly_one_setting`,
+  `test_nudges_take_turns`, `test_too_many_deaths_take_the_last_nudge_back`, `test_newcomers_take_the_last_nudge_back`,
+  `test_some_deaths_hold`, `test_never_easier_than_the_start`, `test_settings_stay_within_limits`,
+  `test_hunters_come_as_their_own_nudge`. `test_world_rules`: `test_well_fed_elder_lives_on`,
+  `test_hungry_elder_dies_of_old_age`, `test_energy_out_is_death_from_the_start`. `test_evolve`:
+  `test_dial_turns_when_nobody_dies`, `test_exam_does_not_change_the_world`.
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: `No module named 'src.dial'`.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+  `grep -rn "STAGES|should_unlock|max-stage" -E src tests` · Expected: no output.
+- [ ] **Step 5: Commit** as `feat: the difficulty dial (one delicate nudge at a time, taken back when too many die)`.
+- [ ] **Step 6: Watch it**, viewer open: `$PY -m src.evolve --seed 1 --steps 30000 --species learning --out
+  runs/3-learning` · Show the owner the level, the settings and the deaths over time.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
@@ -220,7 +273,7 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
 - [ ] **Step 6: Commit** as `feat: the brain's size evolves`; `git show --stat HEAD` lists exactly this task's files.
   Show the owner the Garden check's numbers beside Task 4's.
 
-### Task 6: Tune the stages by measurement
+### Task 6: Tune the dial by measurement
 
 **Files:** Modify: `src/stages.py` (values and their measurements in comments), `tests/test_stages.py` (the tuned values).
 

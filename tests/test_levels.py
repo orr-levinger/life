@@ -10,7 +10,7 @@ class TestLevels(unittest.TestCase):
     def test_level_one_matches_spec(self):
         first = level(1)
         self.assertEqual(first.food_energy, (20, 40))
-        self.assertEqual(first.max_food, 200)
+        self.assertEqual(first.max_food, 40)  # tuned: random walkers score at most 0.3 (src/levels.py)
         self.assertEqual(first.move_cost, 0.5)
         self.assertEqual(first.step_cost, 0.05)
         self.assertIs(first.attacks, False)

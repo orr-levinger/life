@@ -28,13 +28,13 @@ class TestScoreboard(unittest.TestCase):
         w, me = food_world()
         board = Scoreboard()
         board.observe(me, sense(me, w), ("MOVE", (1.0, 0.0)))
-        self.assertAlmostEqual(board.row(w, None)["toward_food"], 1.0)
+        self.assertAlmostEqual(board.row(w, None, False)["toward_food"], 1.0)
 
     def test_sideways_scores_zero(self):
         w, me = food_world()
         board = Scoreboard()
         board.observe(me, sense(me, w), ("MOVE", (0.0, 1.0)))
-        self.assertAlmostEqual(board.row(w, None)["toward_food"], 0.0)
+        self.assertAlmostEqual(board.row(w, None, False)["toward_food"], 0.0)
 
     def test_flee_counts_moving_away(self):
         w, me = hunter_world()
@@ -42,30 +42,30 @@ class TestScoreboard(unittest.TestCase):
         s = sense(me, w)
         board.observe(me, s, ("MOVE", (-1.0, 0.0)))
         board.observe(me, s, ("MOVE", (1.0, 0.0)))
-        self.assertAlmostEqual(board.row(w, None)["flee"], 0.5)
+        self.assertAlmostEqual(board.row(w, None, False)["flee"], 0.5)
 
     def test_standing_still_beside_a_hunter_is_not_fleeing(self):
         w, me = hunter_world()
         board = Scoreboard()
         board.observe(me, sense(me, w), STILL)
-        self.assertEqual(board.row(w, None)["flee"], 0.0)
+        self.assertEqual(board.row(w, None, False)["flee"], 0.0)
 
     def test_concentration_one_direction_is_one(self):
         w, me = food_world()
         board = Scoreboard()
         for _ in range(3):
             board.observe(me, sense(me, w), ("MOVE", (0.5, 0.0)))
-        self.assertAlmostEqual(board.row(w, None)["direction_concentration"], 1.0)
+        self.assertAlmostEqual(board.row(w, None, False)["direction_concentration"], 1.0)
 
     def test_concentration_four_directions_is_zero(self):
         w, me = food_world()
         board = Scoreboard()
         for move in ((1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0)):
             board.observe(me, sense(me, w), ("MOVE", move))
-        self.assertAlmostEqual(board.row(w, None)["direction_concentration"], 0.0)
+        self.assertAlmostEqual(board.row(w, None, False)["direction_concentration"], 0.0)
 
     def test_no_samples_is_none(self):
-        row = Scoreboard().row(make_world(), None)
+        row = Scoreboard().row(make_world(), None, False)
         for key in ("energy", "bites_per_creature_step", "toward_food", "flee", "direction_concentration",
                     "efficiency", "intelligence", "wanderers", "generation"):
             self.assertIsNone(row[key], key)
@@ -78,12 +78,12 @@ class TestScoreboard(unittest.TestCase):
         for creature in (half_full, quarter_full):
             board.observe(creature, sense(creature, w), STILL)
         w.energy_earned, w.energy_spent = 6.0, 4.0
-        first = board.row(w, None)
+        first = board.row(w, None, False)
         self.assertAlmostEqual(first["energy"], 0.375)  # each creature's share of its own maximum, averaged
         self.assertAlmostEqual(first["efficiency"], 1.5)  # energy earned ÷ energy spent in the window
         board.observe(half_full, sense(half_full, w), STILL)
         w.energy_earned, w.energy_spent = 7.0, 8.0
-        second = board.row(w, None)
+        second = board.row(w, None, False)
         self.assertAlmostEqual(second["energy"], 0.5)
         self.assertAlmostEqual(second["efficiency"], 0.25)  # 1 earned and 4 spent since the first row
 
@@ -93,8 +93,8 @@ class TestScoreboard(unittest.TestCase):
         board.observe(me, sense(me, w), ("MOVE", (1.0, 0.0)))
         w.step()
         w.births, w.newcomers = 3, 2
-        first = board.row(w, ExamResult(1.7, 0.6))
-        second = board.row(w, None)
+        first = board.row(w, ExamResult(1.7, 0.6), False)
+        second = board.row(w, None, False)
         self.assertIsNotNone(first["toward_food"])
         self.assertIsNotNone(first["bites_per_creature_step"])
         self.assertEqual((first["intelligence"], first["wanderers"], first["births"], first["newcomers"]),
@@ -107,21 +107,22 @@ class TestScoreboard(unittest.TestCase):
             "step", "level", "population", "energy", "births", "newcomers", "generation", "bites_per_creature_step",
             "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers",
             "deaths_hunger", "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost",
-            "step_cost", "lifespan", "hunters",
+            "step_cost", "lifespan", "hunters", "manual",
         ))
         w, me = food_world()
         me.generation = 4
-        row = Scoreboard().row(w, None)
+        row = Scoreboard().row(w, None, False)
         self.assertEqual(tuple(row.keys()), ROW_KEYS)
         self.assertEqual((row["level"], row["population"], row["generation"]), (0, 1, 4))
 
     def test_row_shows_the_settings_in_force(self):
         w, _ = food_world()
         w.set_settings(w.settings, 7)
-        row = Scoreboard().row(w, None)
+        row = Scoreboard().row(w, None, False)
         self.assertEqual(row["level"], 7)
         self.assertEqual((row["max_food"], row["food_energy"], row["food_per_step"]), (0, 30.0, 0))  # ranges: the middle
         self.assertEqual((row["move_cost"], row["step_cost"], row["lifespan"], row["hunters"]), (0.5, 0.05, 5000.0, 0))
+        self.assertEqual((row["manual"], Scoreboard().row(w, None, True)["manual"]), (0, 1))
 
 
 if __name__ == "__main__":

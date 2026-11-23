@@ -7,29 +7,29 @@ from typing import Dict, List
 from src.check_proof import check
 from src.scoreboard import ROW_KEYS
 
-ROWS = 100  # 100,000 steps
+ROWS = 400  # a row every 250 steps: 100,000 steps
 
 
 def brain_rows(intelligence: float = 2.5, first_intelligence: float = 0.5, wanderers: float = 1.0,
-               toward: float = 0.8, flee: float = 0.8, hunters_at: int = 50, level_end: float = 30,
+               toward: float = 0.8, flee: float = 0.8, hunters_at: int = 200, level_end: float = 30,
                generation_end: int = 40, late_newcomers: int = 0, alive_at_end: bool = True) -> List[Dict]:
     """A run's rows: the dial climbs evenly to `level_end`; hunters exist from row `hunters_at`; an exam every second
     row, the first five at `first_intelligence`."""
     rows = []
     for i in range(ROWS):
-        step = (i + 1) * 1000
+        step = (i + 1) * 250
         exam = step % 2000 == 0
         rows.append({
             "step": step, "level": round(level_end * (i + 1) / ROWS, 2), "population": 30, "energy": 0.6, "births": 5,
-            "newcomers": late_newcomers if i >= ROWS - 5 else 0,
+            "newcomers": late_newcomers if i >= ROWS - 20 else 0,
             "generation": round(generation_end * (i + 1) / ROWS),
             "bites_per_creature_step": 0.3, "toward_food": toward, "flee": flee, "direction_concentration": 0.1,
             "efficiency": 1.2,
-            "intelligence": (first_intelligence if i < 10 else intelligence) if exam else "",
+            "intelligence": (first_intelligence if step <= 10000 else intelligence) if exam else "",
             "wanderers": wanderers if exam else "",
             "deaths_hunger": 3, "deaths_attack": 0, "deaths_age": 1,
             "max_food": 200, "food_energy": 30, "food_per_step": 3, "move_cost": 0.5, "step_cost": 0.05,
-            "lifespan": 5000, "hunters": int(i >= hunters_at),
+            "lifespan": 5000, "hunters": int(i >= hunters_at), "manual": 0,
         })
     if not alive_at_end:
         rows[-1]["population"] = 0
@@ -89,6 +89,15 @@ class TestCheckProof(unittest.TestCase):
 
     def test_low_steering_fails(self):
         self.assertFalse(verdicts(five(toward=0.6))["5 steers to food"])
+
+    def test_windows_are_counted_in_steps(self):
+        rows = brain_rows()
+        for row in rows[-40:]:  # the last 10,000 steps steer badly; the 10,000 before them steer well
+            row["toward_food"] = 0.1
+        self.assertFalse(verdicts([rows] * 5)["5 steers to food"])
+        late = brain_rows()
+        late[-81]["newcomers"] = 3  # 20,250 steps before the end: outside the last 20,000
+        self.assertTrue(verdicts([late] * 5)["2 sustains itself"])
 
     def test_three_seeds_reaching_hunters_fail(self):
         seeds = five()

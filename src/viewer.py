@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Sequence
 from .scoreboard import ROW_KEYS, read_rows
 
 PAGE = Path(__file__).with_name("viewer.html")
-RUNNING_WITHIN = 600.0  # seconds: a run with no end that wrote its scoreboard this recently is still running
+RUNNING_WITHIN = 180.0  # seconds: a run with no end that wrote its scoreboard this recently is still running
 
 
 def runs(folder: Path) -> List[Dict]:

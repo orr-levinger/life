@@ -335,20 +335,20 @@ control file read every 25 steps; a scoreboard row every 250 steps; Auto's revie
   without a limit. Constants: `ROW_EVERY = 250`, `REVIEW_EVERY = 1000`, `CONTROL_EVERY = 25`.
 - Scoreboard column `manual` (1 while the owner holds the knobs, else 0), after `hunters`.
 
-- [ ] **Step 1: Write the failing tests:** `test_control`: `test_control_file_round_trip`,
+- [x] **Step 1: Write the failing tests:** `test_control`: `test_control_file_round_trip`,
   `test_unknown_knob_is_refused`, `test_value_outside_the_ends_is_refused`, `test_no_file_is_no_control`,
   `test_run_folders_are_dated`; `test_evolve`: `test_a_row_every_250_steps`, `test_manual_knobs_reach_the_world`
   (a control file written while the run goes: the next row shows the value and `manual` 1),
   `test_auto_leaves_manual_knobs_alone`, `test_back_to_auto_goes_on_from_the_owner_s_settings`,
   `test_stop_ends_a_run_without_a_limit` (it writes `time.txt` and its best brains),
   `test_steps_or_forever_not_both`; `test_check_proof`, `test_compare`: their fixtures get rows every 250 steps.
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_control tests.test_evolve` · Expected:
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_control tests.test_evolve` · Expected:
   `No module named 'src.control'`.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 5: Measure** the cost of the control check: 2,000 steps of `--species instinct` with and without a control
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 5: Measure** the cost of the control check: 2,000 steps of `--species instinct` with and without a control
   file present · Expected: the same time within 2 %. The two times go in the ledger.
-- [ ] **Step 6: Commit** as `feat: a world that runs until stopped and takes its knobs while it runs`;
+- [x] **Step 6: Commit** as `feat: a world that runs until stopped and takes its knobs while it runs`;
   `git show --stat HEAD` lists exactly this task's files.
 
 ### Task 4h: The control room on the live page (added 2026-11-23; the owner's request)

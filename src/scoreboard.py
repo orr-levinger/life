@@ -19,7 +19,7 @@ ROW_KEYS = (
     "step", "level", "population", "energy", "births", "newcomers", "generation", "bites_per_creature_step",
     "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers", "deaths_hunger",
     "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost", "step_cost", "lifespan",
-    "hunters",
+    "hunters", "manual",
 )
 DEATH_CAUSES = ("hunger", "attack", "age")
 Value = Union[int, float, None]
@@ -35,6 +35,12 @@ def numbers(rows: List[Dict[str, str]], key: str) -> List[float]:
     return [float(row[key]) for row in rows if row[key] != ""]
 
 
+def last_steps(rows: List[Dict[str, str]], steps: int) -> List[Dict[str, str]]:
+    """The rows of a run's last `steps` steps, however often its rows were written."""
+    end = int(float(rows[-1]["step"])) if rows else 0
+    return [row for row in rows if int(float(row["step"])) > end - steps]
+
+
 def _cosine(ax: float, ay: float, bx: float, by: float) -> float:
     return (ax * bx + ay * by) / (math.hypot(ax, ay) * math.hypot(bx, by))
 
@@ -48,7 +54,8 @@ class Scoreboard:
     `level` and the settings are the dial's, as in force during the window (ranges are shown by their middle);
     `energy` is the average, over the window, of each creature's energy as a share of its own maximum;
     `efficiency` is the living world's energy earned ÷ energy spent; `intelligence` and `wanderers` are the same
-    measure from the exam in the fixed test world, in the rows that have an exam."""
+    measure from the exam in the fixed test world, in the rows that have an exam; `manual` is 1 while the owner holds
+    the knobs, 0 while Auto does."""
 
     def __init__(self) -> None:
         self._clear_samples()
@@ -76,7 +83,7 @@ class Scoreboard:
             away = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) < 0
             self._fled.append(1.0 if away else 0.0)
 
-    def row(self, world: World, exam: Optional[ExamResult]) -> Dict[str, Value]:
+    def row(self, world: World, exam: Optional[ExamResult], manual: bool) -> Dict[str, Value]:
         now = {"bites": world.total_bites, "steps": world.creature_steps, "births": world.births,
                "newcomers": world.newcomers, "earned": world.energy_earned, "spent": world.energy_spent}
         window = {key: now[key] - self._seen[key] for key in now}
@@ -113,6 +120,7 @@ class Scoreboard:
             "step_cost": settings.step_cost,
             "lifespan": sum(settings.lifespan) / 2,
             "hunters": int(settings.attacks),
+            "manual": int(manual),
         }
         self._clear_samples()
         self._seen = now

@@ -9,15 +9,15 @@ from pathlib import Path
 from statistics import mean
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from .scoreboard import numbers, read_rows
+from .scoreboard import last_steps, numbers, read_rows
 
 LEVEL_MIN = 10  # the difficulty Auto must have reached by the end
-SUSTAIN_ROWS = 20  # the last 20,000 steps
+SUSTAIN_STEPS = 20000
 GENERATION_MIN = 20
 INTELLIGENCE_MIN = 2.0  # times the random wanderers' energy earned ÷ energy spent in the same exam
 EXAMS_COMPARED = 5
 TOWARD_FOOD_MIN = 0.7
-TOWARD_FOOD_ROWS = 10  # the last 10,000 steps
+TOWARD_FOOD_STEPS = 10000
 FLEE_MIN = 0.70
 SEEDS_WITH_HUNTERS = 4
 
@@ -34,10 +34,10 @@ def _harder(runs: Runs) -> Verdict:
 def _sustains(runs: Runs) -> Verdict:
     ok, details = True, []
     for name, rows in runs.items():
-        late = sum(int(r["newcomers"]) for r in rows[-SUSTAIN_ROWS:])
+        late = sum(int(r["newcomers"]) for r in last_steps(rows, SUSTAIN_STEPS))
         alive = int(rows[-1]["population"])
         ok &= late == 0 and alive > 0
-        details.append(f"{name}: {late} newcomers in the last rows, {alive} alive at the end")
+        details.append(f"{name}: {late} newcomers in the last {SUSTAIN_STEPS:,} steps, {alive} alive at the end")
     return ("2 sustains itself", ok, "; ".join(details))
 
 
@@ -67,7 +67,7 @@ def _exam_score(runs: Runs) -> Verdict:
 def _steers(runs: Runs) -> Verdict:
     ok, details = True, []
     for name, rows in runs.items():
-        values = numbers(rows[-TOWARD_FOOD_ROWS:], "toward_food")
+        values = numbers(last_steps(rows, TOWARD_FOOD_STEPS), "toward_food")
         score = mean(values) if values else None
         ok &= score is not None and score >= TOWARD_FOOD_MIN
         details.append(f"{name}: {'-' if score is None else f'{score:.2f}'}")

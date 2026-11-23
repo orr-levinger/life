@@ -44,12 +44,12 @@ class TestViewer(unittest.TestCase):
             three_runs(Path(tmp))
             found = runs(Path(tmp))
         self.assertEqual([(r["seed"], r["kind"]) for r in found], [(2, "learning"), (1, "learning"), (3, "instinct")])
-        self.assertEqual([len(r["rows"]) for r in found], [3, 100, 5])
+        self.assertEqual([len(r["rows"]) for r in found], [3, 400, 5])
         self.assertEqual([r["steps"] for r in found], [30000, 100000, 30000])
         first = found[1]["rows"][0]
-        self.assertEqual((first["step"], first["level"], first["population"]), (1000, 0.3, 30))
+        self.assertEqual((first["step"], first["level"], first["population"]), (250, 0.07, 30))
         self.assertIsNone(first["intelligence"])  # no exam in that row
-        self.assertEqual((found[1]["rows"][1]["intelligence"], found[1]["rows"][1]["wanderers"]), (0.5, 1))
+        self.assertEqual((found[1]["rows"][7]["intelligence"], found[1]["rows"][7]["wanderers"]), (0.5, 1))
         self.assertEqual(first["energy"], 0.6)
 
     def test_a_run_is_running_only_while_it_keeps_writing(self):

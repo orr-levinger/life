@@ -1,10 +1,10 @@
-"""A creature: its body, its energy, and the world's rules for what its actions do."""
+"""A creature: its body, its energy, and what its actions do to it and to the world."""
 from __future__ import annotations
 
 import math
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-from .levels import EAT_MISS_COST, HUNTER_SHARE
+from .stages import HUNTER_SHARE
 
 if TYPE_CHECKING:
     from .brain import Brain
@@ -54,27 +54,39 @@ class Creature:
         self.attack_damage = size * 5.0
         self.attack_cost = size * 1.0
 
+        self.age = 0
         self.food_eaten = 0.0
         self.last_action = "NONE"
         self.intent = "REST"  # display only
         self.intended_vector: Tuple[float, float] = (0.0, 0.0)  # display only
 
+    @classmethod
+    def eat_reach(cls, creature_radius: Any, food_radius: Any) -> Any:
+        """The one eat-range rule: how far apart a creature and a food may be for a bite (numbers or arrays)."""
+        return (creature_radius + food_radius) * cls.EAT_RANGE_FACTOR
+
     def can_reach(self, food: Food) -> bool:
-        """The one eat-range rule: close enough to take a bite."""
-        reach = (self.radius + food.radius) * self.EAT_RANGE_FACTOR
-        return math.hypot(food.x - self.x, food.y - self.y) <= reach
+        return math.hypot(food.x - self.x, food.y - self.y) <= self.eat_reach(self.radius, food.radius)
 
     def apply_action(self, action: Tuple[str, Any], world: World) -> None:
         kind, param = action
         if kind == "MOVE":
             self._move(param, world)
-        elif kind == "EAT":
-            self._eat(param, world)
         elif kind == "ATTACK":
             self._attack(param, world)
         else:
             raise ValueError(f"unknown action {kind!r}")
-        self.energy = min(self.energy - world.level.step_cost, self.max_energy)
+        self.energy = min(self.energy - world.stage.step_cost, self.max_energy)
+
+    def bite(self, food: Food, world: World) -> None:
+        """Eating on contact: one bite of the food the creature touches."""
+        amount = min(1.0, food.energy)
+        food.energy -= amount
+        self.energy = min(self.energy + amount, self.max_energy)
+        self.food_eaten += amount
+        world.total_bites += 1
+        if food.energy <= 0:
+            world.foods.remove(food)
 
     def _move(self, vector: Tuple[float, float], world: World) -> None:
         dx, dy = vector
@@ -84,25 +96,11 @@ class Creature:
             distance = self.velocity
         self.x = min(max(self.x + dx, self.radius), world.width - self.radius)
         self.y = min(max(self.y + dy, self.radius), world.height - self.radius)
-        self.energy -= distance * world.level.move_cost
+        self.energy -= distance * world.stage.move_cost
         self.last_action = "MOVE"
 
-    def _eat(self, food: Optional[Food], world: World) -> None:
-        if food is None or food not in world.foods or food.energy <= 0 or not self.can_reach(food):
-            self.energy -= EAT_MISS_COST
-            self.last_action = "EAT_MISS"
-            return
-        bite = min(1.0, food.energy)
-        food.energy -= bite
-        self.energy += bite
-        self.food_eaten += bite
-        world.total_bites += 1
-        if food.energy <= 0:
-            world.foods.remove(food)
-        self.last_action = "EAT"
-
     def _attack(self, target: Creature, world: World) -> None:
-        if not world.level.attacks:
+        if not world.stage.attacks:
             self.last_action = "ATTACK_OFF"
             return
         self.energy -= self.attack_cost
@@ -125,7 +123,7 @@ class Creature:
             world.kill(target, "attack")
 
     def get_color(self) -> str:
-        return "purple" if self.policy == "brain" else "green"
+        return "purple" if self.policy in ("brain", "learner") else "green"
 
     def __repr__(self) -> str:
         return (f"<Creature {self.id} {self.policy} x={self.x:.2f} y={self.y:.2f} size={self.size:.2f} "

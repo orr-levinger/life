@@ -83,7 +83,6 @@ class TestSenses(unittest.TestCase):
         s = sense(me, world([me, hunter]))
         self.assertEqual(display_intent(me, ("MOVE", (-1.0, 0.0)), s), "RUN_AWAY")
         self.assertEqual(display_intent(me, ("ATTACK", hunter), s), "ATTACK")
-        self.assertEqual(display_intent(me, ("EAT", None), s), "REST")
 
     def test_is_family(self):
         parent = creature(0, 0, id_=1)

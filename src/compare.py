@@ -1,6 +1,6 @@
-"""Compare teams: one row per team, averaged over its seeds, from the runs' scoreboards.
+"""Compare kinds of runs: one row per name, averaged over its seeds, from the runs' scoreboards.
 
-    python -m src.compare --team evolution runs/1-evolution/scoreboard.csv ... --team both runs/1-both/scoreboard.csv ...
+    python -m src.compare --runs learning runs/1-learning/scoreboard.csv ... --runs instinct runs/1-instinct/scoreboard.csv ...
 """
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ from pathlib import Path
 from statistics import mean
 from typing import Dict, List, Optional, Sequence, Union
 
-from .check_proof import EXAMS_COMPARED, FLEE_LEVEL, TOWARD_FOOD_ROWS
+from .check_proof import EXAMS_COMPARED, HUNTERS, TOWARD_FOOD_ROWS
 from .scoreboard import numbers, read_rows
 
 Cell = Union[str, int, float, None]
-COLUMNS = ("team", "seeds", "exam_ratio", "toward_food", "flee", "highest_level", "minutes")
+COLUMNS = ("name", "seeds", "exam_ratio", "toward_food", "flee", "highest_stage", "generation", "minutes")
 
 
 def _mean(values: Sequence[Optional[float]]) -> Optional[float]:
@@ -27,21 +27,23 @@ def _run_minutes(csv_path: Path) -> Optional[float]:
 
 
 def compare(runs: Dict[str, Sequence[Path]]) -> List[Dict[str, Cell]]:
-    """Per team, the mean over its seeds of: the exam ratio over the last 5 exams, the toward-food score over the
-    last 10 rows, the flee score over rows at level 4 or above; plus the highest level any seed reached and the
-    minutes a run took. A score no seed could measure is None."""
+    """Per name, the mean over its seeds of: the exam score over the last 5 exams, the steering score over the last
+    10 rows, the flee score over rows at the Hunters stage or above, the deepest generation at the end; plus the
+    highest stage any seed reached and the minutes a run took. A score no seed could measure is None."""
     table = []
-    for team, paths in runs.items():
-        exam, toward, flee, levels, minutes = [], [], [], [], []
+    for name, paths in runs.items():
+        exam, toward, flee, stages, generation, minutes = [], [], [], [], [], []
         for path in paths:
             rows = read_rows(path)
             exam.append(_mean(numbers(rows, "exam_ratio")[-EXAMS_COMPARED:]))
             toward.append(_mean(numbers(rows[-TOWARD_FOOD_ROWS:], "toward_food")))
-            flee.append(_mean(numbers([r for r in rows if int(r["level"]) >= FLEE_LEVEL], "flee")))
-            levels.append(max(int(r["level"]) for r in rows))
+            flee.append(_mean(numbers([r for r in rows if int(r["stage"]) >= HUNTERS], "flee")))
+            stages.append(max(int(r["stage"]) for r in rows))
+            generation.append(_mean(numbers(rows[-1:], "generation")))
             minutes.append(_run_minutes(path))
-        table.append({"team": team, "seeds": len(paths), "exam_ratio": _mean(exam), "toward_food": _mean(toward),
-                      "flee": _mean(flee), "highest_level": max(levels), "minutes": _mean(minutes)})
+        table.append({"name": name, "seeds": len(paths), "exam_ratio": _mean(exam), "toward_food": _mean(toward),
+                      "flee": _mean(flee), "highest_stage": max(stages), "generation": _mean(generation),
+                      "minutes": _mean(minutes)})
     return table
 
 
@@ -55,12 +57,11 @@ def format_table(table: List[Dict[str, Cell]]) -> str:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
-    parser = argparse.ArgumentParser(description="Compare teams from their runs' scoreboards.")
-    parser.add_argument("--team", nargs="+", action="append", required=True, metavar=("NAME", "CSV"),
-                        help="a team's name followed by its runs' scoreboard.csv files; repeat per team")
+    parser = argparse.ArgumentParser(description="Compare kinds of runs from their scoreboards.")
+    parser.add_argument("--runs", nargs="+", action="append", required=True, metavar=("NAME", "CSV"),
+                        help="a name followed by its runs' scoreboard.csv files; repeat per name")
     args = parser.parse_args(argv)
-    runs = {name: [Path(p) for p in paths] for name, *paths in args.team}
-    print(format_table(compare(runs)))
+    print(format_table(compare({name: [Path(p) for p in paths] for name, *paths in args.runs})))
 
 
 if __name__ == "__main__":

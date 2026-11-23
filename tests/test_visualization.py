@@ -18,17 +18,17 @@ class TestVisualization(unittest.TestCase):
 
     def test_render_with_creatures_and_food(self):
         w = make_world()
-        add(w, 10, 10, policy="brain", brain=fixed_brain([1, 0, -1, -1]))
+        add(w, 10, 10, policy="brain", brain=fixed_brain([1, 0, -1]))
         w.foods.append(Food(20, 20, remaining_duration=-1, energy=10.0))
         w.step()
         viz = Visualizer(50, 30)
         viz.render(w)
         self.assertGreaterEqual(len(viz.ax.patches), 2)
 
-    def test_corner_shows_level(self):
+    def test_corner_shows_stage(self):
         viz = Visualizer(50, 30)
         viz.render(make_world())
-        self.assertTrue(any("Level: 1" in t.get_text() for t in viz.ax.texts))
+        self.assertTrue(any("Stage: 1 Mortal" in t.get_text() for t in viz.ax.texts))
 
 
 if __name__ == "__main__":

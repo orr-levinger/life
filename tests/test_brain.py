@@ -14,7 +14,7 @@ def _params(brain: Brain) -> np.ndarray:
 class TestBrain(unittest.TestCase):
     def test_forward_shape_and_range(self):
         out = Brain.random(np.random.default_rng(0)).forward(np.ones(12))
-        self.assertEqual(out.shape, (4,))
+        self.assertEqual(out.shape, (3,))  # move x, move y, attack
         self.assertTrue(np.all(out >= -1.0) and np.all(out <= 1.0))
 
     def test_random_is_seeded(self):
@@ -36,7 +36,7 @@ class TestBrain(unittest.TestCase):
         parent = Brain.random(np.random.default_rng(5))
         parent_params = _params(parent).copy()
         child = parent.mutate(np.random.default_rng(1), 0.2, 0.2)
-        self.assertEqual(parent_params.size, 276)
+        self.assertEqual(parent_params.size, 259)
         changed = np.mean(_params(child) != parent_params)
         self.assertGreaterEqual(changed, 0.15)
         self.assertLessEqual(changed, 0.25)

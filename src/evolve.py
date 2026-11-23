@@ -6,7 +6,7 @@
 
 The world is never restarted and no creature is ever ranked or picked: births, deaths and the soup are the world's own
 rules (src/world.py). This runner starts the world, takes the live page's control file every few steps (src/control.py:
-the mode, the owner's knobs, Stop), lets Auto review the world every 1,000 steps (src/dial.py), holds the intelligence
+the mode, the owner's knobs, Stop, a jump-in), lets Auto review the world every 1,000 steps (src/dial.py), holds the intelligence
 exam as a measurement, and writes the scoreboard.
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
-from .control import MODES, Control, new_run_folder, read_control, write_control
+from .control import MODES, Control, new_run_folder, read_control, write_control, write_json
 from .creature import Creature
 from .dial import Dial
 from .exam import ExamResult, run_exam
@@ -79,6 +79,18 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
 def _exam_brains(world: World, sample: Sequence[Creature]) -> List[Any]:
     """What the exam tests: a learner creature's current (learned) network, otherwise its brain."""
     return [world.learner.current(c.slot) if c.policy == "learner" else c.brain for c in sample]
+
+
+def world_view(world: World) -> Dict[str, Any]:
+    """Where everything is, for the page's picture of a watched world."""
+    return {
+        "step": world.step_count,
+        "creatures": [{"x": round(c.x, 3), "y": round(c.y, 3), "radius": round(c.radius, 3),
+                       "energy": round(max(c.energy, 0.0) / c.max_energy, 3),
+                       "heading": [round(v, 3) for v in c.intended_vector], "did": c.last_action,
+                       "generation": c.generation} for c in world.creatures],
+        "foods": [{"x": round(f.x, 3), "y": round(f.y, 3), "radius": round(f.radius, 3)} for f in world.foods],
+    }
 
 
 def _format(row: Dict[str, Value]) -> str:
@@ -142,6 +154,7 @@ def run(args: argparse.Namespace) -> Path:
     exam: Optional[ExamResult] = None
     exam_rng = random.Random(args.seed + 2)  # who takes the exam: its own stream, so an exam never changes the world
     since_review: List[Dict[str, Value]] = []
+    next_tick = time.perf_counter()  # while watched: when the next step may start
     viz = _open_window() if args.window else None
 
     csv_path = out / "scoreboard.csv"
@@ -151,7 +164,8 @@ def run(args: argparse.Namespace) -> Path:
         for step in itertools.count(1):
             if args.steps is not None and step > args.steps:
                 break
-            if step % CONTROL_EVERY == 0:
+            watched = knobs.control.watched(time.time())
+            if watched or step % CONTROL_EVERY == 0:  # watched: every step, so Jump out is instant
                 found = read_control(out)
                 if found is not None:
                     if found.stop:
@@ -160,6 +174,10 @@ def run(args: argparse.Namespace) -> Path:
                         world.set_settings(dial.settings, round(dial.level, 2))
 
             world.step(board.observe)
+            if knobs.control.watched(time.time()):  # the owner is watching: draw it, then wait (the world is unchanged)
+                write_json(out / "view.json", world_view(world))
+                next_tick = max(next_tick, time.perf_counter()) + 1.0 / knobs.control.watch_speed
+                time.sleep(max(0.0, next_tick - time.perf_counter()))
 
             if args.species and step % EXAM_EVERY == 0:  # a measurement only: it never changes the world
                 sample = exam_rng.sample(world.creatures, min(EXAM_BRAINS, len(world.creatures)))

@@ -3,7 +3,8 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from src.control import Control, knob_values, new_run_folder, read_control, settings_from, write_control
+from src.control import (Control, knob_values, new_run_folder, read_control, settings_from, watch_speed_from,
+                         write_control)
 from src.dial import with_value
 from src.settings import START
 
@@ -53,6 +54,22 @@ class TestControl(unittest.TestCase):
         folder = new_run_folder(Path("runs"), 3, "learning")
         self.assertRegex(folder.as_posix(), r"^runs/\d{8}-\d{6}-3-learning$")
 
+
+    def test_watch_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_control(Path(tmp), Control("auto", None, False, watch_until=1234.5, watch_speed=20))
+            back = read_control(Path(tmp))
+            write_control(Path(tmp), Control("auto", None, False))
+            unwatched = read_control(Path(tmp))
+        self.assertEqual((back.watch_until, back.watch_speed), (1234.5, 20))
+        self.assertEqual((unwatched.watch_until, unwatched.watch_speed), (None, 10))
+
+    def test_watch_speed_outside_its_ends_is_refused(self):
+        self.assertEqual(watch_speed_from(12), 12.0)
+        with self.assertRaisesRegex(ValueError, "watch speed must be between 1 and 30 steps a second, not 50"):
+            watch_speed_from(50)
+        with self.assertRaisesRegex(ValueError, "watch speed must be a number"):
+            watch_speed_from("fast")
 
 if __name__ == "__main__":
     unittest.main()

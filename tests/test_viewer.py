@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from src.control import Control, read_control, write_control
+from src.control import WATCH_LEASE, Control, read_control, write_control
 from src.dial import KNOBS
 from src.viewer import make_server, runs
 from tests.test_check_proof import brain_rows, write
@@ -106,6 +106,13 @@ class Server:
     def get(self, path: str):
         with urllib.request.urlopen(self.base + path) as response:
             return json.loads(response.read())
+
+    def status(self, path: str) -> int:
+        try:
+            with urllib.request.urlopen(self.base + path) as response:
+                return response.status
+        except urllib.error.HTTPError as refused:
+            return refused.code
 
     def post(self, path: str, body, kind: str = "application/json"):
         request = urllib.request.Request(self.base + path, data=json.dumps(body).encode(), method="POST",
@@ -235,6 +242,44 @@ class TestControlRoom(unittest.TestCase):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
         for words in ("Start", "Stop", "Auto", "Manual", "Difficulty"):
+            self.assertIn(words, page)
+
+    def test_jump_in_sets_the_lease(self):
+        name = self.running_world()
+        before = time.time()
+        self.assertEqual(self.server.post("/control", {"run": name, "watch": True, "watch_speed": 5})[0], 200)
+        control = read_control(self.root / name)
+        self.assertTrue(before + WATCH_LEASE - 1 <= control.watch_until <= time.time() + WATCH_LEASE + 1)
+        self.assertEqual((control.watch_speed, control.mode), (5, "auto"))
+        status, answer = self.server.post("/control", {"run": name, "watch": True, "watch_speed": 99})
+        self.assertEqual((status, answer["error"]), (400, "watch speed must be between 1 and 30 steps a second, not 99"))
+        self.server.post("/control", {"run": name, "mode": "manual"})
+        self.assertIsNotNone(read_control(self.root / name).watch_until)  # other changes keep the world watched
+
+    def test_jump_out_clears_it(self):
+        name = self.running_world()
+        self.server.post("/control", {"run": name, "watch": True})
+        self.assertEqual(self.server.post("/control", {"run": name, "watch": False})[0], 200)
+        self.assertIsNone(read_control(self.root / name).watch_until)
+
+    def test_view_of_a_watched_world(self):
+        name = self.running_world()
+        self.server.post("/control", {"run": name, "watch": True})
+        picture = {"step": 7, "creatures": [], "foods": []}
+        (self.root / name / "view.json").write_text(json.dumps(picture))
+        self.assertEqual(self.server.get(f"/view?run={name}"), picture)
+
+    def test_no_view_when_not_watched(self):
+        name = self.running_world()
+        (self.root / name / "view.json").write_text(json.dumps({"step": 7, "creatures": [], "foods": []}))
+        self.assertEqual(self.server.status(f"/view?run={name}"), 404)
+        self.assertEqual(self.server.status("/view?run=..%2F..%2Felsewhere"), 404)
+        self.assertEqual(self.server.status("/view"), 404)
+
+    def test_page_has_jump_in(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("Jump in", "Jump out"):
             self.assertIn(words, page)
 
 

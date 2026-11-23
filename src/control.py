@@ -1,7 +1,8 @@
 """How the live page talks to a running world: one small JSON file in the run's folder.
 
 The page (through the viewer's server) writes it; the world reads it every few steps. It says the mode (Auto turns the
-knobs itself, Manual leaves them to the owner), the knobs the owner set, and whether to stop.
+knobs itself, Manual leaves them to the owner), the knobs the owner set, whether to stop, and whether the owner has
+jumped into the world to watch it slowly (until when, and how many steps a second).
 """
 from __future__ import annotations
 
@@ -21,6 +22,9 @@ CONTROL_FILE = "control.json"
 HUNTERS = "hunters"  # the on/off switch beside the knobs
 REPLACE_TRIES = 50  # the run may be reading the file at the moment it is replaced (Windows refuses then): try again
 REPLACE_WAIT = 0.01
+WATCH_SPEED = 10.0  # steps a second while the owner watches
+WATCH_SPEEDS = (1.0, 30.0)  # the speed slider's ends
+WATCH_LEASE = 10.0  # seconds a jump-in lasts unless the page renews it: a closed tab never leaves a world slow
 
 
 @dataclass(frozen=True)
@@ -28,6 +32,11 @@ class Control:
     mode: str  # one of MODES
     settings: Optional[Settings]  # the owner's knobs; None: keep what the world has
     stop: bool
+    watch_until: Optional[float] = None  # a time (time.time()): watched slowly until then; None: full speed
+    watch_speed: float = WATCH_SPEED  # steps a second while watched
+
+    def watched(self, now: float) -> bool:
+        return self.watch_until is not None and now < self.watch_until
 
 
 def knob_values(settings: Settings) -> dict:
@@ -55,6 +64,16 @@ def settings_from(values: Mapping[str, object], base: Settings) -> Settings:
     return settings
 
 
+def watch_speed_from(given: object) -> float:
+    """A watching speed from the page, refused in plain words when it is not a number within the slider's ends."""
+    if isinstance(given, bool) or not isinstance(given, (int, float)) or not math.isfinite(given):
+        raise ValueError(f"watch speed must be a number, not {given!r}")
+    low, high = WATCH_SPEEDS
+    if not low <= given <= high:
+        raise ValueError(f"watch speed must be between {low:g} and {high:g} steps a second, not {given:g}")
+    return float(given)
+
+
 def read_control(folder: Path) -> Optional[Control]:
     """The run's control file, or None when it has none."""
     path = folder / CONTROL_FILE
@@ -65,17 +84,22 @@ def read_control(folder: Path) -> Optional[Control]:
     if raw["mode"] not in MODES:
         raise ValueError(f"{path}: mode must be one of {MODES}, not {raw['mode']!r}")
     settings = None if raw["settings"] is None else settings_from(raw["settings"], START)
-    return Control(raw["mode"], settings, bool(raw["stop"]))
+    return Control(raw["mode"], settings, bool(raw["stop"]), raw["watch_until"], watch_speed_from(raw["watch_speed"]))
 
 
 def write_control(folder: Path, control: Control) -> None:
     """Written whole to a temporary file and renamed, so the run never reads half a file."""
     if control.mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}, not {control.mode!r}")
-    path, temporary = folder / CONTROL_FILE, folder / (CONTROL_FILE + ".tmp")
     settings = None if control.settings is None else knob_values(control.settings)
-    temporary.write_text(json.dumps({"mode": control.mode, "settings": settings, "stop": control.stop}),
-                         encoding="utf-8")
+    write_json(folder / CONTROL_FILE, {"mode": control.mode, "settings": settings, "stop": control.stop,
+                                       "watch_until": control.watch_until, "watch_speed": control.watch_speed})
+
+
+def write_json(path: Path, data: object) -> None:
+    """Written whole to a temporary file and renamed, so a reader never sees half a file."""
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(json.dumps(data), encoding="utf-8")
     for attempt in range(REPLACE_TRIES):
         try:
             os.replace(temporary, path)

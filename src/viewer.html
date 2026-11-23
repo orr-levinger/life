@@ -8,6 +8,7 @@
   :root {
     --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --muted: #52514e; --grid: #e4e3df; --warn: #b3261e;
     --learning: #2a78d6; --instinct: #eb6834; --inborn: #1baf7a; --rules: #eda100; --random: #e87ba4; --other: #8a8983;
+    --food: #3fa34d; --eat: #1baf7a; --miss: #eda100;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -71,6 +72,14 @@
   .empty { color: var(--muted); padding: 40px 0; text-align: center; }
   .nothing { grid-column: 1 / -1; padding: 50px 0; text-align: center; color: var(--muted); }
   .nothing b { display: block; font-size: 22px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+  #watch { background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  #watch .top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
+  #watch .top b { font-weight: 600; }
+  #watch .top span { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  #watch .top label { margin-left: auto; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  #watch canvas { width: 100%; display: block; border-radius: 6px; background: var(--page); }
+  #watch .key { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 12px; margin-top: 6px; }
+  #watch .key i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
   [hidden] { display: none !important; }
   @media (max-width: 480px) { #charts, #worlds { grid-template-columns: 1fr; } body { padding: 10px; } }
 </style>
@@ -101,6 +110,22 @@
   <span id="start-error" class="error"></span>
 </section>
 <div id="worlds"></div>
+<section id="watch" hidden>
+  <div class="top">
+    <b id="watch-title"></b><span id="watch-where">waiting for the first picture…</span>
+    <label>steps a second <input id="watch-speed" type="range" min="1" max="30" step="1" value="10"><output id="watch-speed-shown">10</output></label>
+    <button id="watch-out" class="act" type="button">Jump out</button>
+  </div>
+  <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
+  <div class="key">
+    <span><i style="background:var(--food)"></i>food</span>
+    <span>circle: a creature, as big as it is, filled as full as its energy; the line shows where it is heading</span>
+    <span><i style="border:2px solid var(--eat)"></i>ate</span>
+    <span><i style="border:2px solid var(--miss)"></i>ate at nothing</span>
+    <span><i style="border:2px solid var(--warn)"></i>attacked</span>
+    <span><i style="border:2px solid var(--muted)"></i>moved</span>
+  </div>
+</section>
 <div id="runs"></div>
 <div id="charts"></div>
 
@@ -291,6 +316,7 @@ function makeCard(run) {
   card.className = "world";
   card.innerHTML = `<div class="top"><b>${swatch(run.kind)}${run.kind} · seed ${run.seed}</b>
       <div class="seg"><button type="button" data-mode="auto">Auto</button><button type="button" data-mode="manual">Manual</button></div>
+      <button type="button" class="act jump">Jump in</button>
       <button type="button" class="act stop">Stop</button></div>
     <div class="where"></div><div class="knobs"></div>
     <label class="switch"><input type="checkbox" data-hunters> Hunters (creatures can attack each other)</label>
@@ -306,6 +332,7 @@ function makeCard(run) {
   for (const button of card.querySelectorAll(".seg button"))
     button.addEventListener("click", () => send("/control", { run: state.run.name, mode: button.dataset.mode })
       .then(() => { state.run.mode = button.dataset.mode; updateCard(state); tell(null); }, tell));
+  card.querySelector(".jump").addEventListener("click", () => jumpIn(state.run).catch(tell));
   const stop = card.querySelector(".stop");
   stop.addEventListener("click", () => {
     if (Date.now() - state.stopArmed > 4000) {  // a second click within 4 seconds stops the world
@@ -369,6 +396,7 @@ function updateCard(state) {
 
 function drawWorlds(running) {
   const box = document.getElementById("worlds"), names = new Set(running.map((r) => r.name));
+  if (watching && !names.has(watching.name)) jumpOut();  // the watched world ended
   for (const name of [...cards.keys()]) if (!names.has(name)) { cards.get(name).card.remove(); cards.delete(name); }
   for (const run of running) {
     if (!cards.has(run.name)) { cards.set(run.name, makeCard(run)); box.append(cards.get(run.name).card); }
@@ -382,6 +410,74 @@ function drawWorlds(running) {
   else if (note.dataset.kind === "full" || (note.dataset.kind === "starting" && running.every((r) => r.rows.length)))
     say(note, "", "");  // the note is out of date
 }
+
+// ---- Jump into a world: watch it slowly, then back to full speed ----
+const VIEW_EVERY = 100, RENEW_EVERY = 2000;  // ms: the picture 10 times a second; the slow mode renewed every 2 s
+let watching = null;  // {name, kind, timers}
+
+async function jumpIn(run) {
+  if (watching) await jumpOut();
+  const speed = Number(document.getElementById("watch-speed").value);
+  await send("/control", { run: run.name, watch: true, watch_speed: speed });
+  watching = { name: run.name, kind: run.kind, timers: [] };
+  document.getElementById("watch-title").innerHTML = `${swatch(run.kind)}Inside ${run.kind} · seed ${run.seed}`;
+  document.getElementById("watch-where").textContent = "waiting for the first picture…";
+  document.getElementById("watch").hidden = false;
+  const renew = () => watching && send("/control", { run: watching.name, watch: true,
+    watch_speed: Number(document.getElementById("watch-speed").value) }).catch(() => {});
+  watching.timers.push(setInterval(renew, RENEW_EVERY), setInterval(drawView, VIEW_EVERY));
+}
+
+async function jumpOut() {
+  if (!watching) return;
+  const name = watching.name;
+  watching.timers.forEach(clearInterval);
+  watching = null;
+  document.getElementById("watch").hidden = true;
+  await send("/control", { run: name, watch: false }).catch(() => {});  // a world already ended needs no telling
+}
+
+async function drawView() {
+  if (!watching) return;
+  const response = await fetch(`/view?run=${encodeURIComponent(watching.name)}`, { cache: "no-store" }).catch(() => null);
+  if (!response || !response.ok || !watching) return;
+  const picture = await response.json();
+  const canvas = document.getElementById("watch-canvas"), ink = getComputedStyle(document.documentElement);
+  const color = (name) => ink.getPropertyValue(name).trim();
+  const width = canvas.clientWidth * devicePixelRatio, height = width * 30 / 50;
+  if (canvas.width !== width) { canvas.width = width; canvas.height = height; }
+  const unit = width / 50, g = canvas.getContext("2d");
+  g.clearRect(0, 0, width, height);
+  g.fillStyle = color("--food");
+  for (const food of picture.foods) { g.beginPath(); g.arc(food.x * unit, food.y * unit, Math.max(food.radius * unit, 1.5), 0, 2 * Math.PI); g.fill(); }
+  const outline = { EAT: "--eat", EAT_MISS: "--miss", ATTACK: "--warn", ATTACK_MISS: "--warn" };
+  const body = color(colorOf(watching.kind).slice(4, -1));
+  for (const c of picture.creatures) {
+    const x = c.x * unit, y = c.y * unit, r = Math.max(c.radius * unit, 3);
+    g.globalAlpha = 0.85;
+    g.fillStyle = body;
+    g.beginPath(); g.arc(x, y, r * Math.sqrt(c.energy), 0, 2 * Math.PI); g.fill();  // filled as full as its energy
+    g.globalAlpha = 1;
+    g.strokeStyle = color(outline[c.did] || "--muted");
+    g.lineWidth = Math.max(1.5, unit * 0.08);
+    g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke();
+    const [dx, dy] = c.heading, length = Math.hypot(dx, dy);
+    if (length > 0) {
+      g.strokeStyle = color("--ink");
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + (dx / length) * r * 1.8, y + (dy / length) * r * 1.8); g.stroke();
+    }
+  }
+  document.getElementById("watch-where").textContent =
+    `step ${picture.step.toLocaleString()} · ${picture.creatures.length} alive · ${picture.foods.length} food`;
+}
+
+document.getElementById("watch-out").addEventListener("click", () => jumpOut());
+document.getElementById("watch-speed").addEventListener("input", (event) => {
+  document.getElementById("watch-speed-shown").textContent = event.target.value;
+});
+document.getElementById("watch-speed").addEventListener("change", (event) => {
+  if (watching) send("/control", { run: watching.name, watch: true, watch_speed: Number(event.target.value) }).catch(() => {});
+});
 
 function historyCard(run) {
   const last = lastRow(run);
@@ -403,6 +499,7 @@ function render() {
   const live = view === "live";
   document.getElementById("start").hidden = !live;
   document.getElementById("worlds").hidden = !live;
+  if (!live && watching) jumpOut();
   document.getElementById("runs").hidden = live;
   if (live) {
     const running = data.filter((run) => run.status === "running");

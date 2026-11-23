@@ -18,8 +18,10 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence
+from urllib.parse import parse_qs, urlparse
 
-from .control import HUNTERS, MODES, Control, knob_values, new_run_folder, read_control, settings_from, write_control
+from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run_folder, read_control,
+                      settings_from, watch_speed_from, write_control)
 from .dial import KNOBS, value
 from .evolve import SPECIES
 from .scoreboard import ROW_KEYS, read_rows
@@ -150,8 +152,29 @@ class Controls:
         stop = body.get("stop", current.stop)
         if not isinstance(stop, bool):
             raise Refused(400, "stop must be true or false")
-        write_control(folder, Control(mode, settings, stop))
-        return {"mode": mode, "settings": None if settings is None else knob_values(settings), "stop": stop}
+        watch_until, watch_speed = current.watch_until, current.watch_speed
+        if "watch_speed" in body:
+            try:
+                watch_speed = watch_speed_from(body["watch_speed"])
+            except ValueError as problem:
+                raise Refused(400, str(problem)) from problem
+        if "watch" in body:
+            if not isinstance(body["watch"], bool):
+                raise Refused(400, "watch must be true or false")
+            watch_until = time.time() + WATCH_LEASE if body["watch"] else None  # the page renews it while it watches
+        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed))
+        return {"mode": mode, "settings": None if settings is None else knob_values(settings), "stop": stop,
+                "watching": watch_until is not None, "watch_speed": watch_speed}
+
+    def view(self, name: Optional[str]) -> bytes:
+        """The picture a watched world last drew (it is drawn 10 to 30 times a second, so no scoreboard is read)."""
+        if name is None or name not in {run.name for run in self.folder.iterdir()}:
+            raise Refused(404, f"no world called {name!r}")
+        control = read_control(self.folder / name)
+        picture = self.folder / name / "view.json"
+        if control is None or not control.watched(time.time()) or not picture.exists():
+            raise Refused(404, "that world is not being watched")
+        return picture.read_bytes()
 
     @staticmethod
     def _settings(given: object, base: Settings) -> Settings:
@@ -180,6 +203,12 @@ def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingH
                 self._send(200, runs(folder))
             elif self.path.startswith("/knobs"):
                 self._send(200, knobs())
+            elif self.path.startswith("/view"):
+                try:
+                    name = parse_qs(urlparse(self.path).query).get("run", [None])[0]
+                    self._raw(200, controls.view(name), "application/json")
+                except Refused as refused:
+                    self._send(refused.status, {"error": str(refused)})
             else:
                 body = PAGE.read_bytes()
                 self._raw(200, body, "text/html; charset=utf-8")

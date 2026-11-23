@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -56,6 +57,16 @@ def owner_writes_at(step: int, control: Control):
             write_control(folder, control)
         return real(folder)
     return mock.patch("src.evolve.read_control", read)
+
+
+def watched(folder, speed=10.0, until=None):
+    """The owner jumped into this world (until `until`, a time; ten minutes from now when not given)."""
+    lease = time.time() + 600 if until is None else until
+    write_control(Path(folder), Control("auto", None, False, watch_until=lease, watch_speed=speed))
+
+
+def no_waiting():
+    return mock.patch("src.evolve.time.sleep")
 
 
 class TestEvolve(unittest.TestCase):
@@ -225,6 +236,46 @@ class TestEvolve(unittest.TestCase):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             parse_args(["--seed", "1", "--species", "instinct", "--policy", "random"])
 
+
+    def test_watched_world_writes_its_view(self):
+        with tempfile.TemporaryDirectory() as folder, no_waiting():
+            watched(folder)
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "250", "--species", "instinct", "--out", folder]))
+            view = json.loads((Path(folder) / "view.json").read_text())
+        self.assertEqual(view["step"], 250)
+        self.assertEqual(len(view["creatures"]), int(rows[-1]["population"]))
+        self.assertGreater(len(view["foods"]), 0)
+        creature = view["creatures"][0]
+        self.assertEqual(set(creature), {"x", "y", "radius", "energy", "heading", "did", "generation"})
+        self.assertTrue(0.0 <= creature["energy"] <= 1.0)
+        self.assertTrue(0.0 <= creature["x"] <= 50 and 0.0 <= creature["y"] <= 30)
+        self.assertEqual(set(view["foods"][0]), {"x", "y", "radius"})
+
+    def test_watching_never_changes_the_world(self):
+        argv = ["--seed", "2", "--steps", "500", "--species", "instinct", "--out"]
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b, no_waiting():
+            watched(a, speed=30)
+            seen = quiet_run(argv + [a]).read_text()
+            unseen = quiet_run(argv + [b]).read_text()
+        self.assertEqual(seen, unseen)
+
+    def test_watch_runs_out_by_itself(self):
+        with tempfile.TemporaryDirectory() as folder:
+            watched(folder, until=time.time() - 1)
+            started = time.perf_counter()
+            quiet_run(["--seed", "1", "--steps", "250", "--species", "instinct", "--out", folder])
+            took = time.perf_counter() - started
+            view = (Path(folder) / "view.json").exists()
+        self.assertFalse(view)
+        self.assertLess(took, 8.0)  # 250 steps at 10 a second would take 25
+
+    def test_watched_world_waits(self):
+        with tempfile.TemporaryDirectory() as folder:
+            watched(folder, speed=25)
+            started = time.perf_counter()
+            quiet_run(["--seed", "1", "--steps", "50", "--species", "instinct", "--out", folder])
+            took = time.perf_counter() - started
+        self.assertGreaterEqual(took, 1.8)  # 50 steps at 25 a second
 
 if __name__ == "__main__":
     unittest.main()

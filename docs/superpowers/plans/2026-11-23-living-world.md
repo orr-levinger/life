@@ -366,20 +366,20 @@ control file read every 25 steps; a scoreboard row every 250 steps; Auto's revie
 - Both accept only `Content-Type: application/json`; the server stays on `127.0.0.1`.
 - `viewer.runs()` gives each run `mode` (from its control file; `auto` when it has none).
 
-- [ ] **Step 1: Write the failing tests:** `test_knobs_list_the_ends_of_every_slider`, `test_start_launches_a_world`
+- [x] **Step 1: Write the failing tests:** `test_knobs_list_the_ends_of_every_slider`, `test_start_launches_a_world`
   (the process launch is replaced by a recorder: the command, the folder, the control file),
   `test_start_refuses_a_third_world`, `test_start_refuses_a_bad_species`, `test_control_writes_the_run_s_file`,
   `test_control_refuses_a_value_outside_the_ends`, `test_control_refuses_a_run_that_is_not_running`,
   `test_posts_must_be_json`, `test_stop_is_written_to_the_run`, `test_page_has_the_control_room` (the words Start,
   Stop, Auto, Manual).
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_viewer` · Expected: 404s and missing words.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 5: Play with it** in the app's browser on `http://localhost:8765`: start a Manual world of learning
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_viewer` · Expected: 404s and missing words.
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 5: Play with it** in the app's browser on `http://localhost:8765`: start a Manual world of learning
   animals; lower energy per food; the next point shows the value, the line marks the change, average energy falls;
   switch to Auto and see a knob move by itself within 1,000 steps; press Stop and find the world in History. No errors
   in the browser's console. Each of these is written in the ledger with what was seen.
-- [ ] **Step 6: Commit** as `feat: the control room (Auto, Manual, live knobs, Start and Stop)`; `git show --stat HEAD`
+- [x] **Step 6: Commit** as `feat: the control room (Auto, Manual, live knobs, Start and Stop)`; `git show --stat HEAD`
   lists exactly this task's files. Tell the owner it is ready to play with.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")

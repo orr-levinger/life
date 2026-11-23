@@ -81,7 +81,10 @@ Still to build (the plan: `docs/superpowers/plans/2026-11-23-living-world.md`): 
 dial's numbers by measurement, the long runs and their judgement. The design:
 `docs/superpowers/specs/2026-11-23-living-world-design.md`.
 
-Run one world and watch it:
+Play with it: run `python -m src.viewer` and open http://localhost:8765. Press **Start** to begin a world (it runs
+until you press **Stop**). In **Auto** the world turns its own knobs; in **Manual** you move the sliders (food, energy
+per food, new food per step, the costs of moving and living, lifespan, hunters) and the running world takes each change
+within a second. The charts get a new point every 250 steps, and every change of a knob is marked on them. Past worlds
+are in **History**.
 
-    python -m src.viewer                                  (then open http://localhost:8765)
-    python -m src.evolve --seed 1 --steps 30000 --species learning
+A world can also be run from the command line: `python -m src.evolve --seed 1 --steps 30000 --species learning`.

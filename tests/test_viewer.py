@@ -4,9 +4,12 @@ import tempfile
 import threading
 import time
 import unittest
+import urllib.error
 import urllib.request
 from pathlib import Path
 
+from src.control import Control, read_control, write_control
+from src.dial import KNOBS
 from src.viewer import make_server, runs
 from tests.test_check_proof import brain_rows, write
 
@@ -75,9 +78,164 @@ class TestViewer(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
         self.assertIn("<title>Life", page)
-        for words in ("Nothing is running", "Live", "History", "Average energy per creature"):
+        for words in ("Nothing is running", "Live", "History", "Average energy per creature", "Start a world"):
             self.assertIn(words, page)
         self.assertEqual(len(data), 3)
+
+
+class Recorder:
+    """Stands in for launching a world: records each command and folder, and the world never ends."""
+
+    def __init__(self) -> None:
+        self.launched = []
+
+    def __call__(self, command, folder):
+        self.launched.append((command, folder))
+        return self
+
+    def poll(self):
+        return None
+
+
+class Server:
+    def __init__(self, root: Path, launch=None) -> None:
+        self.server = make_server(root, port=0, launch=launch or Recorder())
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    def get(self, path: str):
+        with urllib.request.urlopen(self.base + path) as response:
+            return json.loads(response.read())
+
+    def post(self, path: str, body, kind: str = "application/json"):
+        request = urllib.request.Request(self.base + path, data=json.dumps(body).encode(), method="POST",
+                                         headers={"Content-Type": kind})
+        try:
+            with urllib.request.urlopen(request) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as refused:
+            return refused.code, json.loads(refused.read())
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+
+
+class TestControlRoom(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.recorder = Recorder()
+        self.server = Server(self.root, self.recorder)
+
+    def tearDown(self):
+        self.server.close()
+        self.tmp.cleanup()
+
+    def running_world(self, name="20261123-120000-5-learning"):
+        run_folder(self.root, name, brain_rows()[:8],
+                   record={"seed": 5, "kind": "learning", "steps": None, "started": "2026-11-23T12:00:00"})
+        write_control(self.root / name, Control("auto", None, False))
+        return name
+
+    def test_knobs_list_the_ends_of_every_slider(self):
+        answer = self.server.get("/knobs")
+        self.assertEqual([k["name"] for k in answer["knobs"]], [k.name for k in KNOBS])
+        energy = next(k for k in answer["knobs"] if k["name"] == "food_energy")
+        self.assertEqual((energy["label"], energy["easiest"], energy["hardest"], energy["start"]),
+                         ("Energy per food", 60.0, 3.0, 30.0))
+        self.assertIs(answer["hunters"], False)
+
+    def test_start_launches_a_world(self):
+        status, answer = self.server.post("/start", {"species": "learning", "seed": 3, "mode": "manual",
+                                                      "settings": {"lifespan": 8000}})
+        self.assertEqual(status, 200)
+        command, folder = self.recorder.launched[0]
+        self.assertEqual(folder.name, answer["name"])
+        self.assertRegex(answer["name"], r"^\d{8}-\d{6}-3-learning$")
+        self.assertEqual(command[1:9], ["-m", "src.evolve", "--seed", "3", "--forever", "--species", "learning",
+                                        "--mode"])
+        control = read_control(folder)
+        self.assertEqual((control.mode, control.stop), ("manual", False))
+        self.assertEqual(control.settings.lifespan, (6400.0, 9600.0))
+
+    def test_start_refuses_a_third_world(self):
+        self.running_world()
+        self.assertEqual(self.server.post("/start", {"species": "instinct", "seed": 1, "mode": "auto"})[0], 200)
+        status, answer = self.server.post("/start", {"species": "instinct", "seed": 2, "mode": "auto"})
+        self.assertEqual((status, answer["error"]), (409, "2 worlds are running already: stop one first"))
+        self.assertEqual(len(self.recorder.launched), 1)
+
+    def test_start_refuses_a_bad_species(self):
+        status, answer = self.server.post("/start", {"species": "dragons", "seed": 1, "mode": "auto"})
+        self.assertEqual((status, answer["error"]), (400, "species must be one of learning, instinct"))
+        status, answer = self.server.post("/start", {"species": "learning", "seed": 1, "mode": "auto",
+                                                     "settings": {"food_energy": 0.5}})
+        self.assertEqual((status, answer["error"]), (400, "food_energy must be between 3 and 60, not 0.5"))
+        self.assertEqual(self.recorder.launched, [])
+
+    def test_control_writes_the_run_s_file(self):
+        name = self.running_world()
+        self.assertEqual(self.server.post("/control", {"run": name, "mode": "manual"})[0], 200)
+        self.assertEqual(read_control(self.root / name), Control("manual", None, False))  # keeps the world's knobs
+        status, answer = self.server.post("/control", {"run": name, "settings": {"food_energy": 24}})
+        self.assertEqual(status, 200)
+        control = read_control(self.root / name)
+        self.assertEqual(control.settings.food_energy, (16.0, 24.0 * 4 / 3))
+        self.assertEqual(control.settings.max_food, 200)  # the other knobs as the world's last row shows them
+        self.server.post("/control", {"run": name, "settings": {"lifespan": 7000}})
+        both = read_control(self.root / name).settings
+        self.assertEqual((both.food_energy[0], both.lifespan), (16.0, (5600.0, 8400.0)))  # changes add up
+        self.assertEqual(self.server.post("/control", {"run": name, "mode": "auto"})[0], 200)
+        self.assertEqual(read_control(self.root / name), Control("auto", None, False))
+
+    def test_knobs_stay_still_in_auto(self):
+        name = self.running_world()
+        status, answer = self.server.post("/control", {"run": name, "settings": {"food_energy": 24}})
+        self.assertEqual((status, answer["error"]), (409, "switch to Manual to turn the knobs"))
+
+    def test_control_refuses_a_value_outside_the_ends(self):
+        name = self.running_world()
+        status, answer = self.server.post("/control", {"run": name, "mode": "manual", "settings": {"lifespan": 50}})
+        self.assertEqual((status, answer["error"]), (400, "lifespan must be between 625 and 10000, not 50"))
+        self.assertEqual(read_control(self.root / name), Control("auto", None, False))
+
+    def test_control_refuses_a_run_that_is_not_running(self):
+        three_runs(self.root)
+        status, answer = self.server.post("/control", {"run": "20261123-100000-1-learning", "stop": True})
+        self.assertEqual(status, 404)  # finished
+        status, _ = self.server.post("/control", {"run": "../../elsewhere", "stop": True})
+        self.assertEqual(status, 404)
+
+    def test_posts_must_be_json(self):
+        name = self.running_world()
+        status, answer = self.server.post("/control", {"run": name, "stop": True}, kind="text/plain")
+        self.assertEqual(status, 415)
+        self.assertEqual(read_control(self.root / name).stop, False)
+
+    def test_stop_is_written_to_the_run(self):
+        name = self.running_world()
+        self.assertEqual(self.server.post("/control", {"run": name, "stop": True})[0], 200)
+        self.assertEqual(read_control(self.root / name), Control("auto", None, True))
+
+    def test_runs_say_their_mode(self):
+        name = self.running_world()
+        write_control(self.root / name, Control("manual", None, False))
+        self.assertEqual([(run["name"], run["mode"]) for run in runs(self.root)], [(name, "manual")])
+
+    def test_a_world_just_started_is_running_before_its_first_row(self):
+        folder = self.root / "20261123-130000-9-instinct"
+        folder.mkdir()
+        (folder / "run.json").write_text(json.dumps({"seed": 9, "kind": "instinct", "steps": None,
+                                                     "started": "2026-11-23T13:00:00"}))
+        found = runs(self.root)
+        self.assertEqual([(run["status"], run["rows"]) for run in found], [("running", [])])
+
+    def test_page_has_the_control_room(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("Start", "Stop", "Auto", "Manual", "Difficulty"):
+            self.assertIn(words, page)
 
 
 if __name__ == "__main__":

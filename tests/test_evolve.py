@@ -29,7 +29,7 @@ class TestEvolve(unittest.TestCase):
                 self.assertEqual(tuple(next(csv.reader(f))), ROW_KEYS)
             rows = read_rows(path)
             seconds = float((Path(folder) / "time.txt").read_text())
-        self.assertEqual([(r["step"], r["stage"]) for r in rows], [("1000", "1"), ("2000", "1")])
+        self.assertEqual([(r["step"], r["stage"]) for r in rows], [("1000", "0"), ("2000", "0")])
         self.assertGreater(int(rows[0]["newcomers"]), 0)  # the first creatures are newcomers
         self.assertNotEqual(rows[1]["exam_ratio"], "")
         self.assertGreater(seconds, 0.0)
@@ -52,7 +52,7 @@ class TestEvolve(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, \
                 mock.patch("src.evolve.run_exam", return_value=ExamResult(0.4, 0.2, 2.0)):
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "4000", "--species", "instinct", "--out", folder]))
-        self.assertEqual([r["stage"] for r in rows], ["1", "1", "1", "2"])
+        self.assertEqual([r["stage"] for r in rows], ["0", "0", "0", "1"])
 
     def test_baseline_never_changes_stage(self):
         with tempfile.TemporaryDirectory() as folder:

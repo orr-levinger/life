@@ -114,8 +114,8 @@ the wanderers'. A stage is passed at 1.5 or more, twice in a row, with at least 
 ### Two kinds of animal, for comparison
 
 - **Learning animals** (the goal): PPO during life, learned brain inherited.
-- **Instinct animals** (a yardstick): brains never learn; babies inherit the brain with mutations. They start at stage
-  1, because without learning and without death nothing can change.
+- **Instinct animals** (a yardstick): brains never learn; babies inherit the brain with mutations. Both kinds start in
+  the Garden (with old age there, evolution works in the Garden too).
 
 Each runs in its own world: `python -m src.evolve --seed N --steps S --species learning|instinct [--inherit learned|inborn]`.
 

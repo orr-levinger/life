@@ -1,5 +1,6 @@
 """The living world: food, creatures, and one step of time. Nothing here ranks creatures or picks parents:
-a creature does what its brain chooses, has a baby when it has the energy, and dies of hunger, a hunter or old age."""
+a creature does what its brain chooses, has a baby when it has the energy, and dies of old age, or, past the
+Garden, of hunger or a hunter."""
 from __future__ import annotations
 
 import math
@@ -136,16 +137,15 @@ class World:
                 if action[0] == phase and creature in self.creatures:
                     creature.apply_action(action, self)
 
-        mortal = self.evolving and self.stage.mortal
         for creature in list(self.creatures):
             if self.evolving:
                 creature.age += 1
-            if mortal and creature.energy <= 0:
+            if self.evolving and self.stage.hunger and creature.energy <= 0:
                 self.kill(creature, "hunger")
-            elif mortal and creature.age >= MAX_AGE:
-                self.kill(creature, "age")
+            elif self.evolving and creature.age >= MAX_AGE:
+                self.kill(creature, "age")  # old age at every stage: each death makes room for a baby
             elif creature.energy < 0:
-                creature.energy = 0.0  # where nothing can die, an empty creature simply stays empty
+                creature.energy = 0.0  # where nobody starves, an empty creature simply stays empty
 
         if self.learner is not None and self.evolving:
             self._teach(acting, energy_before)  # before births: the energy given to a baby is never a penalty
@@ -154,7 +154,7 @@ class World:
                     self.learner.release(dead.slot)
         if self.evolving:
             self._births()
-            if self.stage.mortal and len(self.creatures) < SOUP_MIN:
+            if len(self.creatures) < SOUP_MIN:
                 self.add_newcomer()
         self._decay_food()
 

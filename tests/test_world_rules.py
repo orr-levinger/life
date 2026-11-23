@@ -18,6 +18,12 @@ def food(x: float, y: float, energy: float = 10.0) -> Food:
     return Food(x, y, remaining_duration=-1, energy=energy)
 
 
+def crowd(w) -> None:
+    """Ten wanderers with too little energy for a baby: they keep the primordial soup away."""
+    for i in range(10):
+        add(w, 3 + i * 4, 25)
+
+
 class TestCosts(unittest.TestCase):
     def test_step_cost(self):
         w = make_world()
@@ -127,15 +133,32 @@ class TestHunting(unittest.TestCase):
 
 
 class TestLifeAndDeath(unittest.TestCase):
-    def test_garden_never_kills(self):
+    def test_garden_never_starves(self):
         w = make_world(GARDEN_NO_FOOD)
+        crowd(w)
         c = add(w, 10, 10, energy=0.01, policy="brain", brain=fixed_brain(STAY))
-        c.age = MAX_AGE + 10
         for _ in range(50):
             w.step()
-        self.assertEqual(w.creatures, [c])
+        self.assertIn(c, w.creatures)
         self.assertEqual(c.energy, 0.0)
         self.assertEqual(sum(w.deaths.values()), 0)
+
+    def test_old_age_kills_in_the_garden(self):
+        w = make_world(GARDEN_NO_FOOD)
+        crowd(w)
+        c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
+        c.age = MAX_AGE - 1
+        w.step()
+        self.assertNotIn(c, w.creatures)
+        self.assertEqual((w.deaths["age"], w.deaths["hunger"]), (1, 0))
+
+    def test_a_death_of_old_age_makes_room_for_a_baby(self):
+        w = make_world(GARDEN_NO_FOOD, species="random")
+        for i in range(MAX_CREATURES):
+            add(w, 1 + (i % 10) * 4.5, 1 + (i // 10) * 3.4, energy=90.0)
+        w.creatures[0].age = MAX_AGE - 1
+        w.step()
+        self.assertEqual((len(w.creatures), w.deaths["age"], w.births), (MAX_CREATURES, 1, 1))
 
     def test_hunger_kills_in_mortal_stage(self):
         w = make_world(NO_FOOD)
@@ -154,11 +177,12 @@ class TestLifeAndDeath(unittest.TestCase):
 
     def test_birth_at_seventy_percent(self):
         w = make_world(GARDEN_NO_FOOD)
+        crowd(w)
         parent_brain = fixed_brain(STAY)
         parent = add(w, 10, 10, size=1.0, energy=80.0, policy="brain", brain=parent_brain)
         w.step()
-        self.assertEqual(len(w.creatures), 2)
-        baby = w.creatures[1]
+        self.assertEqual(len(w.creatures), 12)
+        baby = w.creatures[-1]
         before_birth = 80.0 - GARDEN_NO_FOOD.step_cost
         self.assertAlmostEqual(baby.energy, BABY_SHARE * before_birth)
         self.assertAlmostEqual(parent.energy, (1 - BABY_SHARE) * before_birth)
@@ -171,9 +195,10 @@ class TestLifeAndDeath(unittest.TestCase):
 
     def test_no_birth_below_seventy_percent(self):
         w = make_world(GARDEN_NO_FOOD)
+        crowd(w)
         add(w, 10, 10, size=1.0, energy=60.0, policy="brain", brain=fixed_brain(STAY))
         w.step()
-        self.assertEqual(len(w.creatures), 1)
+        self.assertEqual((len(w.creatures), w.births), (11, 0))
 
     def test_births_pause_at_limit(self):
         w = make_world(GARDEN_NO_FOOD, species="random")
@@ -194,12 +219,12 @@ class TestLifeAndDeath(unittest.TestCase):
         self.assertEqual(w.creatures[-1].policy, "brain")
         self.assertIsNotNone(w.creatures[-1].brain)
 
-    def test_no_soup_in_garden(self):
+    def test_soup_also_in_the_garden(self):
         w = make_world(GARDEN_NO_FOOD)
         for i in range(3):
             add(w, 10 + i * 5, 10, policy="brain", brain=fixed_brain(STAY))
         w.step()
-        self.assertEqual((len(w.creatures), w.newcomers), (3, 0))
+        self.assertEqual((len(w.creatures), w.newcomers), (4, 1))
 
     def test_newcomer_is_of_the_world_species(self):
         self.assertEqual(make_world(species="random").add_newcomer().policy, "random")
@@ -243,10 +268,6 @@ class TestLearnersInWorld(unittest.TestCase):
         slot = learner.allocate(NetWeights.random(w.np_rng), LEARNING_RATE)
         return add(w, x, y, energy=energy, policy="learner", slot=slot)
 
-    def crowd(self, w):
-        for i in range(10):  # ten wanderers keep the soup away
-            add(w, 3 + i * 4, 25)
-
     def test_newcomer_gets_a_slot_and_a_random_network(self):
         w, learner = self.world()
         first, second = w.add_newcomer(), w.add_newcomer()
@@ -256,7 +277,7 @@ class TestLearnersInWorld(unittest.TestCase):
 
     def test_learner_creatures_act_and_record(self):
         w, learner = self.world()
-        self.crowd(w)
+        crowd(w)
         creatures = [self.born(w, learner, 10, 10), self.born(w, learner, 30, 15)]
         before = {c.slot: c.energy for c in creatures}
         with mock.patch.object(learner, "record", wraps=learner.record) as record:
@@ -270,7 +291,7 @@ class TestLearnersInWorld(unittest.TestCase):
 
     def test_dead_learner_frees_its_slot(self):
         w, learner = self.world()
-        self.crowd(w)
+        crowd(w)
         dying = self.born(w, learner, 10, 10, energy=0.01)
         with mock.patch.object(learner, "record", wraps=learner.record) as record:
             w.step()
@@ -281,13 +302,14 @@ class TestLearnersInWorld(unittest.TestCase):
 
     def parent_that_has_learned(self, inherit):
         w, learner = self.world(GARDEN_NO_FOOD, inherit)
+        crowd(w)
         parent = self.born(w, learner, 10, 10, energy=80.0)
         live(learner, parent.slot, 65)
         learner.update()
         self.assertFalse(same(learner.current(parent.slot), learner.inborn(parent.slot)))
         learned, born_with = learner.current(parent.slot), learner.inborn(parent.slot)
         w.step()
-        baby = w.creatures[1]
+        baby = w.creatures[-1]
         self.assertEqual((baby.policy, baby.parent_id, baby.generation), ("learner", parent.id, 1))
         return learner, parent, baby, learned, born_with
 
@@ -307,21 +329,23 @@ class TestLearnersInWorld(unittest.TestCase):
 
     def test_birth_is_not_a_negative_reward(self):
         w, learner = self.world(GARDEN_NO_FOOD)
+        crowd(w)
         parent = self.born(w, learner, 10, 10, energy=80.0)
         with mock.patch.object(learner, "record", wraps=learner.record) as record:
             w.step()
-        self.assertEqual(len(w.creatures), 2)
+        self.assertEqual(w.births, 1)
         self.assertLess(parent.energy, 55.0)  # it gave its baby 40 % of its energy
         _, reward, _ = record.call_args_list[0].args
         self.assertGreater(reward, -2.0)  # but its reward only shows the cost of the step itself
 
     def test_garden_learner_keeps_learning_at_zero_energy(self):
         w, learner = self.world(GARDEN_NO_FOOD)
+        crowd(w)
         empty = self.born(w, learner, 10, 10, energy=0.0)
         with mock.patch.object(learner, "record", wraps=learner.record) as record:
             for _ in range(3):
                 w.step()
-        self.assertEqual(w.creatures, [empty])
+        self.assertIn(empty, w.creatures)
         self.assertEqual([(call.args[0], call.args[2]) for call in record.call_args_list], [(empty.slot, False)] * 3)
 
 

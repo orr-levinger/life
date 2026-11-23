@@ -34,9 +34,7 @@ EXAM_BRAINS = 20
 PASS_RATIO = 1.5
 PASS_MIN_POPULATION = 10
 SPECIES = {"learning": "learner", "instinct": "brain"}  # the name on the command line -> the creatures' policy
-# Learning animals start in the Garden. Instinct animals start mortal: without learning and without death nothing
-# can change.
-FIRST_STAGE = {"learning": 0, "instinct": 1}
+FIRST_STAGE = 0  # every species starts in the Garden
 YARDSTICKS = ("random", "rules")
 YARDSTICK_STAGE = 1
 
@@ -56,7 +54,7 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
     if args.stage is None:
-        args.stage = FIRST_STAGE[args.species] if args.species else YARDSTICK_STAGE
+        args.stage = FIRST_STAGE if args.species else YARDSTICK_STAGE
     if args.out is None:
         kind = args.species if args.inherit == "learned" else f"{args.species}-{args.inherit}"
         args.out = f"runs/{args.seed}-{kind}" if args.species else f"runs/{args.seed}-{args.policy}-S{args.stage}"

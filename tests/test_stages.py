@@ -20,8 +20,8 @@ class TestStages(unittest.TestCase):
             self.assertLessEqual(easier.move_cost, harder.move_cost, harder.name)
             self.assertLessEqual(easier.step_cost, harder.step_cost, harder.name)
 
-    def test_only_garden_is_immortal(self):
-        self.assertEqual([s.mortal for s in STAGES], [False, True, True, True, True])
+    def test_only_the_garden_cannot_starve(self):
+        self.assertEqual([s.hunger for s in STAGES], [False, True, True, True, True])
 
     def test_hunting_from_stage_three(self):
         self.assertEqual([s.attacks for s in STAGES], [False, False, False, True, True])

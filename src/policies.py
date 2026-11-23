@@ -41,7 +41,7 @@ def _capped(dx: float, dy: float, top_speed: float) -> Tuple[float, float]:
 
 
 def brain_action(creature: Creature, senses: Senses, attacks_on: bool) -> Action:
-    """Outputs 1-2 move, 3 eat, 4 attack (only when hunting exists at this stage)."""
+    """Outputs 1-2 move, 3 eat, 4 attack (only once hunters exist)."""
     out = creature.brain.forward(senses.vector)
     if attacks_on and out[3] > 0 and out[3] >= out[2] and senses.other is not None:
         return ("ATTACK", senses.other)
@@ -107,7 +107,7 @@ def rules_action(creature: Creature, world: World, rng: random.Random) -> Action
 
 def decide(creature: Creature, world: World, senses: Senses, rng: random.Random) -> Action:
     if creature.policy == "brain":
-        return brain_action(creature, senses, world.stage.attacks)
+        return brain_action(creature, senses, world.settings.attacks)
     if creature.policy == "random":
         return random_action(creature, senses, rng)
     if creature.policy == "rules":
@@ -122,7 +122,7 @@ def decide_all(world: World, creatures: Sequence[Creature], senses: Sequence[Sen
     if learners:
         outputs = world.learner.act([creatures[i].slot for i in learners],
                                     np.stack([senses[i].vector for i in learners]),
-                                    world.stage.attacks, learning=world.evolving)
+                                    world.settings.attacks, learning=world.evolving)
         for i, (choice, move) in zip(learners, outputs):
             actions[i] = learner_action(creatures[i], senses[i], choice, move)
     for i, creature in enumerate(creatures):

@@ -4,10 +4,11 @@
 > use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** One continuous world where creatures with brains learn during life and evolve by having babies from energy,
-through five stages from "nobody dies" to "hunters", watched live.
+in a world that starts easy and gets a little harder whenever nobody dies (the difficulty dial), watched live.
 
-**Architecture:** `src/stages.py` replaces `src/levels.py` (five stages and the world's constants). `World` owns life
-and death: births from energy, deaths by stage, old age, the primordial soup, and making babies and
+**Architecture:** `src/settings.py` holds the world's settings and constants; `src/dial.py` is the difficulty dial
+(Task 4d; Tasks 1–4c were built on five stages in `src/stages.py`, which the dial replaced). `World` owns life
+and death: births from energy, deaths only with low energy, the primordial soup, and making babies and
 newcomers of its species. `src/rounds.py` and the teams are deleted. The learner hands out and takes back slots as
 animals are born and die. `src/evolve.py` runs one species in one world; `src/viewer.py` serves the live page.
 
@@ -21,18 +22,19 @@ works."). The goal: `README.md`. Rules of work: `CLAUDE.md`.
 - Commands run from `C:\Users\Administrator\life` with `PY=/c/Users/Administrator/.venvs/life/Scripts/python`.
 - No program-made selection anywhere: no rounds, ranking, elites or restarts (`CLAUDE.md` rule 1).
 - Spec values: birth at 70 % of maximum energy, the baby gets 40 % of the parent's energy; mutation rate 0.1, scale 0.2;
-  size × (1 ± 0.2) within 0.5–2.0; learning speed × e^N(0, 0.2); old age 5,000 steps; safety limit 80 creatures; soup
-  below 10 alive in mortal stages; exam every 2,000 steps, 500 steps, up to 20 brains, pass at ≥ 1.5 twice in a row with
-  ≥ 10 alive; test world 80 food of energy 10–25, 3 candidates per step; stage starting numbers as in the spec.
-- Food never increases from one stage to the next; no stage is tuned to make an exam score reachable.
+  size × (1 ± 0.2) within 0.5–2.0; learning speed × e^N(0, 0.2); a lifespan drawn from 4,000–6,000 steps at the start;
+  safety limit 80 creatures; soup below 10 alive; exam every 2,000 steps, 500 steps, up to 20 brains, a measurement
+  only; test world 80 food of energy 10–25, 3 candidates per step; the dial's numbers as in the spec.
+- The dial only nudges a setting harder than the start and takes nudges back in reverse order; no setting is tuned to
+  make an exam score reachable.
 - The instinct species never imports TensorFlow. Same seed, same machine, same run. Zero delay. At most 2 runs at once.
 - Before any run longer than a minute, the live viewer is open in the app's browser (general-coding-standards 18).
 - Every task ends with a commit on `evolve-from-scratch`, judged by the commit judge.
 
 ## Review Focus
 
-1. The Garden must never kill: energy at zero stays at zero, and no death of any cause is counted there. Test: Task 1
-   `test_garden_never_kills`.
+1. Only a creature with low energy dies, and a well-fed one never does. Tests: Task 4d
+   `test_well_fed_elder_lives_on`, `test_hungry_elder_dies_of_old_age`, `test_energy_out_is_death_from_the_start`.
 2. A birth must not look like a loss to a learner (or it learns to avoid having babies). Test: Task 2
    `test_birth_is_not_a_negative_reward`.
 3. A dead learner's slot is reused by a baby without the dead animal's experience or optimizer state. Test: Task 2
@@ -185,7 +187,7 @@ yardstick eat whenever food is within reach.
 - [x] **Step 3: Implement** the files above.
 - [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
 - [x] **Step 5: Commit** as `feat: old age in the Garden, so evolution runs from the first step`.
-- [ ] **Step 6: The Garden run again**, with the viewer open: `$PY -m src.evolve --seed 1 --steps 30000 --species
+- [x] **Step 6: The Garden run again**, with the viewer open: `$PY -m src.evolve --seed 1 --steps 30000 --species
   learning --max-stage 0 --out runs/2-learning` · Expected: births and deaths of old age after step 5,000, the deepest
   generation rising, and an exam score not below Task 4's. Show the owner both runs side by side.
 
@@ -199,8 +201,8 @@ yardstick eat whenever food is within reach.
   `test_a_creature_dies_at_its_own_lifespan`; the old-age tests set a creature's own lifespan.
 - [x] **Step 2: Run them to see them fail** · Expected: `cannot import name 'LIFESPAN'`.
 - [x] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`. `grep -rn MAX_AGE src tests` · no output.
-- [ ] **Step 5: Commit** as `feat: every creature has its own lifespan`.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`. `grep -rn MAX_AGE src tests` · no output.
+- [x] **Step 5: Commit** as `feat: every creature has its own lifespan`.
 
 ### Task 4d: The difficulty dial (added 2026-11-23; the owner: "nudge the parameters of difficulty very delicately … Okay")
 
@@ -222,25 +224,62 @@ Replaces the five stages and the exam gate (spec, "The difficulty dial").
 - `Dial(start: Settings = START)`: `level -> int` (nudges in force), `settings -> Settings`,
   `review(deaths: int, alive: int, newcomers: int) -> str` returning `"harder"`, `"easier"` or `"hold"` and changing
   `settings` accordingly; `nudged(settings, n) -> Settings` (the n-th nudge: one setting, about 5 %, within its limits;
-  the 25th switches hunters on); `at_level(n) -> Settings` for yardstick worlds held at one level.
+  the 25th switches hunters on); `turn_to(level)` starts the dial at that many nudges (a yardstick world is held there).
 - `World(width, height, settings, species, …)`; `world.settings` replaces `world.stage`.
 - Scoreboard columns: `step, level, population, births, newcomers, generation, bites_per_creature_step, toward_food,
   flee, direction_concentration, exam_ratio, deaths_hunger, deaths_attack, deaths_age, max_food, food_energy,
   food_per_step, move_cost, step_cost, lifespan, hunters`.
 
-- [ ] **Step 1: Write the failing tests:** `test_dial`: `test_no_deaths_nudges_exactly_one_setting`,
+- [x] **Step 1: Write the failing tests:** `test_dial`: `test_no_deaths_nudges_exactly_one_setting`,
   `test_nudges_take_turns`, `test_too_many_deaths_take_the_last_nudge_back`, `test_newcomers_take_the_last_nudge_back`,
   `test_some_deaths_hold`, `test_never_easier_than_the_start`, `test_settings_stay_within_limits`,
   `test_hunters_come_as_their_own_nudge`. `test_world_rules`: `test_well_fed_elder_lives_on`,
   `test_hungry_elder_dies_of_old_age`, `test_energy_out_is_death_from_the_start`. `test_evolve`:
   `test_dial_turns_when_nobody_dies`, `test_exam_does_not_change_the_world`.
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: `No module named 'src.dial'`.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: `No module named 'src.dial'`.
+- [x] **Step 3: Implement** the files above (`src/stages.py` is renamed `src/settings.py`).
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
   `grep -rn "STAGES|should_unlock|max-stage" -E src tests` · Expected: no output.
-- [ ] **Step 5: Commit** as `feat: the difficulty dial (one delicate nudge at a time, taken back when too many die)`.
-- [ ] **Step 6: Watch it**, viewer open: `$PY -m src.evolve --seed 1 --steps 30000 --species learning --out
-  runs/3-learning` · Show the owner the level, the settings and the deaths over time.
+- [x] **Step 5: Commit** (with Task 4e, built in the same change) as `feat: the difficulty dial (one delicate nudge at
+  a time, taken back when too many die)`.
+- [ ] **Step 6: Watch it**, viewer open: `$PY -m src.evolve --seed 1 --steps 30000 --species learning` · Show the owner
+  the level, the settings, the deaths, intelligence and the average energy over time.
+
+### Task 4e: A clear intelligence gauge, Live and History, average energy (added 2026-11-23, the owner's requests)
+
+The owner: "inteligatesce should be rewards / waste or something similar.. its not super clear how to mesure it" · "at
+the end who ever survices is smart in nature" · "if not it should show nothing running" · "only show me charts when its
+running" · "and lets save history runs" · "add chart of average energy per creature?"
+
+**Files:** Modify: `src/creature.py`, `src/world.py` (count energy earned and energy spent), `src/exam.py`
+(`ExamResult(intelligence, wanderers)`), `src/scoreboard.py`, `src/evolve.py` (a dated folder and a `run.json` per
+run), `src/check_proof.py`, `src/compare.py`, `src/viewer.py`, `src/viewer.html`, their tests.
+
+**Interfaces:**
+- `World.energy_earned` (eating and hunting) and `World.energy_spent` (moving, living, eating at nothing, attacking).
+- `ExamResult(intelligence: Optional[float], wanderers: Optional[float])`: energy earned ÷ energy spent in the test
+  world, the examined creatures' and the random wanderers' in the identical copy.
+- Scoreboard columns: `step, level, population, energy, births, newcomers, generation, bites_per_creature_step,
+  toward_food, flee, direction_concentration, efficiency, intelligence, wanderers, deaths_hunger, deaths_attack,
+  deaths_age, max_food, food_energy, food_per_step, move_cost, step_cost, lifespan, hunters`. `energy` is the average,
+  over the window, of each creature's energy as a share of its maximum; `efficiency` is the living world's energy
+  earned ÷ energy spent in the window.
+- A run's folder is `runs/<YYYYMMDD-HHMMSS>-<seed>-<kind>` with `run.json` `{seed, kind, steps, started}`.
+- `viewer.runs(folder)` gives each run a `status`: `running` (no end yet, scoreboard written in the last 10 minutes),
+  `finished`, or `stopped`. The page has two views: **Live** (charts of the runs in progress, or the words "Nothing is
+  running") and **History** (every past run; a click shows its charts).
+
+- [x] **Step 1: Write the failing tests:** `test_exam`: `test_intelligence_is_energy_earned_over_spent`;
+  `test_world_rules`: `test_world_counts_energy_earned_and_spent`; `test_scoreboard`:
+  `test_row_reports_efficiency_and_average_energy`; `test_viewer`: `test_a_run_is_running_only_while_it_keeps_writing`,
+  `test_server_answers_page_and_data` (the page says "Nothing is running"); `test_evolve`: `test_run_writes_its_record`.
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_scoreboard tests.test_viewer` · Expected:
+  failures naming `energy` and "Nothing is running".
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+  `grep -rn "exam_ratio" src tests` · Expected: no output.
+- [x] **Step 5: Open it** in the app's browser on `http://localhost:8765`: with no run, Live says "Nothing is
+  running" and History lists the past runs; with a run, Live shows its charts.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
@@ -268,22 +307,24 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
   `mutate_size`, `active_neurons` and the new columns.
 - [ ] **Step 3: Implement** the files above.
 - [ ] **Step 4: Run them to see them pass** · `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 5: The Garden check again** · Task 4 Step 1's run, with the viewer open · Expected: the exam score of the
-  last 3 exams is not below Task 4's. If it is, stop and report both sets of numbers.
+- [ ] **Step 5: The dial run again** · Task 4d Step 6's run, with the viewer open · Expected: intelligence over the
+  last 3 exams and the level reached are not below Task 4d's. If either is, stop and report both sets of numbers.
 - [ ] **Step 6: Commit** as `feat: the brain's size evolves`; `git show --stat HEAD` lists exactly this task's files.
-  Show the owner the Garden check's numbers beside Task 4's.
+  Show the owner the run's numbers beside Task 4d's.
 
 ### Task 6: Tune the dial by measurement
 
-**Files:** Modify: `src/stages.py` (values and their measurements in comments), `tests/test_stages.py` (the tuned values).
+**Files:** Modify: `src/settings.py`, `src/dial.py` (values and their measurements in comments), `tests/test_settings.py`,
+`tests/test_dial.py` (the tuned values).
 
-- [ ] **Step 1: Measure** instinct animals at each mortal stage: `$PY -m src.evolve --seed 1 --steps 20000 --species
-  instinct --stage N --max-stage N` for N = 1…4 · Expected after tuning: the population settles between 30 and 60, births
-  happen, deaths by old age appear, and the soup stops being needed at stage 1.
-- [ ] **Step 2:** Adjust food per step, maximum food and the old-age limit until Step 1 holds, keeping the two rules
-  (food never increases; nothing is tuned to an exam score). Every value tried and its result go in the report.
+- [ ] **Step 1: Measure** the dial on learning and instinct animals: `$PY -m src.evolve --seed 1 --steps 30000 --species
+  learning` and `… --species instinct`, viewer open · Read from the scoreboard: how often the dial turned harder, how
+  often it took a nudge back, and how many died in the window after each nudge.
+- [ ] **Step 2:** Adjust the nudge size, the window, the "too many died" share and the starting settings only where
+  Step 1 shows a problem (a nudge that kills more than a quarter at once, or a dial that never turns). Nothing is tuned
+  to an exam score. Every value tried and its result go in the report.
 - [ ] **Step 3:** `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 4: Commit** the 2 files as `tune: stage values, measured`. Show the owner the settled populations.
+- [ ] **Step 4: Commit** as `tune: the dial's numbers, measured`. Show the owner what was measured.
 
 ### Task 7: Let it run, and judge it
 
@@ -301,9 +342,12 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
 1. **Every test passes:** `$PY -m unittest discover tests` → `OK`, with the count.
 2. **No program-made selection is left:** `grep -rn "rounds\|next_generation\|--team" src tests` → no output.
 3. **The Garden check ran first** and its numbers were shown to the owner (Task 4), before any long run.
-4. **Food never increases stage to stage:** `test_food_never_increases` passes on the tuned values.
-5. **Every long run was watched live:** the viewer was open in the app's browser before the Task 4, Task 5 and Task 7 runs.
-6. **Brain size evolves:** `test_new_neuron_is_silent_at_birth` and `test_new_layer_is_silent_at_birth` pass, and Task 5 Step 5 showed the Garden exam score not below Task 4's.
+4. **The dial is delicate:** `tests/test_dial.py` passes (one setting per nudge, the last nudge taken back when too many
+   die, never easier than the start), and `grep -rn "STAGES|should_unlock|max-stage|exam_ratio" -E src tests` → no output.
+5. **Every long run was watched live:** the viewer was open in the app's browser before the Task 4, Task 4d, Task 5 and
+   Task 7 runs; with no run the page says "Nothing is running", and past runs are in History.
+6. **Brain size evolves:** `test_new_neuron_is_silent_at_birth` and `test_new_layer_is_silent_at_birth` pass, and Task 5
+   Step 5 showed intelligence and the level reached not below Task 4d's.
 7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,
    first, with its numbers.
-8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 5 and 6.
+8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 5 and 6.

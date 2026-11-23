@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-from .stages import EAT_MISS_COST, HUNTER_SHARE
+from .settings import EAT_MISS_COST, HUNTER_SHARE
 
 if TYPE_CHECKING:
     from .brain import Brain
@@ -76,12 +76,14 @@ class Creature:
             self._attack(param, world)
         else:
             raise ValueError(f"unknown action {kind!r}")
-        self.energy = min(self.energy - world.stage.step_cost, self.max_energy)
+        self.energy = min(self.energy - world.settings.step_cost, self.max_energy)
+        world.energy_spent += world.settings.step_cost
 
     def _eat(self, food: Optional[Food], world: World) -> None:
         """The creature chose to eat: one bite of `food` if it is still there and within reach, otherwise a miss."""
         if food is None or food not in world.foods or food.energy <= 0 or not self.can_reach(food):
             self.energy -= EAT_MISS_COST
+            world.energy_spent += EAT_MISS_COST
             self.last_action = "EAT_MISS"
             return
         amount = min(1.0, food.energy)
@@ -89,6 +91,7 @@ class Creature:
         self.energy += amount
         self.food_eaten += amount
         world.total_bites += 1
+        world.energy_earned += amount
         if food.energy <= 0:
             world.foods.remove(food)
         self.last_action = "EAT"
@@ -101,14 +104,16 @@ class Creature:
             distance = self.velocity
         self.x = min(max(self.x + dx, self.radius), world.width - self.radius)
         self.y = min(max(self.y + dy, self.radius), world.height - self.radius)
-        self.energy -= distance * world.stage.move_cost
+        self.energy -= distance * world.settings.move_cost
+        world.energy_spent += distance * world.settings.move_cost
         self.last_action = "MOVE"
 
     def _attack(self, target: Creature, world: World) -> None:
-        if not world.stage.attacks:
+        if not world.settings.attacks:
             self.last_action = "ATTACK_OFF"
             return
         self.energy -= self.attack_cost
+        world.energy_spent += self.attack_cost
         attack_range = (self.radius + target.radius) * self.ATTACK_RANGE_FACTOR
         if (target not in world.creatures or target.energy <= 0 or is_family(self, target)
                 or math.hypot(target.x - self.x, target.y - self.y) > attack_range):
@@ -117,6 +122,7 @@ class Creature:
         taken = min(target.energy, self.attack_damage)
         target.energy -= taken
         self.energy += HUNTER_SHARE * taken
+        world.energy_earned += HUNTER_SHARE * taken
         self.last_action = "ATTACK"
         target.last_action = "HIT_BY_ATTACK"
         if target.energy <= 0:

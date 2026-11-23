@@ -1,13 +1,14 @@
 import math
 import unittest
+from dataclasses import replace
 from unittest import mock
 
 import numpy as np
 
 from src.food import Food
 from src.learner import LEARNING_RATE, Learner, NetWeights
-from src.stages import BABY_SHARE, EAT_MISS_COST, LIFESPAN, MAX_CREATURES, STAGES
-from tests.helpers import GARDEN_NO_FOOD, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
+from src.settings import BABY_SHARE, EAT_MISS_COST, MAX_CREATURES, START
+from tests.helpers import NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
 from tests.test_learner import live, same
 
 STAY = [0, 0, -1, -1]
@@ -59,6 +60,18 @@ class TestEating(unittest.TestCase):
         self.assertAlmostEqual(c.food_eaten, 1.0)
         self.assertEqual((w.total_bites, c.last_action), (1, "EAT"))
 
+    def test_world_counts_energy_earned_and_spent(self):
+        w = make_world()
+        add(w, 10, 10, policy="brain", brain=fixed_brain(EAT))
+        add(w, 30, 20, policy="brain", brain=fixed_brain(EAT))  # eats at nothing
+        w.foods.append(food(10, 10))
+        w.step()
+        self.assertAlmostEqual(w.energy_earned, 1.0)
+        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 2 * NO_FOOD.step_cost)
+        mover = add(w, 20, 5, size=1.0)
+        mover.apply_action(("MOVE", (3.0, 4.0)), w)
+        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * NO_FOOD.step_cost + 1.0 * NO_FOOD.move_cost)
+
     def test_no_bite_without_choosing_to_eat(self):
         w = make_world()
         c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
@@ -102,6 +115,8 @@ class TestHunting(unittest.TestCase):
         hunter.apply_action(("ATTACK", prey), w)
         self.assertAlmostEqual(prey.energy, 40.0)
         self.assertAlmostEqual(hunter.energy, 100.0 + 0.8 * 10.0 - 2.0 - NO_FOOD_ATTACKS.step_cost)
+        self.assertAlmostEqual(w.energy_earned, 0.8 * 10.0)
+        self.assertAlmostEqual(w.energy_spent, 2.0 + NO_FOOD_ATTACKS.step_cost)
 
     def test_kill_leaves_corpse_and_counts_attack_death(self):
         w = make_world(NO_FOOD_ATTACKS)
@@ -133,43 +148,62 @@ class TestHunting(unittest.TestCase):
 
 
 class TestLifeAndDeath(unittest.TestCase):
-    def test_garden_never_starves(self):
-        w = make_world(GARDEN_NO_FOOD)
+    def test_energy_out_is_death_from_the_start(self):
+        w = make_world(START)
         crowd(w)
         c = add(w, 10, 10, energy=0.01, policy="brain", brain=fixed_brain(STAY))
-        for _ in range(50):
-            w.step()
-        self.assertIn(c, w.creatures)
-        self.assertEqual(c.energy, 0.0)
-        self.assertEqual(sum(w.deaths.values()), 0)
+        w.step()
+        self.assertNotIn(c, w.creatures)
+        self.assertEqual((w.deaths["hunger"], w.deaths["age"]), (1, 0))
 
-    def test_old_age_kills_in_the_garden(self):
-        w = make_world(GARDEN_NO_FOOD)
+    def test_hungry_elder_dies_of_old_age(self):
+        w = make_world()
         crowd(w)
-        c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
+        c = add(w, 10, 10, energy=29.0, policy="brain", brain=fixed_brain(STAY))  # below 30 % of its maximum
         c.lifespan, c.age = 100, 99
         w.step()
         self.assertNotIn(c, w.creatures)
         self.assertEqual((w.deaths["age"], w.deaths["hunger"]), (1, 0))
 
+    def test_well_fed_elder_lives_on(self):
+        w = make_world()
+        crowd(w)
+        c = add(w, 10, 10, energy=31.0, policy="brain", brain=fixed_brain(STAY))  # above 30 % of its maximum
+        c.lifespan, c.age = 100, 99
+        for _ in range(10):
+            w.step()
+        self.assertIn(c, w.creatures)
+        self.assertEqual(sum(w.deaths.values()), 0)
+        for _ in range(20):  # living costs energy: once it is poorly fed, old age takes it
+            w.step()
+        self.assertNotIn(c, w.creatures)
+        self.assertEqual((w.deaths["age"], w.deaths["hunger"]), (1, 0))
+
     def test_every_creature_has_its_own_lifespan(self):
-        w = make_world(STAGES[0], species="random")
+        w = make_world(START, species="random")
         populate(w, 30)
         spans = [c.lifespan for c in w.creatures]
-        self.assertTrue(all(LIFESPAN[0] <= span <= LIFESPAN[1] for span in spans))
+        shortest, longest = START.lifespan
+        self.assertTrue(all(shortest <= span <= longest for span in spans))
         self.assertGreater(len(set(spans)), 20)
         for creature in w.creatures:
             creature.energy = 90.0
         w.step()
         babies = [c for c in w.creatures if c.generation == 1]
         self.assertTrue(babies)
-        self.assertTrue(all(LIFESPAN[0] <= baby.lifespan <= LIFESPAN[1] for baby in babies))
+        self.assertTrue(all(shortest <= baby.lifespan <= longest for baby in babies))
+
+    def test_lifespans_follow_the_settings_in_force(self):
+        w = make_world(START, species="random")
+        w.set_settings(replace(START, lifespan=(100, 200)), 1)
+        populate(w, 30)
+        self.assertTrue(all(100 <= c.lifespan <= 200 for c in w.creatures))
 
     def test_a_creature_dies_at_its_own_lifespan(self):
-        w = make_world(GARDEN_NO_FOOD)
+        w = make_world()
         crowd(w)
-        young = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
-        old = add(w, 20, 10, policy="brain", brain=fixed_brain(STAY))
+        young = add(w, 10, 10, energy=20.0, policy="brain", brain=fixed_brain(STAY))
+        old = add(w, 20, 10, energy=20.0, policy="brain", brain=fixed_brain(STAY))
         young.lifespan, old.lifespan = 200, 50
         young.age = old.age = 49
         w.step()
@@ -177,37 +211,30 @@ class TestLifeAndDeath(unittest.TestCase):
         self.assertNotIn(old, w.creatures)
 
     def test_a_death_of_old_age_makes_room_for_a_baby(self):
-        w = make_world(GARDEN_NO_FOOD, species="random")
+        w = make_world(species="random")
         for i in range(MAX_CREATURES):
             add(w, 1 + (i % 10) * 4.5, 1 + (i // 10) * 3.4, energy=90.0)
-        w.creatures[0].lifespan, w.creatures[0].age = 100, 99
+        elder = w.creatures[0]
+        elder.lifespan, elder.age, elder.energy = 100, 99, 20.0
         w.step()
         self.assertEqual((len(w.creatures), w.deaths["age"], w.births), (MAX_CREATURES, 1, 1))
 
-    def test_hunger_kills_in_mortal_stage(self):
-        w = make_world(NO_FOOD)
-        c = add(w, 10, 10, energy=0.01, policy="brain", brain=fixed_brain(STAY))
-        w.step()
-        self.assertNotIn(c, w.creatures)
-        self.assertEqual(w.deaths["hunger"], 1)
-
-    def test_old_age_kills_in_mortal_stage(self):
-        w = make_world(NO_FOOD)
-        c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
-        c.lifespan, c.age = 100, 99
-        w.step()
-        self.assertNotIn(c, w.creatures)
-        self.assertEqual(w.deaths["age"], 1)
+    def test_food_per_step_can_be_a_fraction(self):
+        w = make_world(replace(START, food_per_step=0.4, max_food=10 ** 6), evolving=False)
+        with mock.patch.object(type(w), "_fits", return_value=True):  # count every candidate, crowded or not
+            for _ in range(2000):
+                w.spawn_food()
+        self.assertTrue(700 <= len(w.foods) <= 900)  # about 0.4 a step
 
     def test_birth_at_seventy_percent(self):
-        w = make_world(GARDEN_NO_FOOD)
+        w = make_world()
         crowd(w)
         parent_brain = fixed_brain(STAY)
         parent = add(w, 10, 10, size=1.0, energy=80.0, policy="brain", brain=parent_brain)
         w.step()
         self.assertEqual(len(w.creatures), 12)
         baby = w.creatures[-1]
-        before_birth = 80.0 - GARDEN_NO_FOOD.step_cost
+        before_birth = 80.0 - NO_FOOD.step_cost
         self.assertAlmostEqual(baby.energy, BABY_SHARE * before_birth)
         self.assertAlmostEqual(parent.energy, (1 - BABY_SHARE) * before_birth)
         self.assertEqual((baby.parent_id, baby.generation, baby.policy), (parent.id, 1, "brain"))
@@ -218,14 +245,14 @@ class TestLifeAndDeath(unittest.TestCase):
         self.assertEqual(w.births, 1)
 
     def test_no_birth_below_seventy_percent(self):
-        w = make_world(GARDEN_NO_FOOD)
+        w = make_world()
         crowd(w)
         add(w, 10, 10, size=1.0, energy=60.0, policy="brain", brain=fixed_brain(STAY))
         w.step()
         self.assertEqual((len(w.creatures), w.births), (11, 0))
 
     def test_births_pause_at_limit(self):
-        w = make_world(GARDEN_NO_FOOD, species="random")
+        w = make_world(species="random")
         for i in range(MAX_CREATURES):
             add(w, 1 + (i % 10) * 4.5, 1 + (i // 10) * 3.4, energy=90.0)
         w.step()
@@ -242,13 +269,6 @@ class TestLifeAndDeath(unittest.TestCase):
         self.assertEqual((len(w.creatures), w.newcomers), (4, 1))
         self.assertEqual(w.creatures[-1].policy, "brain")
         self.assertIsNotNone(w.creatures[-1].brain)
-
-    def test_soup_also_in_the_garden(self):
-        w = make_world(GARDEN_NO_FOOD)
-        for i in range(3):
-            add(w, 10 + i * 5, 10, policy="brain", brain=fixed_brain(STAY))
-        w.step()
-        self.assertEqual((len(w.creatures), w.newcomers), (4, 1))
 
     def test_newcomer_is_of_the_world_species(self):
         self.assertEqual(make_world(species="random").add_newcomer().policy, "random")
@@ -267,7 +287,7 @@ class TestLifeAndDeath(unittest.TestCase):
         self.assertEqual((w.births, w.newcomers, sum(w.deaths.values())), (0, 0, 0))
 
     def test_same_seed_same_world(self):
-        worlds = [make_world(STAGES[1], seed=5), make_world(STAGES[1], seed=5)]
+        worlds = [make_world(START, seed=5), make_world(START, seed=5)]
         for w in worlds:
             populate(w)
             for _ in range(200):
@@ -276,7 +296,7 @@ class TestLifeAndDeath(unittest.TestCase):
         self.assertEqual(positions[0], positions[1])
 
     def test_brain_creatures_never_call_rules(self):
-        w = make_world(STAGES[1], seed=2)
+        w = make_world(START, seed=2)
         populate(w)
         with mock.patch("src.policies.rules_action", side_effect=AssertionError("rules called for a brain")):
             for _ in range(500):
@@ -284,9 +304,9 @@ class TestLifeAndDeath(unittest.TestCase):
 
 
 class TestLearnersInWorld(unittest.TestCase):
-    def world(self, stage=NO_FOOD, inherit="learned"):
+    def world(self, inherit="learned"):
         learner = Learner(MAX_CREATURES, 0)
-        return make_world(stage, learner=learner, species="learner", inherit=inherit), learner
+        return make_world(learner=learner, species="learner", inherit=inherit), learner
 
     def born(self, w, learner, x, y, energy=50.0):
         slot = learner.allocate(NetWeights.random(w.np_rng), LEARNING_RATE)
@@ -325,7 +345,7 @@ class TestLearnersInWorld(unittest.TestCase):
         self.assertEqual(learner.allocate(NetWeights.random(w.np_rng), LEARNING_RATE), dying.slot)
 
     def parent_that_has_learned(self, inherit):
-        w, learner = self.world(GARDEN_NO_FOOD, inherit)
+        w, learner = self.world(inherit)
         crowd(w)
         parent = self.born(w, learner, 10, 10, energy=80.0)
         live(learner, parent.slot, 65)
@@ -352,7 +372,7 @@ class TestLearnersInWorld(unittest.TestCase):
         self.assertLess(np.mean(genes.w1 == learned.w1), 0.3)
 
     def test_birth_is_not_a_negative_reward(self):
-        w, learner = self.world(GARDEN_NO_FOOD)
+        w, learner = self.world()
         crowd(w)
         parent = self.born(w, learner, 10, 10, energy=80.0)
         with mock.patch.object(learner, "record", wraps=learner.record) as record:
@@ -361,16 +381,6 @@ class TestLearnersInWorld(unittest.TestCase):
         self.assertLess(parent.energy, 55.0)  # it gave its baby 40 % of its energy
         _, reward, _ = record.call_args_list[0].args
         self.assertGreater(reward, -2.0)  # but its reward only shows the cost of the step itself
-
-    def test_garden_learner_keeps_learning_at_zero_energy(self):
-        w, learner = self.world(GARDEN_NO_FOOD)
-        crowd(w)
-        empty = self.born(w, learner, 10, 10, energy=0.0)
-        with mock.patch.object(learner, "record", wraps=learner.record) as record:
-            for _ in range(3):
-                w.step()
-        self.assertIn(empty, w.creatures)
-        self.assertEqual([(call.args[0], call.args[2]) for call in record.call_args_list], [(empty.slot, False)] * 3)
 
 
 if __name__ == "__main__":

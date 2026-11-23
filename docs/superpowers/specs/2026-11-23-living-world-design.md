@@ -106,23 +106,42 @@ is supposed to drive intelligence. Okay."
 
 ### The intelligence exam
 
-Every 2,000 steps, up to 20 living creatures' brains (learning paused) and the same number of random wanderers each
-spend 500 steps in identical copies of a **fixed test world that never changes** (80 food pieces of energy 10–25; there,
-random wanderers score 0.24 bites per step, measured 2026-11-21 with `walker_score`). The score is the brains' bites ÷
-the wanderers'. The exam only measures; it does not change the world.
+The owner: "At the end, whoever survives is smart in nature." · "Intelligence should be rewards / waste or something
+similar."
+
+Two gauges, both on the live page:
+1. **The difficulty level the animals survive at** (the dial, above). This is nature's own measure: the level only
+   rises while nobody dies.
+2. **Intelligence = energy earned ÷ energy spent.** Earned: by eating and hunting. Spent: on moving, on living, on
+   eating at nothing, on attacking. Above 1 a creature gains more than it burns.
+   - **In the exam:** every 2,000 steps, up to 20 living creatures' brains (learning paused) and the same number of
+     random wanderers each spend 500 steps in identical copies of a **fixed test world that never changes** (80 food
+     pieces of energy 10–25). The creatures' number is `intelligence`; the wanderers' is the yardstick beside it.
+     Because the test world never changes, exams compare across time.
+   - **In the living world:** the same division over each 1,000-step window (`efficiency`). It moves with the dial,
+     because a harder world pays less.
+
+The exam only measures; it does not change the world.
 
 ### Two kinds of animal, for comparison
 
 - **Learning animals** (the goal): PPO during life, learned brain inherited.
-- **Instinct animals** (a yardstick): brains never learn; babies inherit the brain with mutations. Both kinds start in
-  the Garden (with old age there, evolution works in the Garden too).
+- **Instinct animals** (a yardstick): brains never learn; babies inherit the brain with mutations. Both kinds start at
+  the dial's easy start.
 
 Each runs in its own world: `python -m src.evolve --seed N --steps S --species learning|instinct [--inherit learned|inborn]`.
 
 ### Watching it live
 
-`python -m src.viewer` serves a page that redraws every 2 seconds: stage, population, births, generations, exam score,
-bites, steering to food, and each run's progress. It is opened in the app's browser before a run starts.
+`python -m src.viewer` serves a page that redraws every 2 seconds. It is opened in the app's browser before a run
+starts. The owner: "If not it should show nothing running." · "Only show me charts when it's running." · "And let's
+save history runs." · "Add chart of average energy per creature?"
+
+- **Live:** the charts of the runs in progress. With no run in progress it shows no chart, only "Nothing is running".
+- **History:** every past run is kept (each run writes its own dated folder); a click on one shows its charts.
+- **The charts:** difficulty level, intelligence (with the random wanderers beside it), energy earned ÷ spent in the
+  living world, average energy per creature (as a share of its maximum, with the 70 % "has a baby" and 30 % "the old
+  die below this" lines), deaths, creatures alive, steering to food, generations, bites.
 
 ## The one-minute arithmetic (done before building this time)
 
@@ -135,21 +154,24 @@ bites, steering to food, and each run's progress. It is opened in the app's brow
 
 ## The simple check that could prove this wrong
 
-Run learning animals in the Garden for 30,000 steps. If their exam score does not rise, creatures cannot learn from
-their own lives in this world, and nothing after the Garden can work. That check comes before anything else is built on
-top.
+Run learning animals in the easiest world for 30,000 steps. If their exam score does not rise, creatures cannot learn
+from their own lives in this world, and nothing after it can work. That check came before anything else was built on
+top (run 2026-11-23, when the easiest world was the "Garden" stage: the score rose from 0.55 to 1.22 times the
+wanderers').
 
 ## How we know it works
 
 Learning animals, seeds 1–5:
-1. **They learn in the Garden:** every seed passes stage 0.
+1. **Survival got harder:** every seed ends at dial level 10 or more.
 2. **Life sustains itself:** no newcomer in the last 20,000 steps.
 3. **Generations follow each other:** the deepest generation alive at the end is at least 20.
-4. **Smarter from generation to generation:** the exam score over the last 5 exams is at least 2 and above the first 5.
+4. **Smarter from generation to generation:** intelligence over the last 5 exams is at least twice the random
+   wanderers' and above the first 5 exams'.
 5. **They steer to food:** steering score over the last 10,000 steps at least 0.7.
-6. **They flee hunters:** at least 4 of 5 seeds reach the Hunters stage, fleeing at least 70 % of the time there.
+6. **They flee hunters:** in at least 4 of 5 seeds the dial switches hunters on, and creatures flee at least 70 % of
+   the time while hunters exist.
 7. **Brain size evolves:** the average number of active neurons at the end differs from the start in every seed, and
-   adding the size machinery does not lower the Garden check's exam score.
+   adding the size machinery does not lower intelligence or the level reached.
 Then two comparisons: learning animals against instinct animals, and learned against strict-genes inheritance.
 The thresholds are Claude's call, not measured. A failed criterion is reported as failed, with its numbers.
 
@@ -161,8 +183,8 @@ checker, the random-wanderer and rules yardsticks.
 
 ## Removed
 
-Rounds (`src/rounds.py`), the three teams, the `round` column, the eat decision and its miss cost, levels tuned to the
-exam.
+Rounds (`src/rounds.py`), the three teams, the `round` column, levels tuned to the exam, the five stages and the exam
+as a gate (replaced by the dial), the "bites compared with wanderers" score (replaced by energy earned ÷ spent).
 
 ## Constraints
 

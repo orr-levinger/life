@@ -25,10 +25,12 @@ class TestVisualization(unittest.TestCase):
         viz.render(w)
         self.assertGreaterEqual(len(viz.ax.patches), 2)
 
-    def test_corner_shows_stage(self):
+    def test_corner_shows_level(self):
         viz = Visualizer(50, 30)
-        viz.render(make_world())
-        self.assertTrue(any("Stage: 1 Mortal" in t.get_text() for t in viz.ax.texts))
+        world = make_world()
+        world.set_settings(world.settings, 3)
+        viz.render(world)
+        self.assertTrue(any("Level: 3" in t.get_text() for t in viz.ax.texts))
 
 
 if __name__ == "__main__":

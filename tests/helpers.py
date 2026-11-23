@@ -7,18 +7,17 @@ import numpy as np
 
 from src.brain import Brain
 from src.creature import Creature
-from src.stages import STAGES, Stage
+from src.settings import START, Settings
 from src.world import World
 
-GARDEN_NO_FOOD = replace(STAGES[0], max_food=0, food_per_step=0)
-NO_FOOD = replace(STAGES[1], max_food=0, food_per_step=0)  # a mortal stage with nothing to eat
-NO_FOOD_ATTACKS = replace(STAGES[3], max_food=0, food_per_step=0)
+NO_FOOD = replace(START, max_food=0, food_per_step=0)  # the easy start with nothing to eat
+NO_FOOD_ATTACKS = replace(NO_FOOD, attacks=True)
 
 
-def make_world(stage: Stage = NO_FOOD, seed: int = 0, evolving: bool = True, learner=None, species: str = "brain",
-               inherit: str = "learned") -> World:
-    return World(50, 30, stage, species, random.Random(seed), np.random.default_rng(seed), random.Random(seed + 1000),
-                 evolving, learner, inherit)
+def make_world(settings: Settings = NO_FOOD, seed: int = 0, evolving: bool = True, learner=None,
+               species: str = "brain", inherit: str = "learned") -> World:
+    return World(50, 30, settings, species, random.Random(seed), np.random.default_rng(seed),
+                 random.Random(seed + 1000), evolving, learner, inherit)
 
 
 def fixed_brain(outputs: Sequence[float]) -> Brain:

@@ -58,7 +58,7 @@ class Visualizer:
          - Creatures as circles: purple for brains, green for baselines.
          - Food as red circles with radius proportional to its energy.
          - Overlay text: energy above, food eaten inside, generation below.
-         - Corner: step, creatures, most food eaten, stage.
+         - Corner: step, creatures, most food eaten, the dial's level.
         """
         # Clear existing artists:
         self.ax.cla()
@@ -188,7 +188,7 @@ class Visualizer:
                     alpha=0.8
                 )
 
-        # 3) Global statistics: step, creatures, most food eaten by a living creature, stage
+        # 3) Global statistics: step, creatures, most food eaten by a living creature, the dial's level
         total_creatures = len(world.creatures)
         max_eaten = max((c.food_eaten for c in world.creatures), default=0.0)
 
@@ -197,7 +197,7 @@ class Visualizer:
             0.5,                            # x-coordinate (slightly right of left edge)
             self.height - 0.5,              # y-coordinate (slightly below top edge)
             f"Step: {world.step_count}   Creatures: {total_creatures}   MaxScore: {max_eaten:.0f}"
-            f"   Stage: {world.stage.number} {world.stage.name}",
+            f"   Level: {world.level}",
             color='white',
             fontsize=10,
             ha='left',

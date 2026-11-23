@@ -1,44 +1,49 @@
-"""The live viewer: a page that redraws every 2 seconds from the runs' scoreboards. Read-only.
+"""The viewer: a page that redraws every 2 seconds from the runs' scoreboards. Read-only.
 
     python -m src.viewer [--runs runs] [--port 8765]        then open http://localhost:8765
 
+Live shows the runs in progress and says plainly when nothing is running; History keeps every past run.
 Open it before a long run starts, so the run is watched as graphs while it goes.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import re
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 from .scoreboard import ROW_KEYS, read_rows
-from .stages import STAGES
 
 PAGE = Path(__file__).with_name("viewer.html")
-RUN_NAME = re.compile(r"^(\d+)-(.+)$")  # <seed>-<kind>, as src.evolve names its output folders
+RUNNING_WITHIN = 600.0  # seconds: a run with no end that wrote its scoreboard this recently is still running
 
 
 def runs(folder: Path) -> List[Dict]:
-    """Every run under `folder` whose scoreboard has today's columns: its name, seed, kind, rows as numbers (an empty
-    cell is None), and the seconds it took once it has finished."""
+    """Every run under `folder`, newest first: its record (seed, kind, steps asked for, when it started), its rows as
+    numbers (an empty cell is None), the seconds it took once finished, and its status: "running" while it keeps
+    writing, "finished" once it has ended, "stopped" when it ended without finishing."""
     found = []
-    for run in sorted(folder.iterdir()):
-        named = RUN_NAME.match(run.name)
-        scoreboard = run / "scoreboard.csv"
-        if not named or not scoreboard.exists():
+    for run in folder.iterdir():
+        scoreboard, record, timing = run / "scoreboard.csv", run / "run.json", run / "time.txt"
+        if not scoreboard.exists() or not record.exists():
             continue
         rows = read_rows(scoreboard)
         if rows and tuple(rows[0]) != ROW_KEYS:
             continue  # a scoreboard of an older design
-        timing = run / "time.txt"
+        if timing.exists():
+            status = "finished"
+        elif time.time() - scoreboard.stat().st_mtime <= RUNNING_WITHIN:
+            status = "running"
+        else:
+            status = "stopped"
         found.append({
-            "name": run.name, "seed": int(named.group(1)), "kind": named.group(2),
+            **json.loads(record.read_text()), "name": run.name, "status": status,
             "rows": [{key: _number(row[key]) for key in ROW_KEYS} for row in rows],
             "seconds": float(timing.read_text()) if timing.exists() else None,
         })
-    return found
+    return sorted(found, key=lambda run: run["started"], reverse=True)
 
 
 def _number(cell: str) -> Optional[float]:
@@ -53,8 +58,6 @@ def make_server(folder: Path, port: int) -> ThreadingHTTPServer:
         def do_GET(self) -> None:
             if self.path.startswith("/data"):
                 body, kind = json.dumps(runs(folder)).encode(), "application/json"
-            elif self.path.startswith("/meta"):
-                body, kind = json.dumps({"stages": [s.name for s in STAGES]}).encode(), "application/json"
             else:
                 body, kind = PAGE.read_bytes(), "text/html; charset=utf-8"
             self.send_response(200)

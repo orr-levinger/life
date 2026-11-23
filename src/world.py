@@ -1,6 +1,6 @@
 """The living world: food, creatures, and one step of time. Nothing here ranks creatures or picks parents:
-a creature does what its brain chooses, has a baby when it has the energy, and dies of old age, or, past the
-Garden, of hunger or a hunter."""
+a creature does what its brain chooses, has a baby when it has the energy, and dies only with low energy: when its
+energy runs out (or a hunter takes it), or when it is past its lifespan and poorly fed."""
 from __future__ import annotations
 
 import math
@@ -15,8 +15,8 @@ from .creature import Creature
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, sense_all
-from .stages import (BABY_SHARE, BIRTH_AT, LIFESPAN, LR_MUTATION, MAX_CREATURES, MUTATION_RATE, MUTATION_SCALE,
-                     SIZE_MUTATION, SOUP_MIN, START_ENERGY, Stage)
+from .settings import (BABY_SHARE, BIRTH_AT, LOW_ENERGY, LR_MUTATION, MAX_CREATURES, MUTATION_RATE, MUTATION_SCALE,
+                       SIZE_MUTATION, SOUP_MIN, START_ENERGY, Settings)
 
 if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to it
     from .learner import Learner
@@ -30,7 +30,7 @@ class World:
     FOOD_RADIUS_MARGIN = 0.4  # a new food's largest radius (energy 40 × 0.01): keeps candidates inside the world
     PREFILL_STEPS = 100  # food spawn passes before a fresh world starts, so it doesn't begin empty
 
-    def __init__(self, width: int, height: int, stage: Stage, species: str, rng: random.Random,
+    def __init__(self, width: int, height: int, settings: Settings, species: str, rng: random.Random,
                  np_rng: np.random.Generator, food_rng: random.Random, evolving: bool = True,
                  learner: Optional[Learner] = None, inherit: str = "learned") -> None:
         """`species` is what this world's newcomers are. `evolving=False` is an exam world: nobody is born, dies,
@@ -42,7 +42,8 @@ class World:
             raise ValueError(f"inherit must be one of {INHERIT}, got {inherit!r}")
         self.width = width
         self.height = height
-        self.stage = stage
+        self.settings = settings  # how hard survival is right now; the dial changes it
+        self.level = 0  # how many of the dial's nudges are in force
         self.species = species
         self.rng = rng  # decisions, placement and size mutation
         self.np_rng = np_rng  # brains and their mutation
@@ -58,6 +59,8 @@ class World:
         self.births = 0
         self.newcomers = 0
         self.total_bites = 0
+        self.energy_earned = 0.0  # by eating and hunting
+        self.energy_spent = 0.0  # on moving, living, eating at nothing and attacking
         self.creature_steps = 0
         self.dead_this_step: List[Creature] = []
         self._next_id = 1
@@ -70,8 +73,9 @@ class World:
     def add_creature(self, creature: Creature) -> None:
         self.creatures.append(creature)
 
-    def set_stage(self, stage: Stage) -> None:
-        self.stage = stage
+    def set_settings(self, settings: Settings, level: int) -> None:
+        self.settings = settings
+        self.level = level
 
     def kill(self, creature: Creature, cause: str) -> None:
         self.creatures.remove(creature)
@@ -86,7 +90,7 @@ class World:
         brain = Brain.random(self.np_rng) if self.species == "brain" else None
         slot = self.learner.newcomer(self.np_rng) if self.species == "learner" else None
         newcomer = Creature(self.next_id(), x, y, size, self.rng.uniform(*START_ENERGY), self.species, brain, slot=slot)
-        newcomer.lifespan = self.rng.randint(*LIFESPAN)
+        newcomer.lifespan = round(self.rng.uniform(*self.settings.lifespan))
         self.creatures.append(newcomer)
         self.newcomers += 1
         return newcomer
@@ -94,11 +98,13 @@ class World:
     def spawn_food(self) -> None:
         """The same number of candidates every step, so two worlds with the same food seed draw the same food."""
         margin = self.FOOD_RADIUS_MARGIN
-        for _ in range(self.stage.food_per_step):
+        whole = int(self.settings.food_per_step)  # e.g. 2.4 per step: 2 every step and a third 40 % of the time
+        extra = self.food_rng.random() < self.settings.food_per_step - whole
+        for _ in range(whole + extra):
             x = self.food_rng.uniform(margin, self.width - margin)
             y = self.food_rng.uniform(margin, self.height - margin)
-            energy = self.food_rng.uniform(*self.stage.food_energy)
-            if len(self.foods) >= self.stage.max_food:
+            energy = self.food_rng.uniform(*self.settings.food_energy)
+            if len(self.foods) >= int(self.settings.max_food):
                 continue
             food = Food(x, y, remaining_duration=-1, energy=energy)
             if self._fits(food):
@@ -141,12 +147,13 @@ class World:
         for creature in list(self.creatures):
             if self.evolving:
                 creature.age += 1
-            if self.evolving and self.stage.hunger and creature.energy <= 0:
+            if not self.evolving:
+                creature.energy = max(creature.energy, 0.0)  # nobody dies in an exam
+            elif creature.energy <= 0:
                 self.kill(creature, "hunger")
-            elif self.evolving and creature.lifespan is not None and creature.age >= creature.lifespan:
-                self.kill(creature, "age")  # old age at every stage: each death makes room for a baby
-            elif creature.energy < 0:
-                creature.energy = 0.0  # where nobody starves, an empty creature simply stays empty
+            elif (creature.lifespan is not None and creature.age >= creature.lifespan
+                  and creature.energy < LOW_ENERGY * creature.max_energy):
+                self.kill(creature, "age")  # past its lifespan, only a creature with low energy dies
 
         if self.learner is not None and self.evolving:
             self._teach(acting, energy_before)  # before births: the energy given to a baby is never a penalty
@@ -193,7 +200,7 @@ class World:
         parent.energy -= gift
         baby = Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
                         parent_id=parent.id, generation=parent.generation + 1, slot=slot)
-        baby.lifespan = self.rng.randint(*LIFESPAN)
+        baby.lifespan = round(self.rng.uniform(*self.settings.lifespan))
         self.creatures.append(baby)
         self.births += 1
 

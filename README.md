@@ -41,9 +41,14 @@ Everything in this repo serves that goal. A change that raises a score but moves
    So: the world starts easy. Only a creature with low energy dies (its energy ran out, or it is past its lifespan
    and its energy is low). Whenever nobody is dying, one setting of the world is nudged a little harder, one setting at
    a time. If too many die after a nudge, that nudge is taken back. There are no fixed stages and no exam gate.
-5. **Intelligence is measured, not guessed:** a standard exam against creatures that wander randomly, in a fixed test
-   world that never changes. The exam only measures; it does not change the world.
-6. **Every long run is watched live** as graphs that update while it runs.
+5. **Intelligence is measured, not guessed,** in two ways. The owner: "At the end, whoever survives is smart in
+   nature." · "Intelligence should be rewards / waste or something similar."
+   - **The difficulty level the creatures survive at.** It only rises while nobody dies.
+   - **Energy earned ÷ energy spent** (earned by eating and hunting; spent on moving, living, eating at nothing and
+     attacking), in a standard exam in a fixed test world that never changes, beside creatures that wander randomly.
+     The exam only measures; it does not change the world.
+6. **Every long run is watched live** as graphs that update while it runs. With no run going the page says "Nothing is
+   running"; every past run is kept in its History.
 
 ## Decisions made on the owner's behalf
 
@@ -65,16 +70,16 @@ These are Claude's calls; each can be overruled.
 
 ## Where things stand (2026-11-23)
 
-Branch `evolve-from-scratch`. Built and tested: the 12 senses, a NumPy brain, a PPO learner in TensorFlow, the world's
-movement, eating, hunting and family rules, the exam, the scoreboard, a zero-delay runner, a comparison table.
+Branch `evolve-from-scratch`. Built and tested: the 12 senses, a NumPy brain, a PPO learner in TensorFlow, one living
+world (births from energy, deaths only with low energy, lifespans in a range, the primordial soup), eating and hunting
+as the creature's own actions, the difficulty dial, the intelligence exam, the scoreboard, a zero-delay runner, the live
+page with Live and History, a comparison table and the proof checker.
 
-Not yet matching the goal, to be replaced by `docs/superpowers/specs/2026-11-23-living-world-design.md`:
-- reproduction runs in program-made "rounds" (the 8 best eaters are copied every 1,000 steps), not by energy;
-- the levels are tuned to the exam, so the first level is not the easiest;
-- creatures can die from the first step; there is no old age;
-- eating is a brain decision;
-- a "learning only" team exists that passes nothing on (it scored below random wandering).
+Still to build (the plan: `docs/superpowers/plans/2026-11-23-living-world.md`): the brain's size evolving, tuning the
+dial's numbers by measurement, the long runs and their judgement. The design:
+`docs/superpowers/specs/2026-11-23-living-world-design.md`.
 
-## Run and watch
+Run one world and watch it:
 
-Design and plans live in `docs/superpowers/`. Read the newest design before changing anything.
+    python -m src.viewer                                  (then open http://localhost:8765)
+    python -m src.evolve --seed 1 --steps 30000 --species learning

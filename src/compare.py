@@ -9,11 +9,11 @@ from pathlib import Path
 from statistics import mean
 from typing import Dict, List, Optional, Sequence, Union
 
-from .check_proof import EXAMS_COMPARED, HUNTERS, TOWARD_FOOD_ROWS
+from .check_proof import EXAMS_COMPARED, TOWARD_FOOD_ROWS
 from .scoreboard import numbers, read_rows
 
 Cell = Union[str, int, float, None]
-COLUMNS = ("name", "seeds", "exam_ratio", "toward_food", "flee", "highest_stage", "generation", "minutes")
+COLUMNS = ("name", "seeds", "intelligence", "wanderers", "toward_food", "flee", "level", "generation", "minutes")
 
 
 def _mean(values: Sequence[Optional[float]]) -> Optional[float]:
@@ -27,22 +27,25 @@ def _run_minutes(csv_path: Path) -> Optional[float]:
 
 
 def compare(runs: Dict[str, Sequence[Path]]) -> List[Dict[str, Cell]]:
-    """Per name, the mean over its seeds of: the exam score over the last 5 exams, the steering score over the last
-    10 rows, the flee score over rows at the Hunters stage or above, the deepest generation at the end; plus the
-    highest stage any seed reached and the minutes a run took. A score no seed could measure is None."""
+    """Per name, the mean over its seeds of: intelligence (energy earned ÷ energy spent in the exam) over the last 5
+    exams and the random wanderers' in the same exams, the steering score over the last
+    10 rows, the flee score over rows with hunters, the dial's level and the deepest generation at the end; plus
+    the minutes a run took. A score no seed could measure is None."""
     table = []
     for name, paths in runs.items():
-        exam, toward, flee, stages, generation, minutes = [], [], [], [], [], []
+        exam, wanderers, toward, flee, levels, generation, minutes = [], [], [], [], [], [], []
         for path in paths:
             rows = read_rows(path)
-            exam.append(_mean(numbers(rows, "exam_ratio")[-EXAMS_COMPARED:]))
+            exam.append(_mean(numbers(rows, "intelligence")[-EXAMS_COMPARED:]))
+            wanderers.append(_mean(numbers(rows, "wanderers")[-EXAMS_COMPARED:]))
             toward.append(_mean(numbers(rows[-TOWARD_FOOD_ROWS:], "toward_food")))
-            flee.append(_mean(numbers([r for r in rows if int(r["stage"]) >= HUNTERS], "flee")))
-            stages.append(max(int(r["stage"]) for r in rows))
+            flee.append(_mean(numbers([r for r in rows if int(r["hunters"]) == 1], "flee")))
+            levels.append(float(rows[-1]["level"]))
             generation.append(_mean(numbers(rows[-1:], "generation")))
             minutes.append(_run_minutes(path))
-        table.append({"name": name, "seeds": len(paths), "exam_ratio": _mean(exam), "toward_food": _mean(toward),
-                      "flee": _mean(flee), "highest_stage": max(stages), "generation": _mean(generation),
+        table.append({"name": name, "seeds": len(paths), "intelligence": _mean(exam), "wanderers": _mean(wanderers),
+                      "toward_food": _mean(toward),
+                      "flee": _mean(flee), "level": _mean(levels), "generation": _mean(generation),
                       "minutes": _mean(minutes)})
     return table
 

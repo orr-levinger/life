@@ -1,6 +1,8 @@
 """The intelligence exam: brains and random wanderers in two identical copies of the fixed test world.
 
-The test world never changes, whatever stage the living world is at, so scores compare across time, and nobody is
+Intelligence is energy earned ÷ energy spent (the owner, 2026-11-23: "intelligence should be rewards / waste").
+
+The test world never changes, however hard the living world is, so scores compare across time, and nobody is
 born or dies in it, so crowding cannot skew the comparison.
 """
 from __future__ import annotations
@@ -13,7 +15,7 @@ import numpy as np
 
 from .brain import Brain
 from .creature import Creature
-from .stages import TEST_WORLD
+from .settings import TEST_WORLD
 from .world import World
 
 WIDTH, HEIGHT = 50, 30
@@ -22,9 +24,9 @@ START_ENERGY_SHARE = 0.5  # creatures start half full
 
 @dataclass(frozen=True)
 class ExamResult:
-    brain_bites_per_step: float
-    walker_bites_per_step: float
-    ratio: Optional[float]  # None when the wanderers never bite
+    """Intelligence = energy earned ÷ energy spent in the test world. None when nothing was spent (nobody took it)."""
+    intelligence: Optional[float]  # the examined creatures'
+    wanderers: Optional[float]  # random wanderers', in the identical copy: the yardstick
 
 
 def _exam_world(policy: str, brains: Sequence[Any], sizes: Sequence[float], seed: int) -> World:
@@ -55,22 +57,13 @@ def exam_worlds(brains: Sequence[Any], sizes: List[float], seed: int) -> Tuple[W
     return (_exam_world(policy, brains, sizes, seed), _exam_world("random", [None] * len(sizes), sizes, seed))
 
 
-def _bites_per_step(world: World, steps: int) -> float:
+def _efficiency(world: World, steps: int) -> Optional[float]:
     for _ in range(steps):
         world.step()
-    return world.total_bites / world.creature_steps if world.creature_steps else 0.0
+    return world.energy_earned / world.energy_spent if world.energy_spent > 0 else None
 
 
 def run_exam(brains: Sequence[Any], sizes: List[float], seed: int, steps: int = 500) -> ExamResult:
     with_brains, with_walkers = exam_worlds(brains, sizes, seed)
-    brains_score = _bites_per_step(with_brains, steps)
-    walkers_score = _bites_per_step(with_walkers, steps)
-    ratio = brains_score / walkers_score if walkers_score > 0 else None
-    return ExamResult(brains_score, walkers_score, ratio)
+    return ExamResult(_efficiency(with_brains, steps), _efficiency(with_walkers, steps))
 
-
-def walker_score(seed: int, steps: int = 500, n: int = 20) -> float:
-    """Random wanderers' bites per creature-step in the test world: the yardstick an exam score is measured against."""
-    sizes_rng = random.Random(seed)
-    sizes = [sizes_rng.uniform(Creature.MIN_SIZE, Creature.MAX_SIZE) for _ in range(n)]
-    return _bites_per_step(_exam_world("random", [None] * n, sizes, seed), steps)

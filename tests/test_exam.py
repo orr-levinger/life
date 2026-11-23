@@ -7,7 +7,10 @@ import numpy as np
 from src.brain import Brain
 from src.exam import exam_worlds, run_exam
 from src.learner import NetWeights
-from src.stages import TEST_WORLD
+from src.settings import TEST_WORLD
+from tests.helpers import fixed_brain
+
+EAT = [0, 0, 1, -1]
 
 
 def brains(n: int, seed: int = 0):
@@ -28,19 +31,28 @@ class TestExam(unittest.TestCase):
 
     def test_exam_uses_the_fixed_test_world(self):
         for world in exam_worlds(brains(2), [1.0, 1.0], seed=1):
-            self.assertIs(world.stage, TEST_WORLD)
+            self.assertIs(world.settings, TEST_WORLD)
             self.assertFalse(world.evolving)
 
     def test_same_seed_same_result(self):
         sizes = [0.7, 1.3, 1.9, 1.0]
         self.assertEqual(run_exam(brains(4), sizes, seed=8, steps=100), run_exam(brains(4), sizes, seed=8, steps=100))
 
-    def test_ratio_none_when_walkers_never_bite(self):
+    def test_intelligence_is_energy_earned_over_spent(self):
+        """With nothing to eat, a brain that always eats earns nothing and spends the miss and the step each step."""
         with mock.patch("src.exam.TEST_WORLD", replace(TEST_WORLD, max_food=0, food_per_step=0)):
-            result = run_exam(brains(2), [1.0, 1.0], seed=1, steps=50)
-        self.assertEqual(result.walker_bites_per_step, 0.0)
-        self.assertEqual(result.brain_bites_per_step, 0.0)
-        self.assertIsNone(result.ratio)
+            result = run_exam([fixed_brain(EAT)] * 2, [1.0, 1.0], seed=1, steps=50)
+            with_brains, _ = exam_worlds([fixed_brain(EAT)] * 2, [1.0, 1.0], seed=1)
+        self.assertEqual((result.intelligence, result.wanderers), (0.0, 0.0))
+        for _ in range(10):
+            with_brains.step()
+        self.assertEqual(with_brains.energy_earned, 0.0)
+        self.assertAlmostEqual(with_brains.energy_spent, 2 * 10 * (0.2 + TEST_WORLD.step_cost))
+
+    def test_wanderers_are_measured_beside_the_brains(self):
+        result = run_exam(brains(6), [1.0] * 6, seed=3, steps=200)
+        self.assertGreater(result.wanderers, 0.0)  # random wanderers find some food in the test world
+        self.assertGreaterEqual(result.intelligence, 0.0)
 
     def test_exam_leaves_brains_unchanged(self):
         sitters = brains(3)
@@ -57,7 +69,7 @@ class TestExam(unittest.TestCase):
             result = run_exam(nets, [1.0, 1.5, 0.5], seed=2, steps=50)
         update.assert_not_called()
         record.assert_not_called()
-        self.assertIsInstance(result.brain_bites_per_step, float)
+        self.assertIsInstance(result.intelligence, float)
 
 
 if __name__ == "__main__":

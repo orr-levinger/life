@@ -14,7 +14,7 @@ import numpy as np
 import tensorflow as tf
 
 from .brain import jitter
-from .stages import MUTATION_RATE, MUTATION_SCALE
+from .settings import MUTATION_RATE, MUTATION_SCALE
 
 N_IN = 12
 N_HIDDEN = 32

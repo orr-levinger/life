@@ -1,9 +1,12 @@
 import unittest
 
+from src.exam import ExamResult
 from src.food import Food
 from src.scoreboard import ROW_KEYS, Scoreboard
 from src.senses import sense
 from tests.helpers import add, make_world
+
+STILL = ("MOVE", (0.0, 0.0))
 
 
 def food_world():
@@ -44,7 +47,7 @@ class TestScoreboard(unittest.TestCase):
     def test_standing_still_beside_a_hunter_is_not_fleeing(self):
         w, me = hunter_world()
         board = Scoreboard()
-        board.observe(me, sense(me, w), ("MOVE", (0.0, 0.0)))
+        board.observe(me, sense(me, w), STILL)
         self.assertEqual(board.row(w, None)["flee"], 0.0)
 
     def test_concentration_one_direction_is_one(self):
@@ -63,9 +66,26 @@ class TestScoreboard(unittest.TestCase):
 
     def test_no_samples_is_none(self):
         row = Scoreboard().row(make_world(), None)
-        for key in ("bites_per_creature_step", "toward_food", "flee", "direction_concentration", "exam_ratio",
-                    "generation"):
+        for key in ("energy", "bites_per_creature_step", "toward_food", "flee", "direction_concentration",
+                    "efficiency", "intelligence", "wanderers", "generation"):
             self.assertIsNone(row[key], key)
+
+    def test_row_reports_efficiency_and_average_energy(self):
+        w = make_world()
+        half_full = add(w, 10, 10, size=1.0, energy=50.0)  # 50 of 100
+        quarter_full = add(w, 30, 10, size=2.0, energy=50.0)  # 50 of 200
+        board = Scoreboard()
+        for creature in (half_full, quarter_full):
+            board.observe(creature, sense(creature, w), STILL)
+        w.energy_earned, w.energy_spent = 6.0, 4.0
+        first = board.row(w, None)
+        self.assertAlmostEqual(first["energy"], 0.375)  # each creature's share of its own maximum, averaged
+        self.assertAlmostEqual(first["efficiency"], 1.5)  # energy earned ÷ energy spent in the window
+        board.observe(half_full, sense(half_full, w), STILL)
+        w.energy_earned, w.energy_spent = 7.0, 8.0
+        second = board.row(w, None)
+        self.assertAlmostEqual(second["energy"], 0.5)
+        self.assertAlmostEqual(second["efficiency"], 0.25)  # 1 earned and 4 spent since the first row
 
     def test_row_resets_window(self):
         w, me = food_world()
@@ -73,25 +93,35 @@ class TestScoreboard(unittest.TestCase):
         board.observe(me, sense(me, w), ("MOVE", (1.0, 0.0)))
         w.step()
         w.births, w.newcomers = 3, 2
-        first = board.row(w, 1.7)
+        first = board.row(w, ExamResult(1.7, 0.6))
         second = board.row(w, None)
         self.assertIsNotNone(first["toward_food"])
         self.assertIsNotNone(first["bites_per_creature_step"])
-        self.assertEqual((first["exam_ratio"], first["births"], first["newcomers"]), (1.7, 3, 2))
+        self.assertEqual((first["intelligence"], first["wanderers"], first["births"], first["newcomers"]),
+                         (1.7, 0.6, 3, 2))
         self.assertIsNone(second["toward_food"])
-        self.assertEqual((second["births"], second["newcomers"]), (0, 0))
+        self.assertEqual((second["intelligence"], second["births"], second["newcomers"]), (None, 0, 0))
 
     def test_row_has_exact_keys(self):
         self.assertEqual(ROW_KEYS, (
-            "step", "stage", "population", "births", "newcomers", "generation", "bites_per_creature_step",
-            "toward_food", "flee", "direction_concentration", "exam_ratio", "deaths_hunger", "deaths_attack",
-            "deaths_age",
+            "step", "level", "population", "energy", "births", "newcomers", "generation", "bites_per_creature_step",
+            "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers",
+            "deaths_hunger", "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost",
+            "step_cost", "lifespan", "hunters",
         ))
         w, me = food_world()
         me.generation = 4
         row = Scoreboard().row(w, None)
         self.assertEqual(tuple(row.keys()), ROW_KEYS)
-        self.assertEqual((row["stage"], row["population"], row["generation"]), (1, 1, 4))
+        self.assertEqual((row["level"], row["population"], row["generation"]), (0, 1, 4))
+
+    def test_row_shows_the_settings_in_force(self):
+        w, _ = food_world()
+        w.set_settings(w.settings, 7)
+        row = Scoreboard().row(w, None)
+        self.assertEqual(row["level"], 7)
+        self.assertEqual((row["max_food"], row["food_energy"], row["food_per_step"]), (0, 30.0, 0))  # ranges: the middle
+        self.assertEqual((row["move_cost"], row["step_cost"], row["lifespan"], row["hunters"]), (0.5, 0.05, 5000.0, 0))
 
 
 if __name__ == "__main__":

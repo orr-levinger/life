@@ -1,17 +1,18 @@
 """Run one living world, headless with zero delay, and keep its scoreboard.
 
     python -m src.evolve --seed 1 --steps 100000 --species learning|instinct [--inherit learned|inborn]
-                         [--stage N] [--max-stage M] [--window] [--out DIR]
-    python -m src.evolve --seed 1 --steps 20000 --policy random|rules [--stage N]      (a yardstick world)
+                         [--level N] [--max-level M] [--window] [--out DIR]
+    python -m src.evolve --seed 1 --steps 20000 --policy random|rules [--level N]      (a yardstick world)
 
 The world is never restarted and no creature is ever ranked or picked: births, deaths and the soup are the world's own
-rules (src/world.py). This runner only starts the world, holds the intelligence exam, moves the stage up when it is
-passed, and writes the scoreboard.
+rules (src/world.py). This runner starts the world, lets the difficulty dial review each window of steps (src/dial.py),
+holds the intelligence exam as a measurement, and writes the scoreboard.
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import json
 import random
 import time
 from pathlib import Path
@@ -20,23 +21,20 @@ from typing import Any, Dict, List, Optional, Sequence
 import numpy as np
 
 from .creature import Creature
-from .exam import run_exam
+from .dial import Dial
+from .exam import ExamResult, run_exam
 from .hall_of_fame import HallOfFame
 from .scoreboard import ROW_KEYS, Scoreboard, Value
-from .stages import MAX_CREATURES, STAGES, stage
+from .settings import MAX_CREATURES
 from .world import INHERIT, World
 
 WIDTH, HEIGHT = 50, 30
 FIRST_CREATURES = 30
-ROW_EVERY = 1000
+WINDOW = 1000  # steps between two rows of the scoreboard, and between two reviews by the dial
 EXAM_EVERY = 2000
 EXAM_BRAINS = 20
-PASS_RATIO = 1.5
-PASS_MIN_POPULATION = 10
 SPECIES = {"learning": "learner", "instinct": "brain"}  # the name on the command line -> the creatures' policy
-FIRST_STAGE = 0  # every species starts in the Garden
 YARDSTICKS = ("random", "rules")
-YARDSTICK_STAGE = 1
 
 
 def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
@@ -46,26 +44,21 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     kind = parser.add_mutually_exclusive_group(required=True)
     kind.add_argument("--species", choices=tuple(SPECIES))
     kind.add_argument("--policy", choices=YARDSTICKS, help="a yardstick world instead of a species")
-    parser.add_argument("--stage", type=int, default=None, help="the stage to start at; a yardstick world stays at it")
-    parser.add_argument("--max-stage", type=int, default=STAGES[-1].number, help="the last stage a species may reach")
+    parser.add_argument("--level", type=int, default=0,
+                        help="how many of the dial's nudges the world starts with; a yardstick world stays there")
+    parser.add_argument("--max-level", type=int, default=None, help="the dial never turns past this level")
     parser.add_argument("--inherit", choices=INHERIT, default="learned",
                         help="what a learning baby gets: the parent's brain as it is now, or as the parent was born")
     parser.add_argument("--window", action="store_true", help="draw every step (no added delay)")
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
-    if args.stage is None:
-        args.stage = FIRST_STAGE if args.species else YARDSTICK_STAGE
-    if args.out is None:
-        kind = args.species if args.inherit == "learned" else f"{args.species}-{args.inherit}"
-        args.out = f"runs/{args.seed}-{kind}" if args.species else f"runs/{args.seed}-{args.policy}-S{args.stage}"
+    if args.species:
+        args.kind = args.species if args.inherit == "learned" else f"{args.species}-{args.inherit}"
+    else:
+        args.kind = f"{args.policy}-L{args.level}"
+    if args.out is None:  # every run gets its own dated folder, so history is never overwritten
+        args.out = f"runs/{time.strftime('%Y%m%d-%H%M%S')}-{args.seed}-{args.kind}"
     return args
-
-
-def should_unlock(ratios: List[Optional[float]], population: int, stage_number: int, max_stage: int) -> bool:
-    """The next stage opens when the last two exam scores are both at least 1.5 with at least 10 alive."""
-    last_two = ratios[-2:]
-    return (len(last_two) == 2 and all(r is not None and r >= PASS_RATIO for r in last_two)
-            and population >= PASS_MIN_POPULATION and stage_number < max_stage)
 
 
 def _exam_brains(world: World, sample: Sequence[Creature]) -> List[Any]:
@@ -83,21 +76,28 @@ def run(args: argparse.Namespace) -> Path:
     started = time.perf_counter()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    (out / "run.json").write_text(json.dumps({  # the run's record, for the viewer's Live and History
+        "seed": args.seed, "kind": args.kind, "steps": args.steps, "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }))
     policy = SPECIES[args.species] if args.species else args.policy
     learner = None
     if policy == "learner":
         from .learner import Learner  # TensorFlow is loaded only for learning animals
 
         learner = Learner(MAX_CREATURES, args.seed)
-    world = World(WIDTH, HEIGHT, stage(args.stage), policy, random.Random(args.seed),
+    dial = Dial(max_level=args.max_level)
+    dial.turn_to(args.level)
+    world = World(WIDTH, HEIGHT, dial.settings, policy, random.Random(args.seed),
                   np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
                   inherit=args.inherit)
+    world.set_settings(dial.settings, dial.level)
     for _ in range(FIRST_CREATURES):
         world.add_newcomer()
+    first_creatures = world.newcomers  # the soup's newcomers are counted from here
 
     board = Scoreboard()
-    ratios: List[Optional[float]] = []
-    exam_ratio: Optional[float] = None
+    exam: Optional[ExamResult] = None
+    exam_rng = random.Random(args.seed + 2)  # who takes the exam: its own stream, so an exam never changes the world
     viz = _open_window() if args.window else None
 
     csv_path = out / "scoreboard.csv"
@@ -107,21 +107,22 @@ def run(args: argparse.Namespace) -> Path:
         for step in range(1, args.steps + 1):
             world.step(board.observe)
 
-            if args.species and step % EXAM_EVERY == 0:
-                sample = world.rng.sample(world.creatures, min(EXAM_BRAINS, len(world.creatures)))
+            if args.species and step % EXAM_EVERY == 0:  # a measurement only: it never changes the world
+                sample = exam_rng.sample(world.creatures, min(EXAM_BRAINS, len(world.creatures)))
                 exam_seed = args.seed * 100_000 + step // EXAM_EVERY
-                exam_ratio = run_exam(_exam_brains(world, sample), [c.size for c in sample], exam_seed).ratio
-                ratios.append(exam_ratio)
-                if should_unlock(ratios, len(world.creatures), world.stage.number, args.max_stage):
-                    world.set_stage(stage(world.stage.number + 1))
-                    ratios = []  # each stage is passed by two exams of its own
+                exam = run_exam(_exam_brains(world, sample), [c.size for c in sample], exam_seed)
 
-            if step % ROW_EVERY == 0:
-                row = board.row(world, exam_ratio)
-                exam_ratio = None  # each exam appears in exactly one row
+            if step % WINDOW == 0:
+                row = board.row(world, exam)
+                exam = None  # each exam appears in exactly one row
                 writer.writerow(row)
                 f.flush()
                 print(_format(row), flush=True)
+                deaths = row["deaths_hunger"] + row["deaths_attack"] + row["deaths_age"]
+                soup = row["newcomers"] - (first_creatures if step == WINDOW else 0)
+                if args.species:  # a yardstick world is held at its level
+                    dial.review(deaths, len(world.creatures), soup)
+                    world.set_settings(dial.settings, dial.level)
 
             if viz is not None:
                 viz.render(world)

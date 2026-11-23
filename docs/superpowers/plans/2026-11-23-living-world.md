@@ -491,6 +491,27 @@ sort, the explanations on hover, the same explanations on a running world's card
 - [x] **Step 6: Commit** as `feat: History rows with their scores, explained on hover`; `git show --stat HEAD` lists
   exactly this task's files. Tell the owner it is ready.
 
+### Task 4l: History sorting by any column, and filters (added 2026-11-23; the owner: "add sorting and filters to history")
+
+Spec: "History: one row per world", its last point.
+
+**Files:** Modify: `src/viewer.html`, `tests/test_viewer.py`.
+
+**Interfaces (in the page):** `SORT_KEYS` (one per column: world name, steps, hardest, intelligence, steering,
+generation, alive, mode, saves); `filters = {animals, mode, minSteps, smarter, withSaves}`; `shown(runs) -> runs` (filtered,
+then sorted); sort and filters kept in `localStorage` (wrapped in try/catch: the page works without it).
+
+- [ ] **Step 1: Write the failing test:** `test_page_has_history_filters` (the words Animals, Mode, At least, Only
+  smarter than random, Only with saves, Clear filters).
+- [ ] **Step 2: Run it to see it fail** · `$PY -m unittest tests.test_viewer` · Expected: the missing words.
+- [ ] **Step 3: Implement** the page.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [ ] **Step 5: Try it** in the app's browser: each column title sorts both ways; each filter narrows the rows as the
+  numbers say (checked by reading the rows); "Clear filters" brings all back; a reload keeps the choices. No errors in
+  the browser's console. Each in the ledger.
+- [ ] **Step 6: Commit** as `feat: History sorting by any column, and filters`; `git show --stat HEAD` lists exactly
+  this task's files.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.
@@ -563,4 +584,4 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
    Step 5 showed intelligence and the level reached not below Task 4d's.
 7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,
    first, with its numbers.
-8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 4j, 4k, 5 and 6.
+8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 4j, 4k, 4l, 5 and 6.

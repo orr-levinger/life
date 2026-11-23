@@ -216,6 +216,11 @@ The owner: "what are the numbers, what was the score, this view gives very littl
   these creatures got 0.35 energy back for each 1 they spent; creatures wandering at random got 0.40. That is 0.9×:
   10 % worse than wandering at random. Above 1× means smarter than random." Good numbers are green, bad ones red.
 - The same explanations on the numbers of a running world's card in Live.
+- **Sorting and filters** (the owner: "add sorting and filters to history"): a click on any column's title sorts by it
+  (a second click reverses it; an arrow shows which); the Sort list stays as a shortcut. Filters above the rows:
+  animals (all, learning, instinct), mode (all, Auto, Manual), "at least" a number of steps (any, 1k, 5k, 10k, 50k),
+  "only smarter than random", "only with saves". A line says how many of the worlds are shown, with "Clear filters".
+  The page remembers the sort and filters in this browser.
 
 ### The intelligence exam
 

@@ -34,8 +34,8 @@ def _exam_world(policy: str, brains: Sequence[Any], sizes: Sequence[float], seed
         from .learner import Learner  # imported only when learner networks are examined: TensorFlow stays out otherwise
 
         learner = Learner(len(sizes), seed)
-        for slot, weights in enumerate(brains):
-            learner.install(slot, weights, lr=0.0)
+        for weights in brains:  # a fresh learner hands out slots 0, 1, 2 … in order
+            learner.allocate(weights, lr=0.0)
     world = World(WIDTH, HEIGHT, TEST_WORLD, policy, random.Random(seed + 2), np.random.default_rng(seed),
                   random.Random(seed + 1), evolving=False, learner=learner)
     world.prefill_food()

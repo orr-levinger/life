@@ -60,6 +60,21 @@ class TestEvolve(unittest.TestCase):
         self.assertEqual({r["stage"] for r in rows}, {"1"})
         self.assertEqual({r["exam_ratio"] for r in rows}, {""})
 
+    def test_learning_run_starts_in_the_garden(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "2000", "--species", "learning", "--max-stage", "0",
+                                        "--out", folder]))
+        self.assertEqual([r["stage"] for r in rows], ["0", "0"])
+        self.assertEqual({(r["deaths_hunger"], r["deaths_attack"], r["deaths_age"]) for r in rows}, {("0", "0", "0")})
+        self.assertGreaterEqual(int(rows[-1]["population"]), 30)
+        self.assertNotEqual(rows[1]["exam_ratio"], "")
+
+    def test_same_seed_same_csv_learning(self):
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            first = quiet_run(["--seed", "3", "--steps", "1000", "--species", "learning", "--out", a]).read_text()
+            second = quiet_run(["--seed", "3", "--steps", "1000", "--species", "learning", "--out", b]).read_text()
+        self.assertEqual(first, second)
+
     def test_species_or_policy_is_required(self):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             parse_args(["--seed", "1"])

@@ -3,16 +3,14 @@ import unittest
 
 import numpy as np
 
-from src.learner import Learner, NetWeights, gae
-
-SPEC_LR = 3e-4
+from src.learner import LEARNING_RATE, Learner, NetWeights, gae
 
 
-def learner_with(slots: int, seed: int = 0, lr: float = SPEC_LR) -> Learner:
+def learner_with(slots: int, seed: int = 0, lr: float = LEARNING_RATE) -> Learner:
     learner = Learner(slots, seed)
     rng = np.random.default_rng(seed)
-    for slot in range(slots):
-        learner.install(slot, NetWeights.random(rng), lr)
+    for _ in range(slots):
+        learner.allocate(NetWeights.random(rng), lr)
     return learner
 
 
@@ -30,12 +28,19 @@ def food_senses(angles: np.ndarray) -> np.ndarray:
 
 
 def toy_rewards(actions, angles: np.ndarray) -> np.ndarray:
-    """Reward = cosine between the move and the food direction; eating or attacking earns nothing."""
+    """Reward = cosine between the move and the food direction; attacking earns nothing."""
     rewards = []
     for (choice, (dx, dy)), angle in zip(actions, angles):
         length = math.hypot(dx, dy)
         rewards.append((dx * math.cos(angle) + dy * math.sin(angle)) / length if choice == 0 and length > 0 else 0.0)
     return np.array(rewards)
+
+
+def live(learner: Learner, slot: int, steps: int) -> None:
+    """`steps` steps of life with something to sense (all-zero senses would leave the input weights untouched)."""
+    for _ in range(steps):
+        learner.act([slot], np.full((1, 12), 0.5), attacks_on=True)
+        learner.record(slot, 1.0, False)
 
 
 class TestLearner(unittest.TestCase):
@@ -44,15 +49,17 @@ class TestLearner(unittest.TestCase):
         actions = learner.act([0, 1, 2, 3], np.zeros((4, 12)), attacks_on=True)
         self.assertEqual(len(actions), 4)
         for choice, (dx, dy) in actions:
-            self.assertIn(choice, (0, 1, 2))
+            self.assertIn(choice, (0, 1))  # move or attack
             self.assertTrue(-1.0 <= dx <= 1.0 and -1.0 <= dy <= 1.0)
 
     def test_attack_masked(self):
         learner = learner_with(10)
         choices = [choice for _ in range(100)
                    for choice, _ in learner.act(list(range(10)), np.zeros((10, 12)), attacks_on=False, learning=False)]
-        self.assertEqual(len(choices), 1000)
-        self.assertNotIn(2, choices)
+        self.assertEqual(set(choices), {0})
+        allowed = [choice for _ in range(100)
+                   for choice, _ in learner.act(list(range(10)), np.zeros((10, 12)), attacks_on=True, learning=False)]
+        self.assertEqual(set(allowed), {0, 1})
 
     def test_gae_matches_hand_example(self):
         values = np.array([0.5, 0.2, 0.4])
@@ -61,6 +68,20 @@ class TestLearner(unittest.TestCase):
         np.testing.assert_allclose(ret, [1.625, 1.25, 2.5])
         adv, _ = gae(np.array([1.0, 0.0, 2.0]), values, np.array([0.0, 1.0, 0.0]), 1.0, gamma=0.5, lam=1.0)
         np.testing.assert_allclose(adv, [0.5, -0.2, 2.1])
+
+    def test_allocate_and_release(self):
+        learner = Learner(3, 0)
+        rng = np.random.default_rng(0)
+        nets = [NetWeights.random(rng) for _ in range(4)]
+        self.assertEqual([learner.allocate(n, 1e-3 * (i + 1)) for i, n in enumerate(nets[:3])], [0, 1, 2])
+        self.assertAlmostEqual(learner.lr(1), 2e-3)
+        self.assertTrue(same(learner.inborn(2), nets[2]))
+        with self.assertRaises(RuntimeError):
+            learner.allocate(nets[3], 1e-3)
+        learner.release(1)
+        self.assertEqual(learner.allocate(nets[3], 5e-3), 1)
+        self.assertTrue(same(learner.current(1), nets[3]))
+        self.assertAlmostEqual(learner.lr(1), 5e-3)
 
     def test_update_changes_only_full_slots(self):
         learner = learner_with(2)
@@ -73,20 +94,19 @@ class TestLearner(unittest.TestCase):
         self.assertFalse(same(learner.current(0), learner.inborn(0)))
         self.assertTrue(same(learner.current(1), learner.inborn(1)))
 
-    def test_install_resets_slot(self):
+    def test_slot_reuse_starts_clean(self):
         learner = learner_with(1)
-        for _ in range(65):
-            learner.act([0], np.zeros((1, 12)), attacks_on=True)
-            learner.record(0, 1.0, False)
-        learner.update()
+        live(learner, 0, 65)
+        learner.update()  # the first animal has learned, and one step of its experience is left over
+        learner.release(0)
         fresh = NetWeights.random(np.random.default_rng(99))
-        learner.install(0, fresh, SPEC_LR)
+        self.assertEqual(learner.allocate(fresh, LEARNING_RATE), 0)
         self.assertTrue(same(learner.current(0), fresh))
         self.assertTrue(same(learner.inborn(0), fresh))
-        for _ in range(64):
-            learner.act([0], np.zeros((1, 12)), attacks_on=True)
-            learner.record(0, 1.0, False)
-        self.assertEqual(learner.update(), 0)  # the leftover step went with the old network
+        live(learner, 0, 64)
+        self.assertEqual(learner.update(), 0)  # the dead animal's leftover step did not count for the newborn
+        live(learner, 0, 1)
+        self.assertEqual(learner.update(), 1)
 
     def test_same_seed_same_actions(self):
         runs = []

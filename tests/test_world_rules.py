@@ -1,5 +1,5 @@
+import math
 import unittest
-from dataclasses import replace
 from unittest import mock
 
 import numpy as np
@@ -8,6 +8,7 @@ from src.food import Food
 from src.learner import LEARNING_RATE, Learner, NetWeights
 from src.stages import BABY_SHARE, MAX_AGE, MAX_CREATURES, STAGES
 from tests.helpers import GARDEN_NO_FOOD, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
+from tests.test_learner import live, same
 
 STAY = [0, 0, -1]
 
@@ -217,17 +218,29 @@ class TestLifeAndDeath(unittest.TestCase):
 
 
 class TestLearnersInWorld(unittest.TestCase):
-    def learner(self, slots: int) -> Learner:
-        learner = Learner(slots, 0)
-        rng = np.random.default_rng(0)
-        for slot in range(slots):
-            learner.install(slot, NetWeights.random(rng), LEARNING_RATE)
-        return learner
+    def world(self, stage=NO_FOOD, inherit="learned"):
+        learner = Learner(MAX_CREATURES, 0)
+        return make_world(stage, learner=learner, species="learner", inherit=inherit), learner
+
+    def born(self, w, learner, x, y, energy=50.0):
+        slot = learner.allocate(NetWeights.random(w.np_rng), LEARNING_RATE)
+        return add(w, x, y, energy=energy, policy="learner", slot=slot)
+
+    def crowd(self, w):
+        for i in range(10):  # ten wanderers keep the soup away
+            add(w, 3 + i * 4, 25)
+
+    def test_newcomer_gets_a_slot_and_a_random_network(self):
+        w, learner = self.world()
+        first, second = w.add_newcomer(), w.add_newcomer()
+        self.assertEqual((first.policy, first.slot, second.slot), ("learner", 0, 1))
+        self.assertFalse(same(learner.current(0), learner.current(1)))
+        self.assertAlmostEqual(learner.lr(0), LEARNING_RATE)
 
     def test_learner_creatures_act_and_record(self):
-        learner = self.learner(2)
-        w = make_world(learner=learner)
-        creatures = [add(w, 10, 10, policy="learner", slot=0), add(w, 30, 20, policy="learner", slot=1)]
+        w, learner = self.world()
+        self.crowd(w)
+        creatures = [self.born(w, learner, 10, 10), self.born(w, learner, 30, 15)]
         before = {c.slot: c.energy for c in creatures}
         with mock.patch.object(learner, "record", wraps=learner.record) as record:
             w.step()
@@ -238,17 +251,61 @@ class TestLearnersInWorld(unittest.TestCase):
             self.assertAlmostEqual(reward, creature.energy - before[creature.slot])
             self.assertFalse(done)
 
-    def test_death_marks_done(self):
-        learner = self.learner(1)
-        w = make_world(replace(NO_FOOD, name="one dying learner"), learner=learner)
-        for i in range(10):  # ten others keep the soup away
-            add(w, 3 + i * 4, 25)
-        dying = add(w, 10, 10, energy=0.01, policy="learner", slot=0)
+    def test_dead_learner_frees_its_slot(self):
+        w, learner = self.world()
+        self.crowd(w)
+        dying = self.born(w, learner, 10, 10, energy=0.01)
         with mock.patch.object(learner, "record", wraps=learner.record) as record:
             w.step()
         record.assert_called_once()
-        self.assertTrue(record.call_args.args[2])
+        self.assertTrue(record.call_args.args[2])  # its last step is marked as the end of its life
         self.assertNotIn(dying, w.creatures)
+        self.assertEqual(learner.allocate(NetWeights.random(w.np_rng), LEARNING_RATE), dying.slot)
+
+    def parent_that_has_learned(self, inherit):
+        w, learner = self.world(GARDEN_NO_FOOD, inherit)
+        parent = self.born(w, learner, 10, 10, energy=80.0)
+        live(learner, parent.slot, 65)
+        learner.update()
+        self.assertFalse(same(learner.current(parent.slot), learner.inborn(parent.slot)))
+        learned, born_with = learner.current(parent.slot), learner.inborn(parent.slot)
+        w.step()
+        baby = w.creatures[1]
+        self.assertEqual((baby.policy, baby.parent_id, baby.generation), ("learner", parent.id, 1))
+        return learner, parent, baby, learned, born_with
+
+    def test_learner_baby_inherits_learned_brain(self):
+        learner, parent, baby, learned, born_with = self.parent_that_has_learned("learned")
+        genes = learner.inborn(baby.slot)
+        self.assertGreater(np.mean(genes.w1 == learned.w1), 0.7)
+        self.assertLess(np.mean(np.isclose(genes.w1, born_with.w1)), 0.3)
+        self.assertNotEqual(learner.lr(baby.slot), learner.lr(parent.slot))
+        self.assertLess(abs(math.log(learner.lr(baby.slot) / learner.lr(parent.slot))), 1.5)
+
+    def test_learner_baby_inherits_born_brain_when_inborn(self):
+        learner, _, baby, learned, born_with = self.parent_that_has_learned("inborn")
+        genes = learner.inborn(baby.slot)
+        self.assertGreater(np.mean(np.isclose(genes.w1, born_with.w1)), 0.7)
+        self.assertLess(np.mean(genes.w1 == learned.w1), 0.3)
+
+    def test_birth_is_not_a_negative_reward(self):
+        w, learner = self.world(GARDEN_NO_FOOD)
+        parent = self.born(w, learner, 10, 10, energy=80.0)
+        with mock.patch.object(learner, "record", wraps=learner.record) as record:
+            w.step()
+        self.assertEqual(len(w.creatures), 2)
+        self.assertLess(parent.energy, 55.0)  # it gave its baby 40 % of its energy
+        _, reward, _ = record.call_args_list[0].args
+        self.assertGreater(reward, -2.0)  # but its reward only shows the cost of the step itself
+
+    def test_garden_learner_keeps_learning_at_zero_energy(self):
+        w, learner = self.world(GARDEN_NO_FOOD)
+        empty = self.born(w, learner, 10, 10, energy=0.0)
+        with mock.patch.object(learner, "record", wraps=learner.record) as record:
+            for _ in range(3):
+                w.step()
+        self.assertEqual(w.creatures, [empty])
+        self.assertEqual([(call.args[0], call.args[2]) for call in record.call_args_list], [(empty.slot, False)] * 3)
 
 
 if __name__ == "__main__":

@@ -39,11 +39,9 @@ def brain_action(creature: Creature, senses: Senses, attacks_on: bool) -> Action
 
 
 def learner_action(creature: Creature, senses: Senses, choice: int, move: Tuple[float, float]) -> Action:
-    """A learner's choice (0 move, 1 stay, 2 attack) and move as an action; an attack with nobody in view does nothing."""
-    if choice == 2:
-        return ("ATTACK", senses.other) if senses.other is not None else STAY
+    """A learner's choice (0 move, 1 attack) and move as an action; an attack with nobody in view does nothing."""
     if choice == 1:
-        return STAY
+        return ("ATTACK", senses.other) if senses.other is not None else STAY
     return ("MOVE", _capped(move[0] * creature.velocity, move[1] * creature.velocity, creature.velocity))
 
 

@@ -14,8 +14,8 @@ from .creature import Creature
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, sense_all
-from .stages import (BABY_SHARE, BIRTH_AT, MAX_AGE, MAX_CREATURES, MUTATION_RATE, MUTATION_SCALE, SIZE_MUTATION,
-                     SOUP_MIN, START_ENERGY, Stage)
+from .stages import (BABY_SHARE, BIRTH_AT, LR_MUTATION, MAX_AGE, MAX_CREATURES, MUTATION_RATE, MUTATION_SCALE,
+                     SIZE_MUTATION, SOUP_MIN, START_ENERGY, Stage)
 
 if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to it
     from .learner import Learner
@@ -80,12 +80,11 @@ class World:
     def add_newcomer(self) -> Creature:
         """A creature of this world's species with a random brain, at a random spot: the first creatures, and the
         primordial soup."""
-        if self.species == "learner":
-            raise NotImplementedError("learner newcomers arrive with the plan's Task 2")
         x, y = self.rng.uniform(1.0, self.width - 1.0), self.rng.uniform(1.0, self.height - 1.0)
         size = self.rng.uniform(Creature.MIN_SIZE, Creature.MAX_SIZE)
         brain = Brain.random(self.np_rng) if self.species == "brain" else None
-        newcomer = Creature(self.next_id(), x, y, size, self.rng.uniform(*START_ENERGY), self.species, brain)
+        slot = self.learner.newcomer(self.np_rng) if self.species == "learner" else None
+        newcomer = Creature(self.next_id(), x, y, size, self.rng.uniform(*START_ENERGY), self.species, brain, slot=slot)
         self.creatures.append(newcomer)
         self.newcomers += 1
         return newcomer
@@ -150,7 +149,10 @@ class World:
                 creature.energy = 0.0  # where nothing can die, an empty creature simply stays empty
 
         if self.learner is not None and self.evolving:
-            self._teach(acting, energy_before)
+            self._teach(acting, energy_before)  # before births: the energy given to a baby is never a penalty
+            for dead in self.dead_this_step:
+                if dead.policy == "learner":
+                    self.learner.release(dead.slot)
         if self.evolving:
             self._births()
             if self.stage.mortal and len(self.creatures) < SOUP_MIN:
@@ -191,8 +193,14 @@ class World:
                 self._birth(parent)
 
     def _birth(self, parent: Creature) -> None:
+        """The baby gets a share of the parent's energy and the parent's brain with mutations (a learner's brain as
+        the world's `inherit` says: as it is now, or as the parent was born)."""
+        slot = None
         if parent.policy == "learner":
-            raise NotImplementedError("learner births arrive with the plan's Task 2")
+            if not self.learner.has_room():
+                return
+            lr_factor = math.exp(self.rng.gauss(0.0, LR_MUTATION))
+            slot = self.learner.baby(parent.slot, self.np_rng, lr_factor, self.inherit)
         gift = BABY_SHARE * parent.energy
         size = parent.size * (1.0 + self.rng.uniform(-SIZE_MUTATION, SIZE_MUTATION))
         size = min(max(size, Creature.MIN_SIZE), Creature.MAX_SIZE)
@@ -201,7 +209,7 @@ class World:
         brain = parent.brain.mutate(self.np_rng, MUTATION_RATE, MUTATION_SCALE) if parent.brain is not None else None
         parent.energy -= gift
         self.creatures.append(Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
-                                       parent_id=parent.id, generation=parent.generation + 1))
+                                       parent_id=parent.id, generation=parent.generation + 1, slot=slot))
         self.births += 1
 
     def _decay_food(self) -> None:

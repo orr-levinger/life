@@ -14,11 +14,12 @@ import numpy as np
 import tensorflow as tf
 
 from .brain import jitter
+from .stages import MUTATION_RATE, MUTATION_SCALE
 
 N_IN = 12
 N_HIDDEN = 32
-N_CHOICES = 3  # 0 move, 1 eat, 2 attack
-ATTACK = 2
+N_CHOICES = 2  # 0 move, 1 attack (eating is on contact, not a choice)
+ATTACK = 1
 ROLLOUT = 64
 LEARNING_RATE = 3e-4  # the Learning team's rate, and the first generation's in the Both team
 GAMMA = 0.99
@@ -131,9 +132,14 @@ class Learner:
         self._inborn: List[Optional[NetWeights]] = [None] * slots
         self._buffers: List[List[dict]] = [[] for _ in range(slots)]
         self._pending: Dict[int, dict] = {}
+        self._free: List[int] = list(range(slots))
 
-    def install(self, slot: int, weights: NetWeights, lr: float) -> None:
-        """A new network in `slot`: these are its inborn weights; its optimizer state and experience start empty."""
+    def allocate(self, weights: NetWeights, lr: float) -> int:
+        """A newborn's network in the lowest free slot: these are its inborn weights, and its optimizer state and
+        experience start empty (nothing of the slot's last animal is left)."""
+        if not self._free:
+            raise RuntimeError(f"all {self.slots} learner slots are taken")
+        slot = self._free.pop(0)
         for name in SHAPES:
             self._params[name][slot].assign(tf.cast(getattr(weights, name), tf.float32))
             self._m[name][slot].assign(tf.zeros(SHAPES[name]))
@@ -143,6 +149,28 @@ class Learner:
         self._inborn[slot] = weights
         self._buffers[slot] = []
         self._pending.pop(slot, None)
+        return slot
+
+    def release(self, slot: int) -> None:
+        """The slot of an animal that died is free for a newborn."""
+        self._free.append(slot)
+        self._free.sort()
+
+    def has_room(self) -> bool:
+        return bool(self._free)
+
+    def newcomer(self, np_rng: np.random.Generator) -> int:
+        """A newcomer of the primordial soup: a random network at the standard learning speed. Returns its slot."""
+        return self.allocate(NetWeights.random(np_rng), LEARNING_RATE)
+
+    def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str) -> int:
+        """A baby's network: the parent's brain as it is now ("learned") or as the parent was born ("inborn"),
+        mutated, with the parent's learning speed × `lr_factor`. Returns the baby's slot."""
+        genes = self.current(parent_slot) if inherit == "learned" else self.inborn(parent_slot)
+        return self.allocate(genes.mutate(np_rng, MUTATION_RATE, MUTATION_SCALE), self.lr(parent_slot) * lr_factor)
+
+    def lr(self, slot: int) -> float:
+        return float(self._lr[slot])
 
     def inborn(self, slot: int) -> NetWeights:
         weights = self._inborn[slot]

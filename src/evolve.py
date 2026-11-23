@@ -1,6 +1,7 @@
 """Run one living world, headless with zero delay, and keep its scoreboard.
 
-    python -m src.evolve --seed 1 --steps 100000 --species instinct [--stage N] [--max-stage M] [--window] [--out DIR]
+    python -m src.evolve --seed 1 --steps 100000 --species learning|instinct [--inherit learned|inborn]
+                         [--stage N] [--max-stage M] [--window] [--out DIR]
     python -m src.evolve --seed 1 --steps 20000 --policy random|rules [--stage N]      (a yardstick world)
 
 The world is never restarted and no creature is ever ranked or picked: births, deaths and the soup are the world's own
@@ -22,8 +23,8 @@ from .creature import Creature
 from .exam import run_exam
 from .hall_of_fame import HallOfFame
 from .scoreboard import ROW_KEYS, Scoreboard, Value
-from .stages import STAGES, stage
-from .world import World
+from .stages import MAX_CREATURES, STAGES, stage
+from .world import INHERIT, World
 
 WIDTH, HEIGHT = 50, 30
 FIRST_CREATURES = 30
@@ -32,8 +33,10 @@ EXAM_EVERY = 2000
 EXAM_BRAINS = 20
 PASS_RATIO = 1.5
 PASS_MIN_POPULATION = 10
-SPECIES = {"instinct": "brain"}  # the species name on the command line -> the creatures' policy
-FIRST_STAGE = {"instinct": 1}  # without learning and without death nothing can change, so instinct starts mortal
+SPECIES = {"learning": "learner", "instinct": "brain"}  # the name on the command line -> the creatures' policy
+# Learning animals start in the Garden. Instinct animals start mortal: without learning and without death nothing
+# can change.
+FIRST_STAGE = {"learning": 0, "instinct": 1}
 YARDSTICKS = ("random", "rules")
 YARDSTICK_STAGE = 1
 
@@ -47,14 +50,16 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     kind.add_argument("--policy", choices=YARDSTICKS, help="a yardstick world instead of a species")
     parser.add_argument("--stage", type=int, default=None, help="the stage to start at; a yardstick world stays at it")
     parser.add_argument("--max-stage", type=int, default=STAGES[-1].number, help="the last stage a species may reach")
+    parser.add_argument("--inherit", choices=INHERIT, default="learned",
+                        help="what a learning baby gets: the parent's brain as it is now, or as the parent was born")
     parser.add_argument("--window", action="store_true", help="draw every step (no added delay)")
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
     if args.stage is None:
         args.stage = FIRST_STAGE[args.species] if args.species else YARDSTICK_STAGE
     if args.out is None:
-        args.out = (f"runs/{args.seed}-{args.species}" if args.species
-                    else f"runs/{args.seed}-{args.policy}-S{args.stage}")
+        kind = args.species if args.inherit == "learned" else f"{args.species}-{args.inherit}"
+        args.out = f"runs/{args.seed}-{kind}" if args.species else f"runs/{args.seed}-{args.policy}-S{args.stage}"
     return args
 
 
@@ -81,8 +86,14 @@ def run(args: argparse.Namespace) -> Path:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     policy = SPECIES[args.species] if args.species else args.policy
+    learner = None
+    if policy == "learner":
+        from .learner import Learner  # TensorFlow is loaded only for learning animals
+
+        learner = Learner(MAX_CREATURES, args.seed)
     world = World(WIDTH, HEIGHT, stage(args.stage), policy, random.Random(args.seed),
-                  np.random.default_rng(args.seed), random.Random(args.seed + 1))
+                  np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
+                  inherit=args.inherit)
     for _ in range(FIRST_CREATURES):
         world.add_newcomer()
 

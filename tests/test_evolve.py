@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from src.dial import Dial
+from src.dial import FEW, MANY, WELL_FED, Dial
 from src.evolve import FIRST_CREATURES, parse_args, run
 from src.scoreboard import ROW_KEYS
 
@@ -24,16 +24,16 @@ def read_rows(path: Path):
         return list(csv.DictReader(f))
 
 
-def deaths(row) -> int:
-    return int(row["deaths_hunger"]) + int(row["deaths_attack"]) + int(row["deaths_age"])
+def levels(rows):
+    return [round(float(row["level"]), 2) for row in rows]
 
 
-def reviewing_as_if(died: str):
-    """The dial's review, told that nobody died in the window ("nobody") or that everybody did ("everybody")."""
+def reviewing_as_if(life: str):
+    """Auto's review, told that the creatures are many and well fed ("easy") or few ("hard")."""
     real = Dial.review
 
-    def review(dial, deaths, alive, newcomers):
-        return real(dial, 0 if died == "nobody" else alive, alive, 0)
+    def review(dial, alive, energy, newcomers):
+        return real(dial, MANY, WELL_FED, 0) if life == "easy" else real(dial, FEW - 1, WELL_FED, 0)
     return mock.patch.object(Dial, "review", review)
 
 
@@ -46,7 +46,7 @@ class TestEvolve(unittest.TestCase):
             rows = read_rows(path)
             seconds = float((Path(folder) / "time.txt").read_text())
         self.assertEqual([r["step"] for r in rows], ["1000", "2000"])
-        self.assertEqual(rows[0]["level"], "0")
+        self.assertEqual(levels(rows[:1]), [0])
         self.assertGreater(int(rows[0]["newcomers"]), 0)  # the first creatures are newcomers
         for column in EXAM_COLUMNS:
             self.assertEqual(rows[0][column], "")  # the exam is every 2,000 steps
@@ -72,43 +72,43 @@ class TestEvolve(unittest.TestCase):
             second = quiet_run(["--seed", "3", "--steps", "1000", "--species", "instinct", "--out", b]).read_text()
         self.assertEqual(first, second)
 
-    def test_the_dial_reviews_every_window(self):
+    def test_auto_reviews_number_and_fedness(self):
         reviews = []
         real = Dial.review
 
-        def review(dial, deaths, alive, newcomers):
-            verdict = real(dial, deaths, alive, newcomers)
-            reviews.append((deaths, alive, newcomers, dial.level))
+        def review(dial, alive, energy, newcomers):
+            verdict = real(dial, alive, energy, newcomers)
+            reviews.append((alive, energy, newcomers, round(dial.level, 2)))
             return verdict
 
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(Dial, "review", review):
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--out", folder]))
-        self.assertEqual([(died, alive) for died, alive, _, _ in reviews],
-                         [(deaths(row), int(row["population"])) for row in rows])
+        self.assertEqual([(alive, round(energy, 6)) for alive, energy, _, _ in reviews],
+                         [(int(row["population"]), round(float(row["energy"]), 6)) for row in rows])
         soup = [int(row["newcomers"]) for row in rows]
         soup[0] -= FIRST_CREATURES  # the first creatures are not the soup's
         self.assertEqual([newcomers for _, _, newcomers, _ in reviews], soup)
-        self.assertEqual([int(row["level"]) for row in rows[1:]], [level for *_, level in reviews[:-1]])
+        self.assertEqual(levels(rows[1:]), [level for *_, level in reviews[:-1]])
 
-    def test_dial_turns_when_nobody_dies(self):
-        with tempfile.TemporaryDirectory() as folder, reviewing_as_if("nobody"):
+    def test_dial_turns_when_life_is_easy(self):
+        with tempfile.TemporaryDirectory() as folder, reviewing_as_if("easy"):
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--out", folder]))
-        self.assertEqual([row["level"] for row in rows], ["0", "1", "2"])
+        self.assertEqual(levels(rows), [0, 1, 2])
         self.assertLess(float(rows[1]["max_food"]), float(rows[0]["max_food"]))  # the first nudge: less food at once
         self.assertLess(float(rows[2]["food_energy"]), float(rows[1]["food_energy"]))  # the second: less in each food
         self.assertEqual(rows[2]["max_food"], rows[1]["max_food"])  # one setting at a time
 
-    def test_dial_takes_nudges_back_when_too_many_die(self):
-        with tempfile.TemporaryDirectory() as folder, reviewing_as_if("everybody"):
+    def test_dial_takes_nudges_back_when_life_is_hard(self):
+        with tempfile.TemporaryDirectory() as folder, reviewing_as_if("hard"):
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--level", "2",
                                         "--out", folder]))
-        self.assertEqual([row["level"] for row in rows], ["2", "1", "0"])
+        self.assertEqual(levels(rows), [2, 1, 0])
 
     def test_dial_stops_at_the_max_level(self):
-        with tempfile.TemporaryDirectory() as folder, reviewing_as_if("nobody"):
+        with tempfile.TemporaryDirectory() as folder, reviewing_as_if("easy"):
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--max-level", "1",
                                         "--out", folder]))
-        self.assertEqual([row["level"] for row in rows], ["0", "1", "1"])
+        self.assertEqual(levels(rows), [0, 1, 1])
 
     def test_exam_does_not_change_the_world(self):
         argv = ["--seed", "2", "--steps", "3000", "--species", "instinct", "--out"]
@@ -127,14 +127,14 @@ class TestEvolve(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--policy", "random", "--level", "2",
                                         "--out", folder]))
-        self.assertEqual({row["level"] for row in rows}, {"2"})
+        self.assertEqual(set(levels(rows)), {2})
         self.assertEqual({row["intelligence"] for row in rows}, {""})
 
     def test_learning_run_writes_rows(self):
         with tempfile.TemporaryDirectory() as folder:
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "2000", "--species", "learning", "--out", folder]))
         self.assertEqual([row["step"] for row in rows], ["1000", "2000"])
-        self.assertEqual(rows[0]["level"], "0")
+        self.assertEqual(levels(rows[:1]), [0])
         self.assertGreaterEqual(int(rows[-1]["population"]), 10)
         self.assertNotEqual(rows[1]["intelligence"], "")
         self.assertNotEqual(rows[1]["energy"], "")

@@ -39,8 +39,10 @@ Everything in this repo serves that goal. A change that raises a score but moves
    > them when they die too much. The hardness of survival is supposed to drive intelligence."
 
    So: the world starts easy. Only a creature with low energy dies (its energy ran out, or it is past its lifespan
-   and its energy is low). Whenever nobody is dying, one setting of the world is nudged a little harder, one setting at
-   a time. If too many die after a nudge, that nudge is taken back. There are no fixed stages and no exam gate.
+   and its energy is low). In Auto, while the creatures are many and well fed, one setting of the world is nudged a
+   little harder, one setting at a time; when they are few or hungry, the last nudge is taken back (the owner: "an auto
+   mode button that changes and reduces and increases the params based on the number of creatures and their
+   fedness"). In Manual the owner turns the settings by hand, live. There are no fixed stages and no exam gate.
 5. **Intelligence is measured, not guessed,** in two ways. The owner: "At the end, whoever survives is smart in
    nature." · "Intelligence should be rewards / waste or something similar."
    - **The difficulty level the creatures survive at.** It only rises while nobody dies.

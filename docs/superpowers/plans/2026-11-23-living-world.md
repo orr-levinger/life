@@ -301,19 +301,19 @@ energy and the soup's newcomers of the last 1,000 steps), `tests/test_evolve.py`
   `set(settings)` (the owner's settings: the nudges to take back are forgotten), `turn_to(level)`.
 - `MANY = 60`, `WELL_FED = 0.5`, `FEW = 30`, `HUNGRY = 0.35`; `TOO_MANY` goes.
 
-- [ ] **Step 1: Write the failing tests** (`test_dial`): `test_many_and_well_fed_nudges_one_knob_harder`,
+- [x] **Step 1: Write the failing tests** (`test_dial`): `test_many_and_well_fed_nudges_one_knob_harder`,
   `test_nudges_take_turns`, `test_few_takes_the_last_nudge_back`, `test_hungry_takes_the_last_nudge_back`,
   `test_newcomers_take_the_last_nudge_back`, `test_in_between_holds`, `test_auto_can_go_easier_than_the_start`,
   `test_knobs_stay_within_their_ends`, `test_hunters_come_as_their_own_nudge`, `test_difficulty_counts_the_nudges`,
   `test_difficulty_of_the_owner_s_settings`, `test_set_forgets_the_nudges_to_take_back`,
   `test_a_range_keeps_its_shape`, `test_max_level_stops_the_dial`; (`test_evolve`):
   `test_auto_reviews_number_and_fedness`; (`test_check_proof`): `test_a_world_that_stayed_easy_fails` on the difficulty.
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_dial` · Expected: failures naming `Knob`,
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_dial` · Expected: failures naming `Knob`,
   `difficulty` and `set`.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
   `grep -rn "TOO_MANY" src tests` · Expected: no output.
-- [ ] **Step 5: Commit** as `feat: Auto turns the knobs by number and fedness, both ways`; `git show --stat HEAD` lists
+- [x] **Step 5: Commit** as `feat: Auto turns the knobs by number and fedness, both ways`; `git show --stat HEAD` lists
   exactly this task's files.
 
 ### Task 4g: A world that runs until stopped and takes its knobs while it runs (added 2026-11-23; the owner's request)

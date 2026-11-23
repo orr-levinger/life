@@ -44,8 +44,8 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     kind = parser.add_mutually_exclusive_group(required=True)
     kind.add_argument("--species", choices=tuple(SPECIES))
     kind.add_argument("--policy", choices=YARDSTICKS, help="a yardstick world instead of a species")
-    parser.add_argument("--level", type=int, default=0,
-                        help="how many of the dial's nudges the world starts with; a yardstick world stays there")
+    parser.add_argument("--level", type=float, default=0,
+                        help="the difficulty the world starts at (nudges harder than the easy start); a yardstick world stays there")
     parser.add_argument("--max-level", type=int, default=None, help="the dial never turns past this level")
     parser.add_argument("--inherit", choices=INHERIT, default="learned",
                         help="what a learning baby gets: the parent's brain as it is now, or as the parent was born")
@@ -55,7 +55,7 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     if args.species:
         args.kind = args.species if args.inherit == "learned" else f"{args.species}-{args.inherit}"
     else:
-        args.kind = f"{args.policy}-L{args.level}"
+        args.kind = f"{args.policy}-L{args.level:g}"
     if args.out is None:  # every run gets its own dated folder, so history is never overwritten
         args.out = f"runs/{time.strftime('%Y%m%d-%H%M%S')}-{args.seed}-{args.kind}"
     return args
@@ -90,7 +90,7 @@ def run(args: argparse.Namespace) -> Path:
     world = World(WIDTH, HEIGHT, dial.settings, policy, random.Random(args.seed),
                   np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
                   inherit=args.inherit)
-    world.set_settings(dial.settings, dial.level)
+    world.set_settings(dial.settings, round(dial.level, 2))
     for _ in range(FIRST_CREATURES):
         world.add_newcomer()
     first_creatures = world.newcomers  # the soup's newcomers are counted from here
@@ -118,11 +118,10 @@ def run(args: argparse.Namespace) -> Path:
                 writer.writerow(row)
                 f.flush()
                 print(_format(row), flush=True)
-                deaths = row["deaths_hunger"] + row["deaths_attack"] + row["deaths_age"]
                 soup = row["newcomers"] - (first_creatures if step == WINDOW else 0)
                 if args.species:  # a yardstick world is held at its level
-                    dial.review(deaths, len(world.creatures), soup)
-                    world.set_settings(dial.settings, dial.level)
+                    dial.review(len(world.creatures), row["energy"], soup)
+                    world.set_settings(dial.settings, round(dial.level, 2))
 
             if viz is not None:
                 viz.render(world)

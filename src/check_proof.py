@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from .scoreboard import numbers, read_rows
 
-LEVEL_MIN = 10  # the dial must have turned at least this far by the end
+LEVEL_MIN = 10  # the difficulty Auto must have reached by the end
 SUSTAIN_ROWS = 20  # the last 20,000 steps
 GENERATION_MIN = 20
 INTELLIGENCE_MIN = 2.0  # times the random wanderers' energy earned ÷ energy spent in the same exam
@@ -26,9 +26,9 @@ Runs = Dict[str, List[Dict[str, str]]]
 
 
 def _harder(runs: Runs) -> Verdict:
-    levels = {name: int(rows[-1]["level"]) for name, rows in runs.items()}
+    levels = {name: float(rows[-1]["level"]) for name, rows in runs.items()}
     return ("1 survival got harder", all(level >= LEVEL_MIN for level in levels.values()),
-            "; ".join(f"{name}: level {level} at the end" for name, level in levels.items()))
+            "; ".join(f"{name}: difficulty {level:.1f} at the end" for name, level in levels.items()))
 
 
 def _sustains(runs: Runs) -> Verdict:

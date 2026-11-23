@@ -1,75 +1,152 @@
-"""The difficulty dial: the hardness of survival drives intelligence, and it is tuned delicately.
+"""The difficulty dial: the hardness of survival drives intelligence, and it is turned delicately.
 
-Every window of steps the dial looks at who died. Nobody died: survival is too easy, so one setting is nudged a little
-harder, one setting at a time. Too many died (or random newcomers had to be added): the last nudge is taken back.
-Some died, not too many: nothing changes; that is where survival is hard enough to select.
+Auto looks at the world every window of steps. Many creatures, well fed: survival is easy, so one knob is nudged 5 %
+harder, one knob at a time. Few creatures, or hungry ones, or the primordial soup had to add newcomers: the last harder
+nudge is taken back, and with none to take back one knob is nudged 5 % easier. Anything else: nothing changes.
+In Manual the owner turns the knobs (`Dial.set`); Auto goes on from wherever they are.
 """
 from __future__ import annotations
 
-from dataclasses import replace
+import math
+from dataclasses import dataclass, replace
 from typing import List, Optional
 
 from .settings import START, Settings
 
-NUDGE = 0.05  # how much one nudge changes one setting
-TOO_MANY = 0.25  # more than this share of the living dying in one window takes the last nudge back
-HUNTERS_AT = 24  # the nudge after this many switches hunters on
+NUDGE = 0.05  # how much one nudge changes one knob
+HUNTERS_AT = 24  # at this difficulty the next harder nudge switches hunters on
+MANY = 60  # this many creatures or more, and well fed: survival is easy
+WELL_FED = 0.5  # average energy, as a share of full
+FEW = 30  # fewer creatures than this: survival is too hard
+HUNGRY = 0.35  # average energy below this share of full: survival is too hard
+TOLERANCE = 1e-9
 
-# The settings a nudge can turn, in turn: (name, direction that makes survival harder, the limit it stops at).
+
+@dataclass(frozen=True)
+class Knob:
+    name: str  # a field of Settings; a range is turned by its middle
+    harder: int  # -1: less is harder (food, lifespan); +1: more is harder (costs)
+    easiest: float  # the ends of the knob's slider: it never passes them
+    hardest: float
+
+    @property
+    def factor(self) -> float:
+        """What one harder nudge multiplies the knob by (an easier nudge divides by it)."""
+        return 1.0 + NUDGE * self.harder
+
+
 KNOBS = (
-    ("max_food", -1, 20.0),
-    ("food_energy", -1, (2.0, 4.0)),
-    ("move_cost", +1, 3.0),
-    ("step_cost", +1, 0.5),
-    ("lifespan", -1, (500.0, 750.0)),
-    ("food_per_step", -1, 0.2),
+    Knob("max_food", -1, easiest=400.0, hardest=20.0),
+    Knob("food_energy", -1, easiest=60.0, hardest=3.0),
+    Knob("move_cost", +1, easiest=0.1, hardest=3.0),
+    Knob("step_cost", +1, easiest=0.01, hardest=0.5),
+    Knob("lifespan", -1, easiest=10000.0, hardest=625.0),
+    Knob("food_per_step", -1, easiest=6.0, hardest=0.2),
 )
 
 
-def _turn(value: float, direction: int, limit: float) -> float:
-    return max(value * (1.0 - NUDGE), limit) if direction < 0 else min(value * (1.0 + NUDGE), limit)
+def knob_named(name: str) -> Knob:
+    for knob in KNOBS:
+        if knob.name == name:
+            return knob
+    raise ValueError(f"no knob called {name!r}; the knobs are {', '.join(k.name for k in KNOBS)}")
 
 
-def nudged(settings: Settings, n: int) -> Settings:
-    """The settings after nudge number `n` (0 is the first): one setting, a little harder, within its limit.
-    Nudge number HUNTERS_AT switches hunters on."""
-    if n == HUNTERS_AT:
-        return replace(settings, attacks=True)
-    name, direction, limit = KNOBS[(n if n < HUNTERS_AT else n - 1) % len(KNOBS)]
-    value = getattr(settings, name)
-    if isinstance(value, tuple):
-        return replace(settings, **{name: tuple(_turn(v, direction, lim) for v, lim in zip(value, limit))})
-    return replace(settings, **{name: _turn(value, direction, limit)})
+def value(settings: Settings, name: str) -> float:
+    """A knob's value: the setting itself, or the middle of a range."""
+    current = getattr(settings, name)
+    return sum(current) / 2 if isinstance(current, tuple) else current
+
+
+def _held(knob: Knob, number: float) -> float:
+    low, high = sorted((knob.easiest, knob.hardest))
+    return min(max(number, low), high)
+
+
+def with_value(settings: Settings, name: str, number: float) -> Settings:
+    """`settings` with one knob at `number`, held within the knob's ends; a range keeps its shape around its middle."""
+    number = _held(knob_named(name), number)
+    current = getattr(settings, name)
+    if isinstance(current, tuple):
+        scale = number / value(settings, name)
+        return replace(settings, **{name: tuple(end * scale for end in current)})
+    return replace(settings, **{name: number})
+
+
+def difficulty(settings: Settings) -> float:
+    """How many 5 % nudges harder than the easy start `settings` are (below zero: easier); hunters count as one."""
+    nudges = sum(math.log(value(settings, k.name) / value(START, k.name)) / math.log(k.factor) for k in KNOBS)
+    return nudges + (settings.attacks - START.attacks)
+
+
+def _at(knob: Knob, settings: Settings, end: float) -> bool:
+    return abs(value(settings, knob.name) - end) <= TOLERANCE * max(1.0, abs(end))
 
 
 class Dial:
-    def __init__(self, start: Settings = START, max_level: Optional[int] = None) -> None:
-        self._levels: List[Settings] = [start]  # the settings at each level; the last is in force
+    def __init__(self, settings: Settings = START, max_level: Optional[int] = None) -> None:
+        self._settings = settings
+        self._taken: List[Settings] = []  # the settings before each harder nudge Auto can still take back
+        self._next_harder = 0  # whose turn it is, among the knobs
+        self._next_easier = 0
         self.max_level = max_level
 
     @property
-    def level(self) -> int:
-        """How many nudges are in force."""
-        return len(self._levels) - 1
+    def settings(self) -> Settings:
+        return self._settings
 
     @property
-    def settings(self) -> Settings:
-        return self._levels[-1]
+    def level(self) -> float:
+        """The difficulty now."""
+        return difficulty(self._settings)
 
-    def review(self, deaths: int, alive: int, newcomers: int) -> str:
-        """Look at one window: `deaths` in it, `alive` at its end, `newcomers` the primordial soup had to add.
-        Returns what the dial did: "harder", "easier" or "hold"."""
-        if newcomers > 0 or deaths > TOO_MANY * alive:
-            if self.level == 0:
-                return "hold"  # never easier than the easy start
-            self._levels.pop()
-            return "easier"
-        if deaths == 0 and (self.max_level is None or self.level < self.max_level):
-            self._levels.append(nudged(self.settings, self.level))
-            return "harder"
+    def set(self, settings: Settings) -> None:
+        """The owner's settings. Auto goes on from here; the nudges it made before are no longer its to take back."""
+        self._settings = settings
+        self._taken = []
+
+    def review(self, alive: int, energy: Optional[float], newcomers: int) -> str:
+        """Look at one window: `alive` at its end, `energy` the creatures' average share of full energy over it (None
+        when nobody was measured), `newcomers` the primordial soup had to add. Returns "harder", "easier" or "hold"."""
+        if newcomers > 0 or alive < FEW or (energy is not None and energy < HUNGRY):
+            return self._easier()
+        if alive >= MANY and energy is not None and energy >= WELL_FED:
+            return self._harder()
         return "hold"
 
-    def turn_to(self, level: int) -> None:
-        """Start the dial at `level` nudges (for a world that begins harder than the easy start)."""
-        while self.level < level:
-            self._levels.append(nudged(self.settings, self.level))
+    def turn_to(self, level: float) -> None:
+        """Nudge harder until the difficulty is `level` (for a world that begins harder than the easy start)."""
+        while self.level < level - TOLERANCE and self._harder() == "harder":
+            pass
+
+    def _harder(self) -> str:
+        if self.max_level is not None and self.level >= self.max_level - TOLERANCE:
+            return "hold"
+        if not self._settings.attacks and self.level >= HUNTERS_AT - TOLERANCE:
+            return self._nudge(replace(self._settings, attacks=True))
+        for _ in KNOBS:
+            knob = KNOBS[self._next_harder % len(KNOBS)]
+            self._next_harder += 1
+            if not _at(knob, self._settings, knob.hardest):
+                return self._nudge(with_value(self._settings, knob.name, value(self._settings, knob.name) * knob.factor))
+        return "hold"  # every knob is at its hardest
+
+    def _nudge(self, harder: Settings) -> str:
+        self._taken.append(self._settings)
+        self._settings = harder
+        return "harder"
+
+    def _easier(self) -> str:
+        if self._taken:
+            self._settings = self._taken.pop()
+            return "easier"
+        if self._settings.attacks:
+            self._settings = replace(self._settings, attacks=False)
+            return "easier"
+        for _ in KNOBS:
+            knob = KNOBS[self._next_easier % len(KNOBS)]
+            self._next_easier += 1
+            if not _at(knob, self._settings, knob.easiest):
+                self._settings = with_value(self._settings, knob.name, value(self._settings, knob.name) / knob.factor)
+                return "easier"
+        return "hold"  # every knob is at its easiest

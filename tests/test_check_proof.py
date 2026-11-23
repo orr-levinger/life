@@ -11,7 +11,7 @@ ROWS = 100  # 100,000 steps
 
 
 def brain_rows(intelligence: float = 2.5, first_intelligence: float = 0.5, wanderers: float = 1.0,
-               toward: float = 0.8, flee: float = 0.8, hunters_at: int = 50, level_end: int = 30,
+               toward: float = 0.8, flee: float = 0.8, hunters_at: int = 50, level_end: float = 30,
                generation_end: int = 40, late_newcomers: int = 0, alive_at_end: bool = True) -> List[Dict]:
     """A run's rows: the dial climbs evenly to `level_end`; hunters exist from row `hunters_at`; an exam every second
     row, the first five at `first_intelligence`."""
@@ -20,7 +20,7 @@ def brain_rows(intelligence: float = 2.5, first_intelligence: float = 0.5, wande
         step = (i + 1) * 1000
         exam = step % 2000 == 0
         rows.append({
-            "step": step, "level": round(level_end * (i + 1) / ROWS), "population": 30, "energy": 0.6, "births": 5,
+            "step": step, "level": round(level_end * (i + 1) / ROWS, 2), "population": 30, "energy": 0.6, "births": 5,
             "newcomers": late_newcomers if i >= ROWS - 5 else 0,
             "generation": round(generation_end * (i + 1) / ROWS),
             "bites_per_creature_step": 0.3, "toward_food": toward, "flee": flee, "direction_concentration": 0.1,
@@ -65,7 +65,8 @@ class TestCheckProof(unittest.TestCase):
         self.assertEqual([result[k] for k in sorted(result)][:6], [True] * 6)
 
     def test_a_world_that_stayed_easy_fails(self):
-        self.assertFalse(verdicts(five(level_end=9))["1 survival got harder"])
+        self.assertFalse(verdicts(five(level_end=9.9))["1 survival got harder"])
+        self.assertTrue(verdicts(five(level_end=10.0))["1 survival got harder"])
 
     def test_late_newcomers_fail(self):
         self.assertFalse(verdicts(five(late_newcomers=2))["2 sustains itself"])

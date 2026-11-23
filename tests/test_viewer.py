@@ -47,7 +47,7 @@ class TestViewer(unittest.TestCase):
         self.assertEqual([len(r["rows"]) for r in found], [3, 100, 5])
         self.assertEqual([r["steps"] for r in found], [30000, 100000, 30000])
         first = found[1]["rows"][0]
-        self.assertEqual((first["step"], first["level"], first["population"]), (1000, 0, 30))
+        self.assertEqual((first["step"], first["level"], first["population"]), (1000, 0.3, 30))
         self.assertIsNone(first["intelligence"])  # no exam in that row
         self.assertEqual((found[1]["rows"][1]["intelligence"], found[1]["rows"][1]["wanderers"]), (0.5, 1))
         self.assertEqual(first["energy"], 0.6)

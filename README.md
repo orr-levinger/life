@@ -85,6 +85,7 @@ Play with it: run `python -m src.viewer` and open http://localhost:8765. Press *
 until you press **Stop**). In **Auto** the world turns its own knobs; in **Manual** you move the sliders (food, energy
 per food, new food per step, the costs of moving and living, lifespan, hunters) and the running world takes each change
 within a second. The charts get a new point every 250 steps, and every change of a knob is marked on them. Past worlds
-are in **History**.
+are in **History**. Every world saves itself every 2,000 steps; pick any save (in History or on a running
+world) and press **Resume from here** to go on from it as a new world. **Pause** holds a world still until **Continue**.
 
 A world can also be run from the command line: `python -m src.evolve --seed 1 --steps 30000 --species learning`.

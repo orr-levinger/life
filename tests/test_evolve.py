@@ -65,6 +65,10 @@ def watched(folder, speed=10.0, until=None):
     write_control(Path(folder), Control("auto", None, False, watch_until=lease, watch_speed=speed))
 
 
+def saved_steps(folder):
+    return sorted(int(p.stem.split("-")[1]) for p in (Path(folder) / "saves").glob("step-*.npz"))
+
+
 def no_waiting():
     return mock.patch("src.evolve.time.sleep")
 
@@ -276,6 +280,58 @@ class TestEvolve(unittest.TestCase):
             quiet_run(["--seed", "1", "--steps", "50", "--species", "instinct", "--out", folder])
             took = time.perf_counter() - started
         self.assertGreaterEqual(took, 1.8)  # 50 steps at 25 a second
+
+    def test_a_save_every_2000_steps(self):
+        with tempfile.TemporaryDirectory() as folder:
+            quiet_run(["--seed", "1", "--steps", "4500", "--species", "instinct", "--out", folder])
+            self.assertEqual(saved_steps(folder), [2000, 4000, 4500])  # and one at the end
+
+    def test_stop_saves(self):
+        with tempfile.TemporaryDirectory() as folder, owner_writes_at(750, Control("auto", None, True)):
+            quiet_run(["--seed", "1", "--forever", "--species", "instinct", "--out", folder])
+            self.assertEqual(saved_steps(folder), [749])  # the last step it took
+
+    def test_resume_starts_a_new_world_from_the_save(self):
+        with tempfile.TemporaryDirectory() as old, tempfile.TemporaryDirectory() as new:
+            quiet_run(["--seed", "3", "--steps", "2000", "--species", "instinct", "--out", old])
+            before = (Path(old) / "scoreboard.csv").read_text()
+            save = Path(old) / "saves" / "step-0002000.npz"
+            rows = read_rows(quiet_run(["--resume", str(save), "--steps", "2500", "--mode", "manual", "--out", new]))
+            record = json.loads((Path(new) / "run.json").read_text())
+            control = read_control(Path(new))
+            after = (Path(old) / "scoreboard.csv").read_text()
+            old_rows = read_rows(Path(old) / "scoreboard.csv")
+        self.assertEqual((record["seed"], record["kind"], record["steps"]), (3, "instinct", 2500))
+        self.assertEqual(record["from"], {"run": Path(old).name, "step": 2000})
+        self.assertEqual([int(r["step"]) for r in rows], [250 * i for i in range(1, 11)])
+        self.assertEqual(rows[:8], old_rows)  # the old world's history up to the save
+        self.assertEqual((rows[8]["manual"], control.mode), ("1", "manual"))
+        self.assertEqual(before, after)  # the old world is never changed
+
+    def test_resume_needs_nothing_else(self):
+        args = parse_args(["--resume", "runs/x/saves/step-0002000.npz"])
+        self.assertEqual(args.resume, "runs/x/saves/step-0002000.npz")
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            parse_args(["--resume", "x.npz", "--species", "instinct", "--seed", "1"])
+
+    def test_pause_takes_no_steps(self):
+        real = control_module.read_control
+        looks = []
+
+        def read(folder):
+            looks.append(time.perf_counter())
+            if len(looks) == 11:  # step 250
+                write_control(folder, Control("auto", None, False, paused=True))
+            if len(looks) > 11 and looks[-1] - looks[11] > 1.0:  # a second later: Continue
+                write_control(folder, Control("auto", None, False))
+            return real(folder)
+
+        with tempfile.TemporaryDirectory() as folder, mock.patch("src.evolve.read_control", read):
+            started = time.perf_counter()
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "500", "--species", "instinct", "--out", folder]))
+            took = time.perf_counter() - started
+        self.assertGreaterEqual(took, 1.0)
+        self.assertEqual([int(r["step"]) for r in rows], [250, 500])  # it went on afterwards
 
 if __name__ == "__main__":
     unittest.main()

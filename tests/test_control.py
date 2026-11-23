@@ -71,5 +71,12 @@ class TestControl(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "watch speed must be a number"):
             watch_speed_from("fast")
 
+    def test_paused_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_control(Path(tmp), Control("manual", None, False, paused=True))
+            self.assertTrue(read_control(Path(tmp)).paused)
+            write_control(Path(tmp), Control("manual", None, False))
+            self.assertFalse(read_control(Path(tmp)).paused)
+
 if __name__ == "__main__":
     unittest.main()

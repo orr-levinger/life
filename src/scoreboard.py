@@ -62,6 +62,12 @@ class Scoreboard:
         self._seen = {"bites": 0, "steps": 0, "births": 0, "newcomers": 0, "earned": 0.0, "spent": 0.0}
         self._deaths_seen = {cause: 0 for cause in DEATH_CAUSES}
 
+    def start_at(self, world: World) -> None:
+        """The first window starts at the world's step now (a resumed world's counters do not start at zero)."""
+        self._seen = {"bites": world.total_bites, "steps": world.creature_steps, "births": world.births,
+                      "newcomers": world.newcomers, "earned": world.energy_earned, "spent": world.energy_spent}
+        self._deaths_seen = {cause: world.deaths[cause] for cause in DEATH_CAUSES}
+
     def _clear_samples(self) -> None:
         self._toward_food: List[float] = []
         self._fled: List[float] = []

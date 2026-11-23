@@ -8,8 +8,8 @@ In Manual the owner turns the knobs (`Dial.set`); Auto goes on from wherever the
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
-from typing import List, Optional
+from dataclasses import asdict, dataclass, replace
+from typing import Dict, List, Optional
 
 from .settings import START, Settings
 
@@ -79,6 +79,14 @@ def difficulty(settings: Settings) -> float:
     return nudges + (settings.attacks - START.attacks)
 
 
+def settings_state(settings: Settings) -> Dict:
+    return asdict(settings)
+
+
+def settings_from_state(state: Dict) -> Settings:
+    return Settings(**{name: tuple(given) if isinstance(given, list) else given for name, given in state.items()})
+
+
 def _at(knob: Knob, settings: Settings, end: float) -> bool:
     return abs(value(settings, knob.name) - end) <= TOLERANCE * max(1.0, abs(end))
 
@@ -99,6 +107,18 @@ class Dial:
     def level(self) -> float:
         """The difficulty now."""
         return difficulty(self._settings)
+
+    def state(self) -> Dict:
+        """What a save keeps: the knobs, the nudges Auto can take back, whose turn it is, and the top level."""
+        return {"settings": settings_state(self._settings), "taken": [settings_state(s) for s in self._taken],
+                "next_harder": self._next_harder, "next_easier": self._next_easier, "max_level": self.max_level}
+
+    @staticmethod
+    def from_state(state: Dict) -> "Dial":
+        dial = Dial(settings_from_state(state["settings"]), state["max_level"])
+        dial._taken = [settings_from_state(s) for s in state["taken"]]
+        dial._next_harder, dial._next_easier = state["next_harder"], state["next_easier"]
+        return dial
 
     def set(self, settings: Settings) -> None:
         """The owner's settings. Auto goes on from here; the nudges it made before are no longer its to take back."""

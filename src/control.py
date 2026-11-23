@@ -1,8 +1,8 @@
 """How the live page talks to a running world: one small JSON file in the run's folder.
 
 The page (through the viewer's server) writes it; the world reads it every few steps. It says the mode (Auto turns the
-knobs itself, Manual leaves them to the owner), the knobs the owner set, whether to stop, and whether the owner has
-jumped into the world to watch it slowly (until when, and how many steps a second).
+knobs itself, Manual leaves them to the owner), the knobs the owner set, whether to stop or pause, and whether the
+owner has jumped into the world to watch it slowly (until when, and how many steps a second).
 """
 from __future__ import annotations
 
@@ -34,6 +34,7 @@ class Control:
     stop: bool
     watch_until: Optional[float] = None  # a time (time.time()): watched slowly until then; None: full speed
     watch_speed: float = WATCH_SPEED  # steps a second while watched
+    paused: bool = False  # paused: the world takes no steps until it is continued
 
     def watched(self, now: float) -> bool:
         return self.watch_until is not None and now < self.watch_until
@@ -84,7 +85,8 @@ def read_control(folder: Path) -> Optional[Control]:
     if raw["mode"] not in MODES:
         raise ValueError(f"{path}: mode must be one of {MODES}, not {raw['mode']!r}")
     settings = None if raw["settings"] is None else settings_from(raw["settings"], START)
-    return Control(raw["mode"], settings, bool(raw["stop"]), raw["watch_until"], watch_speed_from(raw["watch_speed"]))
+    return Control(raw["mode"], settings, bool(raw["stop"]), raw["watch_until"], watch_speed_from(raw["watch_speed"]),
+                   bool(raw["paused"]))
 
 
 def write_control(folder: Path, control: Control) -> None:
@@ -93,7 +95,8 @@ def write_control(folder: Path, control: Control) -> None:
         raise ValueError(f"mode must be one of {MODES}, not {control.mode!r}")
     settings = None if control.settings is None else knob_values(control.settings)
     write_json(folder / CONTROL_FILE, {"mode": control.mode, "settings": settings, "stop": control.stop,
-                                       "watch_until": control.watch_until, "watch_speed": control.watch_speed})
+                                       "watch_until": control.watch_until, "watch_speed": control.watch_speed,
+                                       "paused": control.paused})
 
 
 def write_json(path: Path, data: object) -> None:

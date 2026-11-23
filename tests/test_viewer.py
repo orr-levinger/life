@@ -4,6 +4,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -160,7 +161,7 @@ class TestControlRoom(unittest.TestCase):
         command, folder = self.recorder.launched[0]
         self.assertEqual(folder.name, answer["name"])
         self.assertRegex(answer["name"], r"^\d{8}-\d{6}-3-learning$")
-        self.assertEqual(command[1:9], ["-m", "src.evolve", "--seed", "3", "--forever", "--species", "learning",
+        self.assertEqual(command[1:9], ["-m", "src.evolve", "--seed", "3", "--species", "learning", "--forever",
                                         "--mode"])
         control = read_control(folder)
         self.assertEqual((control.mode, control.stop), ("manual", False))
@@ -275,6 +276,50 @@ class TestControlRoom(unittest.TestCase):
         self.assertEqual(self.server.status(f"/view?run={name}"), 404)
         self.assertEqual(self.server.status("/view?run=..%2F..%2Felsewhere"), 404)
         self.assertEqual(self.server.status("/view"), 404)
+
+    def saved_world(self):
+        name = self.running_world()
+        (self.root / name / "saves").mkdir()
+        for step in (2000, 4000):
+            (self.root / name / "saves" / f"step-{step:07d}.npz").write_bytes(b"")
+        return name
+
+    def test_saves_are_listed(self):
+        name = self.saved_world()
+        self.assertEqual(self.server.get(f"/saves?run={name}"), [2000, 4000])
+        self.assertEqual(self.server.status("/saves?run=..%2F..%2Felsewhere"), 404)
+
+    def test_resume_from_a_save_launches_a_world(self):
+        name = self.saved_world()
+        with mock.patch("src.viewer.save_header", return_value={"seed": 5, "kind": "learning", "step": 4000}):
+            status, answer = self.server.post("/start", {"from": {"run": name, "step": 4000}, "mode": "manual"})
+        self.assertEqual(status, 200)
+        command, folder = self.recorder.launched[0]
+        self.assertRegex(answer["name"], r"^\d{8}-\d{6}-5-learning$")
+        self.assertEqual(command[1:4], ["-m", "src.evolve", "--resume"])
+        self.assertEqual(Path(command[4]), (self.root / name / "saves" / "step-0004000.npz").resolve())
+        self.assertIn("--forever", command)
+        self.assertEqual(read_control(folder).mode, "manual")
+
+    def test_resume_from_a_missing_save_is_refused(self):
+        name = self.saved_world()
+        status, answer = self.server.post("/start", {"from": {"run": name, "step": 3000}, "mode": "auto"})
+        self.assertEqual((status, answer["error"]), (404, f"{name} has no save at step 3000"))
+        self.assertEqual(self.recorder.launched, [])
+
+    def test_pause_is_written_to_the_run(self):
+        name = self.running_world()
+        self.assertEqual(self.server.post("/control", {"run": name, "paused": True})[0], 200)
+        self.assertTrue(read_control(self.root / name).paused)
+        self.assertEqual([run["paused"] for run in runs(self.root)], [True])
+        self.server.post("/control", {"run": name, "paused": False})
+        self.assertFalse(read_control(self.root / name).paused)
+
+    def test_page_has_pause_and_resume(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("Pause", "Continue", "Resume from here"):
+            self.assertIn(words, page)
 
     def test_page_has_jump_in(self):
         with urllib.request.urlopen(self.server.base + "/") as response:

@@ -156,6 +156,36 @@ class Learner:
         self._free.append(slot)
         self._free.sort()
 
+    def state(self) -> Dict[str, np.ndarray]:
+        """What a save keeps: every slot's weights, inborn weights, optimizer moments and step counts, learning speeds,
+        which slots are free, and the dice. Unfinished experience (fewer than a rollout's steps) is not kept."""
+        state = {"t": self._t.copy(), "lr": self._lr.copy(),
+                 "free": np.array([slot in self._free for slot in range(self.slots)]),
+                 "has_inborn": np.array([weights is not None for weights in self._inborn]),
+                 "generator": self._gen.state.numpy()}
+        for name in SHAPES:
+            state[f"params.{name}"] = self._params[name].numpy()
+            state[f"m.{name}"] = self._m[name].numpy()
+            state[f"v.{name}"] = self._v[name].numpy()
+            state[f"inborn.{name}"] = np.stack([np.zeros(SHAPES[name]) if w is None else getattr(w, name)
+                                                for w in self._inborn])
+        return state
+
+    def load_state(self, state: Dict[str, np.ndarray]) -> None:
+        """Back to a saved state (see `state`); experience starts empty."""
+        for name in SHAPES:
+            self._params[name].assign(state[f"params.{name}"])
+            self._m[name].assign(state[f"m.{name}"])
+            self._v[name].assign(state[f"v.{name}"])
+        self._t = state["t"].copy()
+        self._lr = state["lr"].copy()
+        self._free = [slot for slot in range(self.slots) if state["free"][slot]]
+        self._inborn = [NetWeights(**{name: state[f"inborn.{name}"][slot] for name in SHAPES})
+                        if state["has_inborn"][slot] else None for slot in range(self.slots)]
+        self._gen.reset(state["generator"])
+        self._buffers = [[] for _ in range(self.slots)]
+        self._pending = {}
+
     def has_room(self) -> bool:
         return bool(self._free)
 

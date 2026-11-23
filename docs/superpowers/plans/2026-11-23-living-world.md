@@ -443,7 +443,7 @@ Resume from here), their tests, `README.md`.
   run's rows up to that step.
 - `GET /saves?run=<name>` → `[2000, 4000, …]`; `POST /start {from: {run, step}, mode}`; `POST /control {run, paused}`.
 
-- [ ] **Step 1: Write the failing tests:** `test_saves`: `test_save_and_load_give_the_same_world` (creatures, food,
+- [x] **Step 1: Write the failing tests:** `test_saves`: `test_save_and_load_give_the_same_world` (creatures, food,
   knobs, counters equal), `test_a_resumed_world_goes_on_as_the_old_one_did` (instinct: 2,000 steps from a save at 2,000
   equal the old world's steps 2,001-4,000), `test_learners_keep_what_they_learned` (weights, inborn weights, optimizer
   moments and learning speeds equal after loading), `test_auto_keeps_its_nudges` (a take-back after resuming undoes the
@@ -453,17 +453,17 @@ Resume from here), their tests, `README.md`.
   `test_pause_takes_no_steps` (paused for 1 s: no step taken, then it goes on); `test_control`: `test_paused_round_trip`;
   `test_viewer`: `test_saves_are_listed`, `test_resume_from_a_save_launches_a_world`, `test_resume_from_a_missing_save_is_refused`,
   `test_pause_is_written_to_the_run`, `test_page_has_pause_and_resume` (the words Pause, Continue, Resume from here).
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_saves tests.test_evolve tests.test_control
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_saves tests.test_evolve tests.test_control
   tests.test_viewer` · Expected: `No module named 'src.saves'` and failures naming `paused`, `/saves`.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 5: Measure** a learning world's save: its size on disk and how long it takes; and that saving every 2,000
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 5: Measure** a learning world's save: its size on disk and how long it takes; and that saving every 2,000
   steps leaves the speed within 2 % (2,000 instinct steps with and without the save). Numbers in the ledger.
-- [ ] **Step 6: Try it** in the app's browser: start a learning world; after 4,000 steps see its saves 2k and 4k; Pause
+- [x] **Step 6: Try it** in the app's browser: start a learning world; after 4,000 steps see its saves 2k and 4k; Pause
   and see the step counter hold, Continue and see it go on; stop it; in History pick it, pick 2k, Resume from here; the
   new world's charts start with the old history up to 2k and go on from there; Jump in shows its creatures. No errors in
   the browser's console. Each in the ledger with what was seen.
-- [ ] **Step 7: Commit** as `feat: a save every 2,000 steps, resume from any save, and Pause`; `git show --stat HEAD`
+- [x] **Step 7: Commit** as `feat: a save every 2,000 steps, resume from any save, and Pause`; `git show --stat HEAD`
   lists exactly this task's files. Tell the owner it is ready.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")

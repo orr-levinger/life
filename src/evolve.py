@@ -3,11 +3,13 @@
     python -m src.evolve --seed 1 [--steps 100000 | --forever] --species learning|instinct [--mode auto|manual]
                          [--inherit learned|inborn] [--level N] [--max-level M] [--window] [--out DIR]
     python -m src.evolve --seed 1 --steps 20000 --policy random|rules [--level N]      (a yardstick world)
+    python -m src.evolve --resume runs/<run>/saves/step-0016000.npz [--steps N | --forever] [--mode auto|manual]
 
 The world is never restarted and no creature is ever ranked or picked: births, deaths and the soup are the world's own
 rules (src/world.py). This runner starts the world, takes the live page's control file every few steps (src/control.py:
-the mode, the owner's knobs, Stop, a jump-in), lets Auto review the world every 1,000 steps (src/dial.py), holds the intelligence
-exam as a measurement, and writes the scoreboard.
+the mode, the owner's knobs, Stop, Pause, a jump-in), lets Auto review the world every 1,000 steps (src/dial.py), holds
+the intelligence exam as a measurement, writes the scoreboard, and saves the whole world every 2,000 steps
+(src/saves.py). A world resumed from a save is a new run that begins with the old run's history up to that step.
 """
 from __future__ import annotations
 
@@ -15,11 +17,12 @@ import argparse
 import csv
 import itertools
 import json
+import os
 import random
 import time
 from pathlib import Path
 from statistics import mean
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -28,7 +31,9 @@ from .creature import Creature
 from .dial import Dial
 from .exam import ExamResult, run_exam
 from .hall_of_fame import HallOfFame
-from .scoreboard import ROW_KEYS, Scoreboard, Value
+from .saves import (SAVE_EVERY, SaveError, load_world, random_state, save_header, save_path, save_world,
+                    set_random_state)
+from .scoreboard import ROW_KEYS, Scoreboard, Value, read_rows
 from .settings import MAX_CREATURES
 from .world import INHERIT, World
 
@@ -39,6 +44,7 @@ CONTROL_EVERY = 25  # steps between two looks at the control file: a knob moved 
 ROW_EVERY = 250  # steps between two rows of the scoreboard (a new point on every chart)
 REVIEW_EVERY = 1000  # steps between two of Auto's reviews
 EXAM_EVERY = 2000
+PAUSE_LOOK = 0.25  # seconds between two looks at the control file while paused
 EXAM_BRAINS = 20
 SPECIES = {"learning": "learner", "instinct": "brain"}  # the name on the command line -> the creatures' policy
 YARDSTICKS = ("random", "rules")
@@ -46,32 +52,41 @@ YARDSTICKS = ("random", "rules")
 
 def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run one living world and keep its scoreboard.")
-    parser.add_argument("--seed", type=int, required=True)
+    parser.add_argument("--seed", type=int, default=None)
     length = parser.add_mutually_exclusive_group()
     length.add_argument("--steps", type=int, default=None, help=f"how long to run (default {DEFAULT_STEPS:,})")
     length.add_argument("--forever", action="store_true", help="run until Stop is pressed on the live page")
     kind = parser.add_mutually_exclusive_group(required=True)
     kind.add_argument("--species", choices=tuple(SPECIES))
     kind.add_argument("--policy", choices=YARDSTICKS, help="a yardstick world instead of a species")
+    kind.add_argument("--resume", help="a save to go on from, as a new run (its seed and kind come from the save)")
     parser.add_argument("--mode", choices=MODES, default="auto",
                         help="auto: the world turns its own knobs; manual: only the owner does (from the live page)")
-    parser.add_argument("--level", type=float, default=0,
+    parser.add_argument("--level", type=float, default=None,
                         help="the difficulty the world starts at (nudges harder than the easy start)")
     parser.add_argument("--max-level", type=int, default=None, help="Auto never makes the world harder than this")
-    parser.add_argument("--inherit", choices=INHERIT, default="learned",
+    parser.add_argument("--inherit", choices=INHERIT, default=None,
                         help="what a learning baby gets: the parent's brain as it is now, or as the parent was born")
     parser.add_argument("--window", action="store_true", help="draw every step (no added delay)")
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
+    if args.resume:
+        if args.seed is not None or args.level is not None or args.inherit is not None:
+            parser.error("a resumed world takes its seed, difficulty and inheritance from its save")
+        args.kind = None  # read from the save when the run starts
+    elif args.seed is None:
+        parser.error("--seed is required")
+    args.level = 0.0 if args.level is None else args.level
+    args.inherit = "learned" if args.inherit is None else args.inherit
     if args.forever:
         args.steps = None
     elif args.steps is None:
         args.steps = DEFAULT_STEPS
     if args.species:
         args.kind = args.species if args.inherit == "learned" else f"{args.species}-{args.inherit}"
-    else:
+    elif args.policy:
         args.kind = f"{args.policy}-L{args.level:g}"
-    if args.out is None:  # every run gets its own dated folder, so history is never overwritten
+    if args.out is None and not args.resume:  # every run gets its own dated folder, so history is never overwritten
         args.out = new_run_folder(Path("runs"), args.seed, args.kind).as_posix()
     return args
 
@@ -119,40 +134,58 @@ class _Knobs:
         return True
 
 
+def _resumed_from(args: argparse.Namespace) -> Optional[Dict[str, Any]]:
+    """For a resumed world: the old run and the save's step (and the run's seed and kind, from the save)."""
+    if not args.resume:
+        return None
+    header = save_header(Path(args.resume))
+    args.seed, args.kind = header["seed"], header["kind"]
+    args.species = args.kind.split("-")[0]
+    if args.species not in SPECIES:
+        raise SaveError(f"{args.resume} is of a {args.kind} world; only a species world can be resumed")
+    if args.out is None:
+        args.out = new_run_folder(Path("runs"), args.seed, args.kind).as_posix()
+    return {"run": Path(args.resume).parent.parent, "step": header["step"]}
+
+
 def run(args: argparse.Namespace) -> Path:
     started = time.perf_counter()
+    source = _resumed_from(args)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "run.json").write_text(json.dumps({  # the run's record, for the viewer's Live and History
-        "seed": args.seed, "kind": args.kind, "steps": args.steps, "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }))
+    record = {"seed": args.seed, "kind": args.kind, "steps": args.steps, "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    if source is not None:
+        record["from"] = {"run": source["run"].name, "step": source["step"]}
+    (out / "run.json").write_text(json.dumps(record))  # the run's record, for the viewer's Live and History
     control = read_control(out)  # the live page may have written it before starting the run
     if control is None:
         control = Control(args.mode, None, False)
         write_control(out, control)
-    policy = SPECIES[args.species] if args.species else args.policy
-    learner = None
-    if policy == "learner":
-        from .learner import Learner  # TensorFlow is loaded only for learning animals
-
-        learner = Learner(MAX_CREATURES, args.seed)
-    dial = Dial(max_level=args.max_level)
-    dial.turn_to(args.level)
+    exam_rng = random.Random(args.seed + 2)  # who takes the exam: its own stream, so an exam never changes the world
+    if source is None:
+        world, dial = _new_world(args)
+        first_creatures = world.newcomers  # the soup's newcomers are counted from here
+    else:
+        world, dial, extra = load_world(Path(args.resume), learner_seed=args.seed)
+        dial.max_level = args.max_level
+        set_random_state(exam_rng, extra["exam_rng"])
+        first_creatures = 0  # the first creatures were counted in the old run's windows
     if control.settings is not None:  # the world starts from the settings the page asked for, in either mode
         dial.set(control.settings)
     knobs = _Knobs(control)
     knobs.take(control, dial)
-    world = World(WIDTH, HEIGHT, dial.settings, policy, random.Random(args.seed),
-                  np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
-                  inherit=args.inherit)
     world.set_settings(dial.settings, round(dial.level, 2))
-    for _ in range(FIRST_CREATURES):
-        world.add_newcomer()
-    first_creatures = world.newcomers  # the soup's newcomers are counted from here
 
     board = Scoreboard()
+    if source is not None:
+        board.start_at(world)  # a new world's first row counts its first creatures as newcomers; a resumed one's does not
     exam: Optional[ExamResult] = None
-    exam_rng = random.Random(args.seed + 2)  # who takes the exam: its own stream, so an exam never changes the world
+    saved = set()
+
+    def save() -> None:
+        save_world(save_path(out, world.step_count), world, dial,
+                   {"seed": args.seed, "kind": args.kind, "exam_rng": random_state(exam_rng)})
+        saved.add(world.step_count)
     since_review: List[Dict[str, Value]] = []
     next_tick = time.perf_counter()  # while watched: when the next step may start
     viz = _open_window() if args.window else None
@@ -161,12 +194,19 @@ def run(args: argparse.Namespace) -> Path:
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=ROW_KEYS)
         writer.writeheader()
-        for step in itertools.count(1):
+        if source is not None:  # the story so far: the old run's rows up to the save
+            writer.writerows(_history(source["run"], source["step"]))
+            f.flush()
+        for step in itertools.count(world.step_count + 1):
             if args.steps is not None and step > args.steps:
                 break
             watched = knobs.control.watched(time.time())
             if watched or step % CONTROL_EVERY == 0:  # watched: every step, so Jump out is instant
                 found = read_control(out)
+                while found is not None and found.paused and not found.stop:  # paused: no step until Continue
+                    os.utime(csv_path)  # still alive: the page keeps a paused world in Live
+                    time.sleep(PAUSE_LOOK)
+                    found = read_control(out)
                 if found is not None:
                     if found.stop:
                         break
@@ -200,11 +240,16 @@ def run(args: argparse.Namespace) -> Path:
                     world.set_settings(dial.settings, round(dial.level, 2))
                 since_review = []
 
+            if step % SAVE_EVERY == 0:
+                save()
+
             if viz is not None:
                 viz.render(world)
                 viz.fig.canvas.draw_idle()
                 viz.fig.canvas.flush_events()
 
+    if world.step_count not in saved and (source is None or world.step_count > source["step"]):
+        save()  # stopped, or at its last step
     best = HallOfFame()
     for creature, brain in zip(world.creatures, _exam_brains(world, world.creatures)):
         if brain is not None:
@@ -214,6 +259,31 @@ def run(args: argparse.Namespace) -> Path:
     if viz is not None:
         _keep_window_open()
     return csv_path
+
+
+def _new_world(args: argparse.Namespace) -> Tuple[World, Dial]:
+    policy = SPECIES[args.species] if args.species else args.policy
+    learner = None
+    if policy == "learner":
+        from .learner import Learner  # TensorFlow is loaded only for learning animals
+
+        learner = Learner(MAX_CREATURES, args.seed)
+    dial = Dial(max_level=args.max_level)
+    dial.turn_to(args.level)
+    world = World(WIDTH, HEIGHT, dial.settings, policy, random.Random(args.seed),
+                  np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
+                  inherit=args.inherit)
+    for _ in range(FIRST_CREATURES):
+        world.add_newcomer()
+    return world, dial
+
+
+def _history(old_run: Path, step: int) -> List[Dict[str, str]]:
+    """The old run's scoreboard rows up to `step`."""
+    rows = read_rows(old_run / "scoreboard.csv")
+    if rows and tuple(rows[0]) != ROW_KEYS:
+        raise SaveError(f"the scoreboard of {old_run} has other columns than this code writes")
+    return [row for row in rows if int(row["step"]) <= step]
 
 
 def _open_window():

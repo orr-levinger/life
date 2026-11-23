@@ -80,6 +80,10 @@
   #watch canvas { width: 100%; display: block; border-radius: 6px; background: var(--page); }
   #watch .key { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 12px; margin-top: 6px; }
   #watch .key i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  .resume { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; margin-top: 8px; }
+  .resume select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
+  #resume-bar { grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 8px 12px; }
+  .paused { color: var(--miss); font-weight: 600; }
   [hidden] { display: none !important; }
   @media (max-width: 480px) { #charts, #worlds { grid-template-columns: 1fr; } body { padding: 10px; } }
 </style>
@@ -314,14 +318,16 @@ function message(title, detail) {
 function makeCard(run) {
   const card = document.createElement("div");
   card.className = "world";
-  card.innerHTML = `<div class="top"><b>${swatch(run.kind)}${run.kind} · seed ${run.seed}</b>
+  card.innerHTML = `<div class="top"><b>${swatch(run.kind)}${title(run)}</b>
       <div class="seg"><button type="button" data-mode="auto">Auto</button><button type="button" data-mode="manual">Manual</button></div>
       <button type="button" class="act jump">Jump in</button>
+      <button type="button" class="act pause">Pause</button>
       <button type="button" class="act stop">Stop</button></div>
     <div class="where"></div><div class="knobs"></div>
     <label class="switch"><input type="checkbox" data-hunters> Hunters (creatures can attack each other)</label>
     <div class="hint"></div><div class="error"></div>`;
   const state = { card, run, pending: {}, dragging: null, stopArmed: 0 };
+  card.append(resumePicker(run, (problem) => tell(problem)));
   const error = card.querySelector(".error");
   const tell = (problem) => { error.textContent = problem ? problem.message : ""; };
   const change = (name, value) => {
@@ -333,6 +339,10 @@ function makeCard(run) {
     button.addEventListener("click", () => send("/control", { run: state.run.name, mode: button.dataset.mode })
       .then(() => { state.run.mode = button.dataset.mode; updateCard(state); tell(null); }, tell));
   card.querySelector(".jump").addEventListener("click", () => jumpIn(state.run).catch(tell));
+  card.querySelector(".pause").addEventListener("click", () => {
+    const paused = !state.run.paused;
+    send("/control", { run: state.run.name, paused }).then(() => { state.run.paused = paused; updateCard(state); tell(null); }, tell);
+  });
   const stop = card.querySelector(".stop");
   stop.addEventListener("click", () => {
     if (Date.now() - state.stopArmed > 4000) {  // a second click within 4 seconds stops the world
@@ -369,9 +379,10 @@ function makeCard(run) {
 function updateCard(state) {
   const { card, run } = state, last = lastRow(run), manual = run.mode === "manual", now = Date.now();
   for (const button of card.querySelectorAll(".seg button")) button.classList.toggle("on", button.dataset.mode === run.mode);
-  card.querySelector(".where").textContent = last
+  card.querySelector(".where").innerHTML = (run.paused ? '<span class="paused">Paused</span> · ' : "") + (last
     ? `step ${last.step.toLocaleString()} · difficulty ${fmt(last.level)} · ${last.population} alive · energy ${last.energy === null ? "-" : Math.round(last.energy * 100) + " %"}`
-    : "starting… (the first numbers come after 250 steps)";
+    : "starting… (the first numbers come after 250 steps)");
+  card.querySelector(".pause").textContent = run.paused ? "Continue" : "Pause";
   card.querySelector(".hint").textContent = manual
     ? "Manual: only you turn the knobs. A change reaches the world within a second and shows on the charts at the next point."
     : "Auto: the world turns its own knobs every 1,000 steps (harder when many and well fed, easier when few or hungry). Switch to Manual to turn them yourself.";
@@ -409,6 +420,43 @@ function drawWorlds(running) {
   if (full) say(note, "2 worlds are running: stop one to start another.", "full");
   else if (note.dataset.kind === "full" || (note.dataset.kind === "starting" && running.every((r) => r.rows.length)))
     say(note, "", "");  // the note is out of date
+}
+
+// ---- Saves: every world saves itself every 2,000 steps; any save can go on as a new world ----
+const SAVES_EVERY = 10000;  // ms between two looks at a running world's saves
+const startedAt = (name) => { const time = name.split("-")[1]; return `${time.slice(0, 2)}:${time.slice(2, 4)}`; };  // folder names start with the date and time
+const title = (run) => `${run.kind} · seed ${run.seed}` + (run.from ? ` · from the ${startedAt(run.from.run)} world at ${thousands(run.from.step)}` : "");
+
+function resumePicker(run, tell) {
+  const box = document.createElement("div");
+  box.className = "resume";
+  box.innerHTML = `<span>Saves</span><select aria-label="Save"><option value="">none yet</option></select>
+    <select aria-label="Mode"><option value="auto">Auto</option><option value="manual">Manual</option></select>
+    <button type="button" class="act" disabled>Resume from here</button>`;
+  const [steps, mode] = box.querySelectorAll("select"), go = box.querySelector("button");
+  const load = async () => {
+    const found = await (await fetch(`/saves?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })).json().catch(() => []);
+    if (!Array.isArray(found) || !found.length) return;
+    const chosen = steps.value;
+    steps.replaceChildren(...found.slice().reverse().map((step) => new Option(`step ${step.toLocaleString()}`, step)));
+    if (found.includes(Number(chosen))) steps.value = chosen;
+    go.disabled = false;
+  };
+  go.addEventListener("click", async () => {
+    go.disabled = true;
+    try {
+      await send("/start", { from: { run: run.name, step: Number(steps.value) }, mode: mode.value });
+      tell(null);
+      show("live");
+      signature = "";
+      await poll();
+    } catch (problem) { tell(problem); } finally { go.disabled = false; }
+  });
+  load();
+  if (run.status === "running") {  // a running world gets a new save every 2,000 steps
+    const timer = setInterval(() => box.isConnected ? load() : clearInterval(timer), SAVES_EVERY);
+  }
+  return box;
 }
 
 // ---- Jump into a world: watch it slowly, then back to full speed ----
@@ -489,7 +537,7 @@ function historyCard(run) {
   const minutes = run.seconds === null ? null : (run.seconds / 60).toFixed(1);
   const end = run.status !== "finished" ? "ended without finishing"
     : run.steps === null || (last && last.step < run.steps) ? `stopped after ${minutes} min` : `finished in ${minutes} min`;
-  card.innerHTML = `<b>${swatch(run.kind)}${run.kind} · seed ${run.seed}</b><div>${run.started.replace("T", " ")}</div><div>${reached}</div><div>${end}</div>`;
+  card.innerHTML = `<b>${swatch(run.kind)}${title(run)}</b><div>${run.started.replace("T", " ")}</div><div>${reached}</div><div>${end}</div>`;
   card.addEventListener("click", () => { picked = run.name; render(); });
   return card;
 }
@@ -511,8 +559,12 @@ function render() {
   document.getElementById("runs").replaceChildren(...past.map(historyCard));
   if (!past.length) return message("No past runs yet", "A run appears here when it ends.");
   const chosen = past.find((run) => run.name === picked);
-  if (!chosen) return message("Pick a run", "Click a run above to see its charts.");
+  if (!chosen) return message("Pick a run", "Click a run above to see its charts and its saves.");
   drawCharts([chosen]);
+  const bar = document.createElement("div");
+  bar.id = "resume-bar";
+  bar.append(resumePicker(chosen, (problem) => { if (problem) alert(problem.message); }));
+  document.getElementById("charts").prepend(bar);
 }
 
 function show(next) {
@@ -553,7 +605,7 @@ async function poll() {
       row.deaths = (row.deaths_hunger + row.deaths_attack + row.deaths_age) * 1000 / gap;
       row.energy_percent = row.energy === null ? null : row.energy * 100;
     });
-    const now = JSON.stringify(next.map((r) => [r.name, r.rows.length, r.status, r.mode]));
+    const now = JSON.stringify(next.map((r) => [r.name, r.rows.length, r.status, r.mode, r.paused]));
     if (now !== signature) { signature = now; data = next; lastChange = Date.now(); render(); }
     const running = next.filter((run) => run.status === "running").length;
     const ago = Math.round((Date.now() - lastChange) / 1000);

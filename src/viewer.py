@@ -3,8 +3,8 @@ stops worlds.
 
     python -m src.viewer [--runs runs] [--port 8765]        then open http://localhost:8765
 
-Live shows the worlds in progress (or says plainly that nothing is running) with Start, Stop, the Auto / Manual switch
-and a slider for every knob; History keeps every past run. The server listens on this machine only, and its two
+Live shows the worlds in progress (or says plainly that nothing is running) with Start, Stop, Pause, the Auto / Manual
+switch and a slider for every knob; History keeps every past run. Any world's save can be resumed as a new world. The server listens on this machine only, and its two
 writing requests accept JSON only, which another website cannot send to it.
 """
 from __future__ import annotations
@@ -24,6 +24,7 @@ from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run
                       settings_from, watch_speed_from, write_control)
 from .dial import KNOBS, value
 from .evolve import SPECIES
+from .saves import save_header, save_path, saves_of
 from .scoreboard import ROW_KEYS, read_rows
 from .settings import START, Settings
 
@@ -66,6 +67,7 @@ def runs(folder: Path) -> List[Dict]:
         found.append({
             **json.loads(record.read_text()), "name": run.name, "status": status,
             "mode": control.mode if control is not None else "auto",
+            "paused": control.paused if control is not None else False,
             "rows": [{key: _number(row[key]) for key in ROW_KEYS} for row in rows],
             "seconds": float(timing.read_text()) if timing.exists() else None,
         })
@@ -115,24 +117,48 @@ class Controls:
         return {run["name"]: run for run in runs(self.folder) if run["status"] == "running"}
 
     def start(self, body: Dict) -> Dict:
-        species, seed, mode = body.get("species"), body.get("seed"), body.get("mode")
-        if species not in SPECIES:
-            raise Refused(400, f"species must be one of {', '.join(SPECIES)}")
-        if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
-            raise Refused(400, "seed must be a whole number, 0 or more")
+        """A new world: of a species and seed, or resumed from a save (`from: {run, step}`)."""
+        mode = body.get("mode")
         if mode not in MODES:
             raise Refused(400, f"mode must be one of {', '.join(MODES)}")
         settings = self._settings(body.get("settings"), START) if body.get("settings") is not None else None
+        if body.get("from") is not None:
+            save = self._save(body["from"])
+            header = save_header(save)
+            seed, kind = header["seed"], header["kind"]
+            how = ["--resume", str(save.resolve())]
+        else:
+            species, seed = body.get("species"), body.get("seed")
+            if species not in SPECIES:
+                raise Refused(400, f"species must be one of {', '.join(SPECIES)}")
+            if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
+                raise Refused(400, "seed must be a whole number, 0 or more")
+            kind, how = species, ["--seed", str(seed), "--species", species]
         alive = set(self._running()) | {name for name, process in self.started.items() if process.poll() is None}
         if len(alive) >= MAX_RUNNING:
             raise Refused(409, f"{MAX_RUNNING} worlds are running already: stop one first")
-        folder = new_run_folder(self.folder, seed, species)
+        folder = new_run_folder(self.folder, seed, kind)
         folder.mkdir(parents=True)
         write_control(folder, Control(mode, settings, False))
-        command = [sys.executable, "-m", "src.evolve", "--seed", str(seed), "--forever", "--species", species,
-                   "--mode", mode, "--out", str(folder.resolve())]
+        command = [sys.executable, "-m", "src.evolve", *how, "--forever", "--mode", mode, "--out", str(folder.resolve())]
         self.started[folder.name] = self.launch(command, folder)
         return {"name": folder.name}
+
+    def _run_folder(self, name: object) -> Path:
+        if not isinstance(name, str) or name not in {run.name for run in self.folder.iterdir()}:
+            raise Refused(404, f"no world called {name!r}")
+        return self.folder / name
+
+    def _save(self, source: object) -> Path:
+        if not isinstance(source, dict):
+            raise Refused(400, "from must say the world and the step: {run, step}")
+        run, step = self._run_folder(source.get("run")), source.get("step")
+        if step not in saves_of(run):
+            raise Refused(404, f"{run.name} has no save at step {step}")
+        return save_path(run, step)
+
+    def saves(self, name: Optional[str]) -> List[int]:
+        return saves_of(self._run_folder(name))
 
     def control(self, body: Dict) -> Dict:
         running = self._running()
@@ -149,9 +175,11 @@ class Controls:
             if mode != "manual":
                 raise Refused(409, "switch to Manual to turn the knobs")
             settings = self._settings(body["settings"], settings or self._now(running[name]))
-        stop = body.get("stop", current.stop)
+        stop, paused = body.get("stop", current.stop), body.get("paused", current.paused)
         if not isinstance(stop, bool):
             raise Refused(400, "stop must be true or false")
+        if not isinstance(paused, bool):
+            raise Refused(400, "paused must be true or false")
         watch_until, watch_speed = current.watch_until, current.watch_speed
         if "watch_speed" in body:
             try:
@@ -162,16 +190,15 @@ class Controls:
             if not isinstance(body["watch"], bool):
                 raise Refused(400, "watch must be true or false")
             watch_until = time.time() + WATCH_LEASE if body["watch"] else None  # the page renews it while it watches
-        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed))
+        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused))
         return {"mode": mode, "settings": None if settings is None else knob_values(settings), "stop": stop,
-                "watching": watch_until is not None, "watch_speed": watch_speed}
+                "paused": paused, "watching": watch_until is not None, "watch_speed": watch_speed}
 
     def view(self, name: Optional[str]) -> bytes:
         """The picture a watched world last drew (it is drawn 10 to 30 times a second, so no scoreboard is read)."""
-        if name is None or name not in {run.name for run in self.folder.iterdir()}:
-            raise Refused(404, f"no world called {name!r}")
-        control = read_control(self.folder / name)
-        picture = self.folder / name / "view.json"
+        folder = self._run_folder(name)
+        control = read_control(folder)
+        picture = folder / "view.json"
         if control is None or not control.watched(time.time()) or not picture.exists():
             raise Refused(404, "that world is not being watched")
         return picture.read_bytes()
@@ -203,10 +230,13 @@ def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingH
                 self._send(200, runs(folder))
             elif self.path.startswith("/knobs"):
                 self._send(200, knobs())
-            elif self.path.startswith("/view"):
+            elif self.path.startswith("/view") or self.path.startswith("/saves"):
                 try:
                     name = parse_qs(urlparse(self.path).query).get("run", [None])[0]
-                    self._raw(200, controls.view(name), "application/json")
+                    if self.path.startswith("/view"):
+                        self._raw(200, controls.view(name), "application/json")
+                    else:
+                        self._send(200, controls.saves(name))
                 except Refused as refused:
                     self._send(refused.status, {"error": str(refused)})
             else:

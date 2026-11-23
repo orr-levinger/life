@@ -16,9 +16,12 @@ class Level:
 
 
 # food_per_step = 3 is today's spawn rate: int(50 * 30 * 0.002).
+# max_food tuned so random walkers score at most 0.3 bites per creature-step at every level (spec tuning target),
+# measured with src.exam.walker_score(level, seed=1): at the spec's 200 and 150, levels 1 and 2 gave 0.644 and 0.369;
+# level 1 at 40/45/50/60 gave 0.243/0.300/0.306/0.336, level 2 at 80/100/120 gave 0.238/0.261/0.343.
 LEVELS: tuple[Level, ...] = (
-    Level(1, (20, 40), 200, 3, 0.5, 0.05, False),
-    Level(2, (10, 25), 150, 3, 1.0, 0.10, False),
+    Level(1, (20, 40), 40, 3, 0.5, 0.05, False),
+    Level(2, (10, 25), 100, 3, 1.0, 0.10, False),
     Level(3, (10, 25), 80, 3, 1.0, 0.10, False),
     Level(4, (10, 25), 80, 3, 1.0, 0.10, True),
     Level(5, (5, 15), 50, 3, 1.5, 0.15, True),

@@ -521,21 +521,21 @@ Spec: "Live tiles beside the knobs".
 
 **Interfaces:** `world_now(world) -> {step, alive, energy, food, births, deaths, time}` in `src/evolve.py` (`energy`
 the average share of full, `time` the wall-clock time it was written); `GET /now?run=<name>` → the run's `now.json`, `404`
-for an unknown world or one with none yet.
+for an unknown world; `null` before its first numbers (or for a world made by older code).
 
-- [ ] **Step 1: Write the failing tests:** `test_evolve`: `test_a_running_world_says_how_it_is_now` (now.json after a
+- [x] **Step 1: Write the failing tests:** `test_evolve`: `test_a_running_world_says_how_it_is_now` (now.json after a
   run equals the world's last numbers), `test_now_never_changes_the_world` (the scoreboard is the same with and without
   writing it); `test_viewer`: `test_now_of_a_world`, `test_no_now_for_an_unknown_world`, `test_page_has_live_tiles` (the
   words Steps a second, Average energy, Born, Died).
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_evolve tests.test_viewer` · Expected:
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_evolve tests.test_viewer` · Expected:
   failures naming `world_now` and `/now`.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 5: Measure** full speed: 2,000 instinct steps before and after · Expected: within 2 %. In the ledger.
-- [ ] **Step 6: Look at it** in the app's browser on a running world: the right half holds the tiles; the step tile
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 5: Measure** full speed: 2,000 instinct steps before and after · Expected: within 2 %. In the ledger.
+- [x] **Step 6: Look at it** in the app's browser on a running world: the right half holds the tiles; the step tile
   changes every second; hovering a tile explains it; at phone width (375 px) the tiles go under the knobs with no
   sideways scrolling. No errors in the console. In the ledger.
-- [ ] **Step 7: Commit** as `feat: live tiles beside the knobs`; `git show --stat HEAD` lists exactly this task's files.
+- [x] **Step 7: Commit** as `feat: live tiles beside the knobs`; `git show --stat HEAD` lists exactly this task's files.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 

@@ -331,6 +331,23 @@ class TestControlRoom(unittest.TestCase):
         for words in ("Animals", "Mode", "At least", "Only smarter than random", "Only with saves", "Clear filters"):
             self.assertIn(words, page)
 
+    def test_now_of_a_world(self):
+        name = self.running_world()
+        now = {"step": 1234, "alive": 70, "energy": 0.5, "food": 120, "births": 9, "deaths": 3, "time": 1.0}
+        (self.root / name / "now.json").write_text(json.dumps(now))
+        self.assertEqual(self.server.get(f"/now?run={name}"), now)
+
+    def test_no_now_for_an_unknown_world(self):
+        name = self.running_world()
+        self.assertIsNone(self.server.get(f"/now?run={name}"))  # none written yet
+        self.assertEqual(self.server.status("/now?run=..%2F..%2Felsewhere"), 404)
+
+    def test_page_has_live_tiles(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("steps a second", "Average energy", "Born", "Died"):
+            self.assertIn(words, page)
+
     def test_page_has_pause_and_resume(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

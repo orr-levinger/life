@@ -39,8 +39,18 @@
   #start input, #start select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 3px 6px; }
   #start input { width: 70px; }
   .error { color: var(--warn); font-size: 12px; }
-  #worlds { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; margin-bottom: 12px; }
-  .world { background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px; }
+  #worlds { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px; }
+  .world { background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px;
+           display: grid; grid-template-columns: minmax(320px, 1fr) minmax(0, 1.3fr); gap: 12px 20px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-content: start; }
+  .tiles .head { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+  .tile { background: var(--page); border-radius: 8px; padding: 10px 12px; }
+  .tile > span { display: block; color: var(--muted); font-size: 12px; }
+  .tile strong { display: block; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .tile small { color: var(--muted); font-size: 11px; }
+  .tiles svg { grid-column: 1 / -1; width: 100%; height: 56px; }
+  .tiles .line-note { grid-column: 1 / -1; color: var(--muted); font-size: 11px; margin-top: -6px; }
+  @media (max-width: 760px) { .world { grid-template-columns: 1fr; } .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .world .top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
   .world .top b { font-weight: 600; margin-right: auto; }
   .world .where { color: var(--muted); font-size: 12px; margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
@@ -341,8 +351,13 @@ function makeCard(run) {
     <div class="where"></div><div class="knobs"></div>
     <label class="switch"><input type="checkbox" data-hunters> Hunters (creatures can attack each other)</label>
     <div class="hint"></div><div class="error"></div>`;
-  const state = { card, run, pending: {}, dragging: null, stopArmed: 0 };
+  const state = { card, run, pending: {}, dragging: null, stopArmed: 0, now: null, samples: [] };
   card.append(resumePicker(run, (problem) => tell(problem)));
+  const controls = document.createElement("div");
+  controls.append(...card.childNodes);  // the knobs on the left, the live tiles on the right
+  card.append(controls, makeTiles(state));
+  const timer = setInterval(() => card.isConnected ? pollNow(state) : clearInterval(timer), NOW_EVERY_MS);
+  pollNow(state);
   const error = card.querySelector(".error");
   const tell = (problem) => { error.textContent = problem ? problem.message : ""; };
   const change = (name, value) => {
@@ -401,6 +416,7 @@ function updateCard(state) {
       `${tipped("smart", `intelligence ${s.smart === null ? "-" : two(s.smart) + "× random"}`, s, run)}`
     : "starting… (the first numbers come after 250 steps)");
   card.querySelector(".pause").textContent = run.paused ? "Continue" : "Pause";
+  updateTiles(state);
   card.querySelector(".hint").textContent = manual
     ? "Manual: only you turn the knobs. A change reaches the world within a second and shows on the charts at the next point."
     : "Auto: the world turns its own knobs every 1,000 steps (harder when many and well fed, easier when few or hungry). Switch to Manual to turn them yourself.";
@@ -438,6 +454,98 @@ function drawWorlds(running) {
   if (full) say(note, "2 worlds are running: stop one to start another.", "full");
   else if (note.dataset.kind === "full" || (note.dataset.kind === "starting" && running.every((r) => r.rows.length)))
     say(note, "", "");  // the note is out of date
+}
+
+// ---- Live tiles: the world's numbers right now, every second ----
+const NOW_EVERY_MS = 1000, SAMPLES_KEPT = 300;  // one look a second; the energy line covers the last 5 minutes
+const TILES = [
+  ["step", "Step"], ["alive", "Alive"], ["energy", "Average energy"], ["smart", "Intelligence × random"],
+  ["hardest", "Difficulty"], ["steer", "Steers to food"], ["born", "Born"], ["died", "Died"], ["generation", "Generation"],
+];
+
+function makeTiles(state) {
+  const box = document.createElement("div");
+  box.className = "tiles";
+  box.innerHTML = '<div class="head">Right now · updates every second</div>' + TILES.map(([key, label]) =>
+    `<div class="tile" data-tile="${key}"><span>${label}</span><strong data-tip="">-</strong><small></small></div>`).join("") +
+    '<svg viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label="Average energy over the last minutes"></svg>' +
+    '<small class="line-note"></small>';
+  state.tiles = box;
+  return box;
+}
+
+async function pollNow(state) {
+  if (state.run.paused && state.now) return updateTiles(state);
+  const response = await fetch(`/now?run=${encodeURIComponent(state.run.name)}`, { cache: "no-store" }).catch(() => null);
+  if (!response || !response.ok) return updateTiles(state);
+  const now = await response.json();
+  if (now === null) return updateTiles(state);  // no live numbers yet: the tiles use the scoreboard
+  state.now = now;
+  const last = state.samples[state.samples.length - 1];
+  if (!last || last.step !== state.now.step) state.samples.push(state.now);
+  if (state.samples.length > SAMPLES_KEPT) state.samples.shift();
+  updateTiles(state);
+}
+
+function liveNumbers(state) {
+  const { run, now, samples } = state, last = lastRow(run), s = scores(run);
+  const recentRows = last ? run.rows.filter((r) => r.step > last.step - 1000) : [];
+  const sum = (key) => recentRows.reduce((total, r) => total + r[key], 0);
+  const back = now && samples.find((x) => x.step >= now.step - 1000);  // the sample about 1,000 steps ago
+  const spanned = now && back && now.step - back.step >= 900;
+  const earlier = now && samples.find((x) => x.time >= now.time - 5);
+  return {
+    ...s,
+    step: now ? now.step : last ? last.step : 0,
+    speed: now && earlier && now.time > earlier.time ? (now.step - earlier.step) / (now.time - earlier.time) : null,
+    alive: now ? now.alive : s.alive,
+    fed: now && now.energy !== null ? Math.round(now.energy * 100) : s.fed,
+    fedBefore: spanned && back.energy !== null ? Math.round(back.energy * 100) : null,
+    born: spanned ? now.births - back.births : last ? sum("births") : null,
+    died: spanned ? now.deaths - back.deaths : last ? sum("deaths_hunger") + sum("deaths_attack") + sum("deaths_age") : null,
+    food: now ? now.food : null,
+  };
+}
+
+function updateTiles(state) {
+  if (!state.tiles) return;
+  const n = liveNumbers(state), run = state.run;
+  const set = (key, value, note, tip, cls = "") => {
+    const tile = state.tiles.querySelector(`[data-tile="${key}"]`), strong = tile.querySelector("strong");
+    strong.textContent = value;
+    strong.className = cls;
+    strong.dataset.tip = tip;
+    tile.querySelector("small").textContent = note;
+  };
+  set("step", n.step.toLocaleString(), n.speed === null ? (run.paused ? "paused" : "") : `${Math.round(n.speed)} steps a second`,
+      `How many steps this world has lived. It runs ${n.speed === null ? "-" : Math.round(n.speed)} steps a second right now.`);
+  set("alive", n.alive === null ? "-" : n.alive, "of 80 room",
+      `${n.alive} creatures are alive. The world has room for 80; when it is full, no more babies are born until someone dies.`,
+      n.alive !== null && n.alive < 30 ? "bad" : "");
+  set("energy", n.fed === null ? "-" : `${n.fed} %`, n.fedBefore === null ? "of a full tank" : `${n.fed >= n.fedBefore ? "up" : "down"} from ${n.fedBefore} %`,
+      `On average each creature has ${n.fed} % of a full tank of energy. At 70 % a creature has a baby; past its lifespan, ` +
+      `below 30 % it dies. Auto makes the world harder while most are well fed (50 % or more) and easier below 35 %.`,
+      n.fedBefore === null ? "" : n.fed > n.fedBefore ? "good" : n.fed < n.fedBefore ? "bad" : "");
+  set("smart", n.smart === null ? "-" : `${two(n.smart)}×`, n.smartWas === null ? "first test at 2,000 steps" : `random · was ${two(n.smartWas)}×`,
+      explain("smart", n, run), n.smart === null ? "" : n.smart >= 1 ? "good" : "bad");
+  set("hardest", n.ended === null ? "-" : fmt(n.ended), run.mode === "manual" ? "Manual: you set it" : "Auto turns it",
+      explain("hardest", { ...n, hardest: n.ended }, run));
+  set("steer", two(n.steer), "0 = random", explain("steer", n, run), n.steer === null ? "" : n.steer >= 0.2 ? "good" : n.steer < 0 ? "bad" : "");
+  set("born", n.born === null ? "-" : n.born, "last 1,000 steps",
+      `${n.born} babies were born in the last 1,000 steps. A creature has a baby when it reaches 70 % of a full tank.`);
+  set("died", n.died === null ? "-" : n.died, "last 1,000 steps",
+      `${n.died} creatures died in the last 1,000 steps. Only creatures low on energy die: their energy ran out, or they ` +
+      `were past their lifespan with less than 30 %.`);
+  set("generation", n.generation === null ? "-" : n.generation, "deepest alive", explain("generation", n, run));
+  const points = state.samples.filter((x) => x.energy !== null);
+  const svg = state.tiles.querySelector("svg");
+  if (points.length > 1) {
+    const x0 = points[0].step, x1 = points[points.length - 1].step || x0 + 1;
+    const line = points.map((p) => `${((p.step - x0) / Math.max(1, x1 - x0) * 300).toFixed(1)},${(52 - p.energy * 48).toFixed(1)}`).join(" ");
+    svg.innerHTML = `<line x1="0" x2="300" y1="${52 - 0.7 * 48}" y2="${52 - 0.7 * 48}" stroke="var(--grid)" stroke-dasharray="3 3"/>` +
+      `<polyline points="${line}" fill="none" stroke="${colorOf(run.kind)}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+    state.tiles.querySelector(".line-note").textContent = `Average energy, the last ${Math.round((points[points.length - 1].time - points[0].time) / 60) || "<1"} min (dashed: 70 %, enough for a baby)`;
+  }
 }
 
 // ---- Saves: every world saves itself every 2,000 steps; any save can go on as a new world ----

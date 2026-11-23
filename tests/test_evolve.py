@@ -333,5 +333,26 @@ class TestEvolve(unittest.TestCase):
         self.assertGreaterEqual(took, 1.0)
         self.assertEqual([int(r["step"]) for r in rows], [250, 500])  # it went on afterwards
 
+    def test_a_running_world_says_how_it_is_now(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder]))
+            now = json.loads((Path(folder) / "now.json").read_text())
+        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time"})
+        self.assertEqual((now["step"], now["alive"]), (1000, int(rows[-1]["population"])))
+        self.assertEqual(now["births"], sum(int(r["births"]) for r in rows))
+        self.assertEqual(now["deaths"], sum(int(r["deaths_hunger"]) + int(r["deaths_attack"]) + int(r["deaths_age"]) for r in rows))
+        self.assertTrue(0.0 <= now["energy"] <= 1.0)
+        self.assertLess(abs(now["time"] - time.time()), 60)
+
+    def test_now_never_changes_the_world(self):
+        argv = ["--seed", "2", "--steps", "500", "--species", "instinct", "--out"]
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            with mock.patch("src.evolve.NOW_SECONDS", 0.0):  # written every 25 steps
+                with_now = quiet_run(argv + [a]).read_text()
+            with mock.patch("src.evolve.world_now", return_value={}) as asked, mock.patch("src.evolve.write_json"):
+                without = quiet_run(argv + [b]).read_text()  # never looked at, never written
+        self.assertGreater(asked.call_count, 0)
+        self.assertEqual(with_now, without)
+
 if __name__ == "__main__":
     unittest.main()

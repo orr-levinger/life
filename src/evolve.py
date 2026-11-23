@@ -45,6 +45,8 @@ ROW_EVERY = 250  # steps between two rows of the scoreboard (a new point on ever
 REVIEW_EVERY = 1000  # steps between two of Auto's reviews
 EXAM_EVERY = 2000
 PAUSE_LOOK = 0.25  # seconds between two looks at the control file while paused
+NOW_EVERY = 25  # steps between two looks at whether now.json is due (the live page's every-second numbers)
+NOW_SECONDS = 0.5  # now.json is written at most this often: the page asks once a second, a fast world need not pay more
 EXAM_BRAINS = 20
 SPECIES = {"learning": "learner", "instinct": "brain"}  # the name on the command line -> the creatures' policy
 YARDSTICKS = ("random", "rules")
@@ -105,6 +107,16 @@ def world_view(world: World) -> Dict[str, Any]:
                        "heading": [round(v, 3) for v in c.intended_vector], "did": c.last_action,
                        "generation": c.generation} for c in world.creatures],
         "foods": [{"x": round(f.x, 3), "y": round(f.y, 3), "radius": round(f.radius, 3)} for f in world.foods],
+    }
+
+
+def world_now(world: World) -> Dict[str, Any]:
+    """The world's numbers right now, for the live page's tiles."""
+    alive = world.creatures
+    return {
+        "step": world.step_count, "alive": len(alive),
+        "energy": sum(max(c.energy, 0.0) / c.max_energy for c in alive) / len(alive) if alive else None,
+        "food": len(world.foods), "births": world.births, "deaths": sum(world.deaths.values()), "time": time.time(),
     }
 
 
@@ -188,6 +200,7 @@ def run(args: argparse.Namespace) -> Path:
         saved.add(world.step_count)
     since_review: List[Dict[str, Value]] = []
     next_tick = time.perf_counter()  # while watched: when the next step may start
+    now_written = -NOW_SECONDS  # when now.json was last written
     viz = _open_window() if args.window else None
 
     csv_path = out / "scoreboard.csv"
@@ -219,6 +232,10 @@ def run(args: argparse.Namespace) -> Path:
                 next_tick = max(next_tick, time.perf_counter()) + 1.0 / knobs.control.watch_speed
                 time.sleep(max(0.0, next_tick - time.perf_counter()))
 
+            if step % NOW_EVERY == 0 and time.perf_counter() - now_written >= NOW_SECONDS:  # it never changes the world
+                write_json(out / "now.json", world_now(world))
+                now_written = time.perf_counter()
+
             if args.species and step % EXAM_EVERY == 0:  # a measurement only: it never changes the world
                 sample = exam_rng.sample(world.creatures, min(EXAM_BRAINS, len(world.creatures)))
                 exam_seed = args.seed * 100_000 + step // EXAM_EVERY
@@ -248,6 +265,7 @@ def run(args: argparse.Namespace) -> Path:
                 viz.fig.canvas.draw_idle()
                 viz.fig.canvas.flush_events()
 
+    write_json(out / "now.json", world_now(world))  # its last numbers
     if world.step_count not in saved and (source is None or world.step_count > source["step"]):
         save()  # stopped, or at its last step
     best = HallOfFame()

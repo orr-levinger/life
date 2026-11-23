@@ -161,6 +161,12 @@ class Controls:
     def saves(self, name: Optional[str]) -> List[int]:
         return saves_of(self._run_folder(name))
 
+    def now(self, name: Optional[str]) -> bytes:
+        """The world's numbers right now (it writes them every 25 steps); null before its first ones (or for a world
+        made by older code, which writes none)."""
+        numbers = self._run_folder(name) / "now.json"
+        return numbers.read_bytes() if numbers.exists() else b"null"
+
     def control(self, body: Dict) -> Dict:
         running = self._running()
         name = body.get("run")
@@ -231,11 +237,13 @@ def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingH
                 self._send(200, runs(folder))
             elif self.path.startswith("/knobs"):
                 self._send(200, knobs())
-            elif self.path.startswith("/view") or self.path.startswith("/saves"):
+            elif self.path.startswith(("/view", "/saves", "/now")):
                 try:
                     name = parse_qs(urlparse(self.path).query).get("run", [None])[0]
                     if self.path.startswith("/view"):
                         self._raw(200, controls.view(name), "application/json")
+                    elif self.path.startswith("/now"):
+                        self._raw(200, controls.now(name), "application/json")
                     else:
                         self._send(200, controls.saves(name))
                 except Refused as refused:

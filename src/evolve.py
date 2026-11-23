@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import random
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -116,6 +117,7 @@ def _format(row: Dict[str, Value]) -> str:
 
 
 def run(args: argparse.Namespace, levels: Sequence[Level] = LEVELS) -> Path:
+    started = time.perf_counter()
     by_number = {lv.number: lv for lv in levels}
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -199,6 +201,7 @@ def run(args: argparse.Namespace, levels: Sequence[Level] = LEVELS) -> Path:
                 viz.fig.canvas.flush_events()
 
     hall.save(out / "best")
+    (out / "time.txt").write_text(f"{time.perf_counter() - started:.1f}\n")  # seconds the run took
     if viz is not None:
         _keep_window_open()
     return csv_path

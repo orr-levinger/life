@@ -34,8 +34,10 @@ class TestEvolve(unittest.TestCase):
             with open(path, newline="") as f:
                 self.assertEqual(tuple(next(csv.reader(f))), ROW_KEYS)
             rows = read_rows(path)
+            seconds = float((Path(folder) / "time.txt").read_text())
         self.assertEqual([(r["step"], r["round"]) for r in rows], [("1000", "1"), ("2000", "2")])
         self.assertNotEqual(rows[1]["exam_ratio"], "")
+        self.assertGreater(seconds, 0.0)
 
     def test_same_seed_same_csv(self):
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:

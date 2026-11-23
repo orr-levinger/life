@@ -1,7 +1,9 @@
 """The scoreboard: numbers that say whether the creatures are getting smarter, one row per window of steps."""
 from __future__ import annotations
 
+import csv
 import math
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 from .senses import THREAT_RATIO, Senses
@@ -17,6 +19,16 @@ ROW_KEYS = (
 )
 DEATH_CAUSES = ("hunger", "attack")
 Value = Union[int, float, None]
+
+
+def read_rows(path: Path) -> List[Dict[str, str]]:
+    """A run's scoreboard CSV as rows of text; an empty cell is a score with nothing to measure."""
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def numbers(rows: List[Dict[str, str]], key: str) -> List[float]:
+    return [float(row[key]) for row in rows if row[key] != ""]
 
 
 def _cosine(ax: float, ay: float, bx: float, by: float) -> float:

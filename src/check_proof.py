@@ -5,10 +5,11 @@
 from __future__ import annotations
 
 import argparse
-import csv
 from pathlib import Path
 from statistics import mean
 from typing import Dict, List, Optional, Sequence, Tuple
+
+from .scoreboard import numbers, read_rows
 
 EXAM_RATIO_MIN = 2.0
 EXAMS_COMPARED = 5
@@ -21,19 +22,10 @@ SEEDS_AT_FLEE_LEVEL = 4
 Verdict = Tuple[str, Optional[bool], str]
 
 
-def _rows(path: Path) -> List[Dict[str, str]]:
-    with open(path, newline="") as f:
-        return list(csv.DictReader(f))
-
-
-def _numbers(rows: List[Dict[str, str]], key: str) -> List[float]:
-    return [float(r[key]) for r in rows if r[key] != ""]
-
-
 def _exam_ratio(runs: Dict[str, List[Dict[str, str]]]) -> Verdict:
     ok, details = True, []
     for name, rows in runs.items():
-        exams = _numbers(rows, "exam_ratio")
+        exams = numbers(rows, "exam_ratio")
         if len(exams) < 2 * EXAMS_COMPARED:
             ok = False
             details.append(f"{name}: only {len(exams)} exams")
@@ -47,7 +39,7 @@ def _exam_ratio(runs: Dict[str, List[Dict[str, str]]]) -> Verdict:
 def _toward_food(runs: Dict[str, List[Dict[str, str]]]) -> Verdict:
     ok, details = True, []
     for name, rows in runs.items():
-        values = _numbers(rows[-TOWARD_FOOD_ROWS:], "toward_food")
+        values = numbers(rows[-TOWARD_FOOD_ROWS:], "toward_food")
         score = mean(values) if values else None
         ok &= score is not None and score >= TOWARD_FOOD_MIN
         details.append(f"{name}: {'-' if score is None else f'{score:.2f}'}")
@@ -62,7 +54,7 @@ def _flee(runs: Dict[str, List[Dict[str, str]]]) -> Verdict:
             details.append(f"{name}: never reached level {FLEE_LEVEL}")
             continue
         reached += 1
-        values = _numbers(at_level, "flee")
+        values = numbers(at_level, "flee")
         score = mean(values) if values else None
         ok &= score is not None and score >= FLEE_MIN
         details.append(f"{name}: {'-' if score is None else f'{score:.0%}'}")
@@ -81,15 +73,15 @@ def _survives(runs: Dict[str, List[Dict[str, str]]]) -> Verdict:
 def _rules(paths: Sequence[Path]) -> Verdict:
     details = []
     for path in paths:
-        rows = _rows(path)
-        bites = _numbers(rows, "bites_per_creature_step")
+        rows = read_rows(path)
+        bites = numbers(rows, "bites_per_creature_step")
         details.append(f"level {rows[-1]['level']}: {mean(bites):.3f} bites per creature-step" if bites
                        else f"{path}: no rows")
     return ("5 rules yardstick", None, "; ".join(details))
 
 
 def check(brain_csvs: Sequence[Path], rules_csvs: Sequence[Path]) -> List[Verdict]:
-    runs = {str(path): _rows(path) for path in brain_csvs}
+    runs = {str(path): read_rows(path) for path in brain_csvs}
     return [_exam_ratio(runs), _toward_food(runs), _flee(runs), _survives(runs), _rules(rules_csvs)]
 
 

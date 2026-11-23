@@ -151,6 +151,21 @@ this machine only and accepts only JSON requests, which another website cannot s
 which the run looks at every 25 steps. Every value from the page is checked against the knob's ends before it is
 written; a value outside them is refused in plain words.
 
+### Live tiles beside the knobs (the owner, 2026-11-23)
+
+The owner: "it's weird that there is an entire empty section because of the knobs taking half the screen" · "also add
+some live metrics that change over time, the screen looks too static, something like [tiles] for the interesting
+metrics that update live".
+
+- In Live, each running world is one wide panel: its knobs on the left, **nine live tiles** on the right (on a phone,
+  the tiles go under the knobs): step (and steps a second), alive, average energy, intelligence × random (and where it
+  started), difficulty, steers to food, born and died in the last 1,000 steps, deepest generation. Each tile explains
+  itself on hover like History's numbers. Under the tiles, a small line of the average energy over the last minutes.
+- **They change every second:** the world writes a small `now.json` (step, alive, average energy, food on the ground,
+  births and deaths so far) every 25 steps, as it already looks at its control file; the page asks for it every second
+  (`GET /now?run=`). Tiles that only change with the scoreboard (intelligence, steering, difficulty) change with it.
+  A tile shows which way its number moved since the last 1,000 steps (green better, red worse).
+
 ### Jump into the world (the owner, 2026-11-23)
 
 The owner: "add a jump into world button that show me the world in slower motion so can actually see what the creatures

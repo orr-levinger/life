@@ -281,6 +281,107 @@ run), `src/check_proof.py`, `src/compare.py`, `src/viewer.py`, `src/viewer.html`
 - [x] **Step 5: Open it** in the app's browser on `http://localhost:8765`: with no run, Live says "Nothing is
   running" and History lists the past runs; with a run, Live shows its charts.
 
+### Task 4f: Auto turns the knobs by number and fedness; difficulty is one number (added 2026-11-23; the owner's request)
+
+The owner: "an auto mode button that changes and reduces and increases the params based on the number of creatures and
+their fedness." Spec: "The control room". Measured reason for the change of signal: the spec's "Why not nobody died".
+
+**Files:** Modify: `src/dial.py`, `tests/test_dial.py`, `src/evolve.py` (the review gets the number alive, the average
+energy and the soup's newcomers of the last 1,000 steps), `tests/test_evolve.py`, `src/check_proof.py`,
+`tests/test_check_proof.py` (criterion 1 reads the difficulty), `README.md` (rule 4's last paragraph).
+
+**Interfaces:**
+- `Knob(name: str, harder: int, easiest: float, hardest: float)`; `KNOBS: tuple[Knob, ...]` for `max_food`,
+  `food_energy`, `move_cost`, `step_cost`, `lifespan`, `food_per_step` (a range is named by its middle).
+- `value(settings, name) -> float`; `with_value(settings, name, value) -> Settings` (a range keeps its shape around the
+  new middle; the value is held within the knob's ends).
+- `difficulty(settings) -> float`: nudges harder than `START` (below zero: easier); hunters count as one.
+- `Dial(settings: Settings = START, max_level: Optional[int] = None)`: `settings`, `level -> float` (the difficulty),
+  `review(alive: int, energy: Optional[float], newcomers: int) -> str` (`"harder"`, `"easier"`, `"hold"`),
+  `set(settings)` (the owner's settings: the nudges to take back are forgotten), `turn_to(level)`.
+- `MANY = 60`, `WELL_FED = 0.5`, `FEW = 30`, `HUNGRY = 0.35`; `TOO_MANY` goes.
+
+- [ ] **Step 1: Write the failing tests** (`test_dial`): `test_many_and_well_fed_nudges_one_knob_harder`,
+  `test_nudges_take_turns`, `test_few_takes_the_last_nudge_back`, `test_hungry_takes_the_last_nudge_back`,
+  `test_newcomers_take_the_last_nudge_back`, `test_in_between_holds`, `test_auto_can_go_easier_than_the_start`,
+  `test_knobs_stay_within_their_ends`, `test_hunters_come_as_their_own_nudge`, `test_difficulty_counts_the_nudges`,
+  `test_difficulty_of_the_owner_s_settings`, `test_set_forgets_the_nudges_to_take_back`,
+  `test_a_range_keeps_its_shape`, `test_max_level_stops_the_dial`; (`test_evolve`):
+  `test_auto_reviews_number_and_fedness`; (`test_check_proof`): `test_a_world_that_stayed_easy_fails` on the difficulty.
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_dial` · Expected: failures naming `Knob`,
+  `difficulty` and `set`.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+  `grep -rn "TOO_MANY" src tests` · Expected: no output.
+- [ ] **Step 5: Commit** as `feat: Auto turns the knobs by number and fedness, both ways`; `git show --stat HEAD` lists
+  exactly this task's files.
+
+### Task 4g: A world that runs until stopped and takes its knobs while it runs (added 2026-11-23; the owner's request)
+
+**Files:** Create: `src/control.py`, `tests/test_control.py`. Modify: `src/evolve.py` (`--forever`, `--mode`; the
+control file read every 25 steps; a scoreboard row every 250 steps; Auto's review every 1,000; Stop), `src/scoreboard.py`
+(column `manual`), `src/check_proof.py`, `src/compare.py` (their windows are counted in steps, not rows),
+`src/viewer.py` (a run counts as running for 3 minutes after its last row), their tests.
+
+**Interfaces:**
+- `Control(mode: str, settings: Settings, stop: bool)` (frozen); `MODES = ("auto", "manual")`.
+- `settings_from(values: Mapping[str, object], base: Settings) -> Settings`: the knobs named in `values` set on `base`;
+  raises `ValueError` in plain words for an unknown knob, a value that is not a number, or one outside the knob's ends.
+- `read_control(folder: Path) -> Optional[Control]`; `write_control(folder: Path, control: Control) -> None` (written
+  to a temporary file and renamed, so the run never reads half a file).
+- `new_run_folder(runs: Path, seed: int, kind: str) -> Path` (`<YYYYMMDD-HHMMSS>-<seed>-<kind>`; the one place a run's
+  folder is named: `evolve` and the viewer both use it).
+- `python -m src.evolve … [--steps N | --forever] [--mode auto|manual]`; `run.json` gets `steps: null` for a run
+  without a limit. Constants: `ROW_EVERY = 250`, `REVIEW_EVERY = 1000`, `CONTROL_EVERY = 25`.
+- Scoreboard column `manual` (1 while the owner holds the knobs, else 0), after `hunters`.
+
+- [ ] **Step 1: Write the failing tests:** `test_control`: `test_control_file_round_trip`,
+  `test_unknown_knob_is_refused`, `test_value_outside_the_ends_is_refused`, `test_no_file_is_no_control`,
+  `test_run_folders_are_dated`; `test_evolve`: `test_a_row_every_250_steps`, `test_manual_knobs_reach_the_world`
+  (a control file written while the run goes: the next row shows the value and `manual` 1),
+  `test_auto_leaves_manual_knobs_alone`, `test_back_to_auto_goes_on_from_the_owner_s_settings`,
+  `test_stop_ends_a_run_without_a_limit` (it writes `time.txt` and its best brains),
+  `test_steps_or_forever_not_both`; `test_check_proof`, `test_compare`: their fixtures get rows every 250 steps.
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_control tests.test_evolve` · Expected:
+  `No module named 'src.control'`.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [ ] **Step 5: Measure** the cost of the control check: 2,000 steps of `--species instinct` with and without a control
+  file present · Expected: the same time within 2 %. The two times go in the ledger.
+- [ ] **Step 6: Commit** as `feat: a world that runs until stopped and takes its knobs while it runs`;
+  `git show --stat HEAD` lists exactly this task's files.
+
+### Task 4h: The control room on the live page (added 2026-11-23; the owner's request)
+
+**Files:** Modify: `src/viewer.py` (`POST /start`, `POST /control`, `GET /knobs`; each run's `mode`), `src/viewer.html`
+(Start, Stop, the Auto / Manual switch, the seven knobs, the change lines on the charts, the Difficulty chart),
+`tests/test_viewer.py`, `README.md` (how to play).
+
+**Interfaces:**
+- `GET /knobs` → `[{name, label, easiest, hardest, start, step}]` and the hunters switch: the page builds its sliders
+  from the server's list, so the ends are written in one place (`src/dial.py`).
+- `POST /start` `{species, seed, mode, settings?}` → `200 {name}`; `400` in plain words for a bad value; `409` "2
+  worlds are running already" at the limit.
+- `POST /control` `{run, mode?, settings?, stop?}` → `200`; `400` for a bad value; `404` for a run that is not running.
+- Both accept only `Content-Type: application/json`; the server stays on `127.0.0.1`.
+- `viewer.runs()` gives each run `mode` (from its control file; `auto` when it has none).
+
+- [ ] **Step 1: Write the failing tests:** `test_knobs_list_the_ends_of_every_slider`, `test_start_launches_a_world`
+  (the process launch is replaced by a recorder: the command, the folder, the control file),
+  `test_start_refuses_a_third_world`, `test_start_refuses_a_bad_species`, `test_control_writes_the_run_s_file`,
+  `test_control_refuses_a_value_outside_the_ends`, `test_control_refuses_a_run_that_is_not_running`,
+  `test_posts_must_be_json`, `test_stop_is_written_to_the_run`, `test_page_has_the_control_room` (the words Start,
+  Stop, Auto, Manual).
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_viewer` · Expected: 404s and missing words.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [ ] **Step 5: Play with it** in the app's browser on `http://localhost:8765`: start a Manual world of learning
+  animals; lower energy per food; the next point shows the value, the line marks the change, average energy falls;
+  switch to Auto and see a knob move by itself within 1,000 steps; press Stop and find the world in History. No errors
+  in the browser's console. Each of these is written in the ledger with what was seen.
+- [ ] **Step 6: Commit** as `feat: the control room (Auto, Manual, live knobs, Start and Stop)`; `git show --stat HEAD`
+  lists exactly this task's files. Tell the owner it is ready to play with.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.
@@ -346,8 +447,11 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
    die, never easier than the start), and `grep -rn "STAGES|should_unlock|max-stage|exam_ratio" -E src tests` → no output.
 5. **Every long run was watched live:** the viewer was open in the app's browser before the Task 4, Task 4d, Task 5 and
    Task 7 runs; with no run the page says "Nothing is running", and past runs are in History.
+5a. **The control room works:** Task 4h Step 5 was done in the app's browser and each part seen (a knob moved by hand
+   reaches the running world and shows on the charts; Auto moves a knob by itself; Stop ends the world and it is in
+   History), with no error in the browser's console; `tests/test_control.py` and `tests/test_viewer.py` pass.
 6. **Brain size evolves:** `test_new_neuron_is_silent_at_birth` and `test_new_layer_is_silent_at_birth` pass, and Task 5
    Step 5 showed intelligence and the level reached not below Task 4d's.
 7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,
    first, with its numbers.
-8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 5 and 6.
+8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 5 and 6.

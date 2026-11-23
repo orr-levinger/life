@@ -92,17 +92,64 @@ is supposed to drive intelligence. Okay."
   born, between 4,000 and 6,000 steps at the start.
 - **The world's settings** start easy: at most 200 food pieces of energy 20–40, 3 new food candidates per step, moving
   costs 0.5 per unit, living costs 0.05 per step, no hunters.
-- **The dial:** every 1,000 steps the world looks at who died in that window.
-  - **Nobody died:** survival is too easy. One setting is nudged about 5 % harder, one setting at a time, in turn: less
-    food at once, less energy per food, costlier moves, costlier living, shorter lifespans, less new food. After 24
-    nudges the next one switches hunters on.
-  - **Too many died** (more than a quarter of the creatures alive, or random newcomers had to be added): the last nudge
-    is taken back. If it happens again, the one before it, and so on down to the easy start.
-  - **Some died, not too many:** nothing changes. This is where survival is hard enough to select.
-- The dial's level (how many nudges are in force) and every setting are on the scoreboard and the live page.
-- All numbers here (5 %, 1,000 steps, a quarter, 30 %, 24, the starting settings and each setting's limits) are
-  Claude's starting values, not measured; the plan tunes them by measurement.
+- **The dial as first built** (Task 4d) looked at who died every 1,000 steps: nobody died, one setting about 5 %
+  harder, one setting at a time; more than a quarter died (or random newcomers were needed), the last nudge taken back,
+  never easier than the start. **Its signal is replaced** by the number of creatures and how well fed they are: see
+  "The control room" below, which also says why.
+- The difficulty and every setting are on the scoreboard and the live page.
+- All numbers here (5 %, 1,000 steps, 30 %, 24, the starting settings and each setting's ends) are Claude's starting
+  values, not measured; the plan tunes them by measurement.
 - **Primordial soup:** while fewer than 10 creatures live, one random newcomer appears each step.
+
+### The control room: play with the world live (the owner, 2026-11-23)
+
+The owner: "Create a webpage where I can play with each parameter, the ease of each step, like lifespan, energy per
+food, all these things, so I can set and play with it myself and have the simulation run as I please. And I can at any
+point reduce any and change any param at real time. … I want to be able to play in real time live and see all the
+charts, how they are changing based on my change. It should be the same web app that you're presenting to me when it's
+automatic. We should have like an auto mode button that changes and reduces and increases the params based on the
+number of creatures and their fedness. And there should be manual mode where I can tweak, and then steps just keep
+running and running forever until we stop it."
+
+**On the same page, in Live:**
+- **Start** a world: learning or instinct animals, a seed, Auto or Manual. It runs until **Stop** is pressed; there is
+  no step limit. At most 2 worlds run at once. A stopped world stays in History.
+- **Seven knobs**, each a slider that shows its value now: food pieces at most, energy per food, new food per step, the
+  cost of moving, the cost of living per step, lifespan, and hunters on or off.
+- **Manual:** the owner moves a knob and the running world takes the new value within 25 steps (under a second).
+  Nothing but the owner changes a knob.
+- **Auto:** the world turns its own knobs (the rule below). The sliders move by themselves and cannot be dragged.
+  Switching to Manual keeps the values of that moment; switching back to Auto goes on from wherever the knobs are.
+- **The charts get a new point every 250 steps** (before: every 1,000), so a change shows within seconds. Every change
+  of a knob is a thin vertical line on every chart; pointing at it says what changed ("energy per food 30 → 24, by you").
+- **Difficulty is one number that works in both modes:** how many 5 % nudges harder than the easy start the world is
+  (each knob's distance from its starting value, counted in 5 % steps; hunters count as one). Below zero means easier
+  than the start. With Auto alone from the start it is exactly the number of nudges in force.
+
+**Auto's rule.** Every 1,000 steps:
+- **Many and well fed** (60 or more creatures, and their average energy at least 50 % of full): one knob is nudged 5 %
+  harder, one knob at a time, in turn: less food at once, less energy per food, costlier moves, costlier living,
+  shorter lifespans, less new food. At difficulty 24 the next nudge switches hunters on.
+- **Few or hungry** (fewer than 30 creatures, or average energy below 35 %, or random newcomers had to be added): the
+  last harder nudge is taken back. With none to take back, one knob is nudged 5 % easier, in turn. Auto may go easier
+  than the start.
+- **Anything else:** nothing changes.
+
+Each knob has an easiest and a hardest value it never passes; they are the ends of its slider.
+
+**Why not "nobody died" any more.** Measured 2026-11-23 on the first dial run (learning animals, seed 1, steps
+1,000–3,000): the world was full (80 creatures) and gaining energy (earned ÷ spent 1.11–1.20), yet 41–62 creatures
+died of hunger in every 1,000 steps while 62–82 were born. A full world always has deaths, so "nobody died" never
+came and the dial stayed at 0. How many live and how well fed they are say directly whether life is easy.
+
+The numbers (60, 30, 50 %, 35 %, 5 %, 1,000 steps, 25 steps, 250 steps, each knob's ends) are Claude's starting values,
+not measured; the plan tunes them by measurement.
+
+**Underneath.** The page sends Start, the mode, a knob's value and Stop to the viewer's server. The server listens on
+this machine only and accepts only JSON requests, which another website cannot send to it. Start launches one
+`python -m src.evolve … --forever` process. The mode, the knobs and Stop are written to that run's own `control.json`,
+which the run looks at every 25 steps. Every value from the page is checked against the knob's ends before it is
+written; a value outside them is refused in plain words.
 
 ### The intelligence exam
 
@@ -162,7 +209,7 @@ wanderers').
 ## How we know it works
 
 Learning animals, seeds 1–5:
-1. **Survival got harder:** every seed ends at dial level 10 or more.
+1. **Survival got harder:** in Auto, every seed ends at difficulty 10 or more.
 2. **Life sustains itself:** no newcomer in the last 20,000 steps.
 3. **Generations follow each other:** the deepest generation alive at the end is at least 20.
 4. **Smarter from generation to generation:** intelligence over the last 5 exams is at least twice the random

@@ -152,15 +152,15 @@ its eat output is above 0 (and attack does not win), a learner when it picks cho
 on, else the nearest food within reach, else `None` (a miss: `EAT_MISS_COST`, no bite). The random wanderer and the rules
 yardstick eat whenever food is within reach.
 
-- [ ] **Step 1: Write the failing tests:** `test_brain_eat_in_reach`, `test_brain_eat_miss_when_nothing_in_reach`,
+- [x] **Step 1: Write the failing tests:** `test_brain_eat_in_reach`, `test_brain_eat_miss_when_nothing_in_reach`,
   `test_random_walker_eats_in_reach`, `test_eats_food_in_reach` (rules), `test_eat_action_takes_a_bite`,
   `test_eat_miss_costs_energy`, `test_second_eater_misses_last_bite`, `test_no_bite_without_choosing_to_eat`,
   `test_learner_eat_choice`; the brain has 4 outputs and the learner 3 choices.
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: failures naming `EAT`.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run them to see them pass** · `$PY -m unittest discover tests` · Expected: `OK`. Then
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: failures naming `EAT`.
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run them to see them pass** · `$PY -m unittest discover tests` · Expected: `OK`. Then
   `grep -rn "on contact" src` · Expected: no output.
-- [ ] **Step 5: Commit** as `fix: eating is the creature's own action again`; `git show --stat HEAD` lists exactly this
+- [x] **Step 5: Commit** as `fix: eating is the creature's own action again`; `git show --stat HEAD` lists exactly this
   task's files.
 
 ### Task 4: The check that could prove the design wrong (the Garden)
@@ -171,6 +171,23 @@ yardstick eat whenever food is within reach.
   last 5 rows is above the first 5.
 - [ ] **Step 3:** Show the owner the numbers. **If the check fails, stop:** report it with what was measured and a
   proposal; nothing after this task is run until the owner decides.
+
+### Task 4b: Old age in the Garden (added 2026-11-23; the owner: "when none dies there is 0 evolution only learning" · "Ok")
+
+**Files:** Modify: `src/stages.py` (`Stage.mortal` becomes `Stage.hunger`: whether an empty creature dies), `src/world.py`
+(old age and the soup at every stage; hunger only where `stage.hunger`), `src/viewer.html` (the Garden's note), tests
+(`test_stages`, `test_world_rules`, `tests/helpers.py`).
+
+- [ ] **Step 1: Write the failing tests:** `test_only_the_garden_cannot_starve`, `test_garden_never_starves`,
+  `test_old_age_kills_in_the_garden`, `test_a_death_of_old_age_makes_room_for_a_baby`, `test_soup_also_in_the_garden`.
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_stages tests.test_world_rules` · Expected:
+  failures naming `hunger` and old age in the Garden.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [ ] **Step 5: Commit** as `feat: old age in the Garden, so evolution runs from the first step`.
+- [ ] **Step 6: The Garden run again**, with the viewer open: `$PY -m src.evolve --seed 1 --steps 30000 --species
+  learning --max-stage 0 --out runs/2-learning` · Expected: births and deaths of old age after step 5,000, the deepest
+  generation rising, and an exam score not below Task 4's. Show the owner both runs side by side.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 

@@ -83,22 +83,25 @@ Stages change only when the creatures pass the intelligence exam, never by the c
 
 | Stage | What can kill | Food | Moving and living cost | Hunting |
 |---|---|---|---|---|
-| 0 Garden | nothing: nobody dies | plenty, rich | cheap | off |
+| 0 Garden | old age only: nobody starves | plenty, rich | cheap | off |
 | 1 Mortal | hunger, old age | plenty, rich | cheap | off |
 | 2 Scarcity | hunger, old age | less, poorer | double | off |
 | 3 Hunters | hunger, old age, hunters | less, poorer | double | on |
 | 4 Harsh | hunger, old age, hunters | little, poor | triple | on |
 
-- **Garden:** a creature at zero energy simply stays at zero. Lives are long, so there is time to learn. Babies are
-  still born from energy, until the world is full.
-- **Old age** arrives together with death, so that the world keeps renewing and generations follow each other. It
-  starts at 5,000 steps (not measured; tuned in the plan).
+- **Garden:** a creature at zero energy simply stays at zero: nobody starves. Lives are long, so there is time to
+  learn.
+- **Old age is there from the first step** (changed 2026-11-23, approved by the owner: "Ok"). The first Garden run
+  showed why: with no deaths at all the world filled to its limit of 80 by step 1,000 and not one baby was born in the
+  next 14,000 steps (measured, `runs/1-learning`), so there was learning but no evolution. Each death of old age frees
+  a place for a baby of a creature that has gathered the energy. It starts at 5,000 steps (not measured; tuned in the
+  plan).
 - **Starting numbers** (not measured; tuned in the plan): food pieces at most 200, 200, 100, 100, 50; food energy 20–40,
   20–40, 10–25, 10–25, 5–15; cost per unit moved 0.5, 0.5, 1.0, 1.0, 1.5; cost per step 0.05, 0.05, 0.10, 0.10, 0.15.
   Two rules hold through any tuning: food never increases from one stage to the next, and each mortal stage settles
   between 30 and 60 creatures by food alone.
 - **How many can live:** food decides. A safety limit of 80 pauses births only to keep the simulation fast.
-- **Primordial soup:** in a mortal stage, while fewer than 10 creatures live, one random newcomer appears each step.
+- **Primordial soup:** at every stage, while fewer than 10 creatures live, one random newcomer appears each step.
   Newcomers are counted; when life sustains itself, the count stops.
 
 ### The intelligence exam

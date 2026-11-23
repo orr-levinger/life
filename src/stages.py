@@ -40,6 +40,7 @@ MAX_CREATURES = 80  # a safety limit that only pauses births, to keep the simula
 SOUP_MIN = 10  # in a mortal stage, random newcomers appear while fewer than this many live
 START_ENERGY = (50.0, 100.0)  # a newcomer's energy
 HUNTER_SHARE = 0.8  # share of the energy an attacker takes that it keeps
+EAT_MISS_COST = 0.2  # energy lost choosing to eat with no food within reach
 MUTATION_RATE = 0.1  # share of a baby's brain weights that change
 MUTATION_SCALE = 0.2  # how much a changed weight moves (standard deviation)
 SIZE_MUTATION = 0.2  # a baby's size is its parent's × (1 ± up to this)

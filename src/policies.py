@@ -1,7 +1,7 @@
 """How a creature picks its action: its brain, its learning network, a random walk, or the hand-written rules.
 
-Only brains and learning networks are creatures of the simulation; the random walk and the rules are yardsticks.
-Nobody decides to eat: eating happens on contact (see World).
+Each step a creature chooses one action: move, eat, or attack. Only brains and learning networks are creatures of the
+simulation; the random walk and the rules are yardsticks.
 """
 from __future__ import annotations
 
@@ -17,10 +17,20 @@ from .sensors import ProximitySensor
 
 if TYPE_CHECKING:
     from .creature import Creature
+    from .food import Food
     from .world import World
 
-Action = Tuple[str, Any]  # ("MOVE", (dx, dy)) | ("ATTACK", Creature)
+Action = Tuple[str, Any]  # ("MOVE", (dx, dy)) | ("EAT", Food | None) | ("ATTACK", Creature)
 STAY: Action = ("MOVE", (0.0, 0.0))
+
+
+def _reachable_food(creature: Creature, senses: Senses) -> Optional[Food]:
+    """What an eat action bites: the food the creature stands on, else the nearest food within reach, else nothing."""
+    if senses.on_food is not None:
+        return senses.on_food
+    if senses.food is not None and creature.can_reach(senses.food):
+        return senses.food
+    return None
 
 
 def _capped(dx: float, dy: float, top_speed: float) -> Tuple[float, float]:
@@ -31,22 +41,29 @@ def _capped(dx: float, dy: float, top_speed: float) -> Tuple[float, float]:
 
 
 def brain_action(creature: Creature, senses: Senses, attacks_on: bool) -> Action:
-    """Outputs 1-2 move, 3 attack (only when hunting exists at this stage)."""
+    """Outputs 1-2 move, 3 eat, 4 attack (only when hunting exists at this stage)."""
     out = creature.brain.forward(senses.vector)
-    if attacks_on and out[2] > 0 and senses.other is not None:
+    if attacks_on and out[3] > 0 and out[3] >= out[2] and senses.other is not None:
         return ("ATTACK", senses.other)
+    if out[2] > 0:
+        return ("EAT", _reachable_food(creature, senses))
     return ("MOVE", _capped(out[0] * creature.velocity, out[1] * creature.velocity, creature.velocity))
 
 
 def learner_action(creature: Creature, senses: Senses, choice: int, move: Tuple[float, float]) -> Action:
-    """A learner's choice (0 move, 1 attack) and move as an action; an attack with nobody in view does nothing."""
+    """A learner's choice (0 move, 1 eat, 2 attack) and move as an action; an attack with nobody in view does nothing."""
     if choice == 1:
+        return ("EAT", _reachable_food(creature, senses))
+    if choice == 2:
         return ("ATTACK", senses.other) if senses.other is not None else STAY
     return ("MOVE", _capped(move[0] * creature.velocity, move[1] * creature.velocity, creature.velocity))
 
 
 def random_action(creature: Creature, senses: Senses, rng: random.Random) -> Action:
-    """A random direction at a random speed, every step."""
+    """The yardstick wanderer: eat whenever food is within reach; otherwise a random direction at a random speed."""
+    food = _reachable_food(creature, senses)
+    if food is not None:
+        return ("EAT", food)
     angle = rng.uniform(0.0, 2.0 * math.pi)
     speed = rng.uniform(0.0, creature.velocity)
     return ("MOVE", (math.cos(angle) * speed, math.sin(angle) * speed))
@@ -79,7 +96,7 @@ def rules_action(creature: Creature, world: World, rng: random.Random) -> Action
     if foods:
         food, _, angle = foods[0]
         if creature.can_reach(food):
-            return STAY  # stay on the food and keep eating
+            return ("EAT", food)
         return ("MOVE", (math.cos(angle) * v * 0.75, math.sin(angle) * v * 0.75))
 
     if rng.random() < 0.5:

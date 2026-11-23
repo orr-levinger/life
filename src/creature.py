@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-from .stages import HUNTER_SHARE
+from .stages import EAT_MISS_COST, HUNTER_SHARE
 
 if TYPE_CHECKING:
     from .brain import Brain
@@ -60,33 +60,37 @@ class Creature:
         self.intent = "REST"  # display only
         self.intended_vector: Tuple[float, float] = (0.0, 0.0)  # display only
 
-    @classmethod
-    def eat_reach(cls, creature_radius: Any, food_radius: Any) -> Any:
-        """The one eat-range rule: how far apart a creature and a food may be for a bite (numbers or arrays)."""
-        return (creature_radius + food_radius) * cls.EAT_RANGE_FACTOR
-
     def can_reach(self, food: Food) -> bool:
-        return math.hypot(food.x - self.x, food.y - self.y) <= self.eat_reach(self.radius, food.radius)
+        """The one eat-range rule: close enough to take a bite."""
+        reach = (self.radius + food.radius) * self.EAT_RANGE_FACTOR
+        return math.hypot(food.x - self.x, food.y - self.y) <= reach
 
     def apply_action(self, action: Tuple[str, Any], world: World) -> None:
         kind, param = action
         if kind == "MOVE":
             self._move(param, world)
+        elif kind == "EAT":
+            self._eat(param, world)
         elif kind == "ATTACK":
             self._attack(param, world)
         else:
             raise ValueError(f"unknown action {kind!r}")
         self.energy = min(self.energy - world.stage.step_cost, self.max_energy)
 
-    def bite(self, food: Food, world: World) -> None:
-        """Eating on contact: one bite of the food the creature touches."""
+    def _eat(self, food: Optional[Food], world: World) -> None:
+        """The creature chose to eat: one bite of `food` if it is still there and within reach, otherwise a miss."""
+        if food is None or food not in world.foods or food.energy <= 0 or not self.can_reach(food):
+            self.energy -= EAT_MISS_COST
+            self.last_action = "EAT_MISS"
+            return
         amount = min(1.0, food.energy)
         food.energy -= amount
-        self.energy = min(self.energy + amount, self.max_energy)
+        self.energy += amount
         self.food_eaten += amount
         world.total_bites += 1
         if food.energy <= 0:
             world.foods.remove(food)
+        self.last_action = "EAT"
 
     def _move(self, vector: Tuple[float, float], world: World) -> None:
         dx, dy = vector

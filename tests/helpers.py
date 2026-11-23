@@ -22,9 +22,9 @@ def make_world(stage: Stage = NO_FOOD, seed: int = 0, evolving: bool = True, lea
 
 
 def fixed_brain(outputs: Sequence[float]) -> Brain:
-    """A brain whose 3 outputs (move x, move y, attack) are always `outputs` (±1 becomes ±0.999999)."""
+    """A brain whose 4 outputs (move x, move y, eat, attack) are always `outputs` (±1 becomes ±0.999999)."""
     b2 = np.arctanh(np.clip(np.asarray(outputs, dtype=float), -0.999999, 0.999999))
-    return Brain(np.zeros((12, 16)), np.zeros(16), np.zeros((16, 3)), b2)
+    return Brain(np.zeros((12, 16)), np.zeros(16), np.zeros((16, 4)), b2)
 
 
 def add(world: World, x: float, y: float, size: float = 1.0, energy: float = 50.0, policy: str = "random",

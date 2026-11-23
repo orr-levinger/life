@@ -6,11 +6,12 @@ import numpy as np
 
 from src.food import Food
 from src.learner import LEARNING_RATE, Learner, NetWeights
-from src.stages import BABY_SHARE, MAX_AGE, MAX_CREATURES, STAGES
+from src.stages import BABY_SHARE, EAT_MISS_COST, MAX_AGE, MAX_CREATURES, STAGES
 from tests.helpers import GARDEN_NO_FOOD, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
 from tests.test_learner import live, same
 
-STAY = [0, 0, -1]
+STAY = [0, 0, -1, -1]
+EAT = [0, 0, 1, -1]
 
 
 def food(x: float, y: float, energy: float = 10.0) -> Food:
@@ -41,31 +42,47 @@ class TestCosts(unittest.TestCase):
 
 
 class TestEating(unittest.TestCase):
-    def test_eating_on_contact(self):
+    def test_eat_action_takes_a_bite(self):
         w = make_world()
-        c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
+        c = add(w, 10, 10, policy="brain", brain=fixed_brain(EAT))
         f = food(10, 10)
         w.foods.append(f)
         w.step()
         self.assertAlmostEqual(c.energy, 51.0 - NO_FOOD.step_cost)
         self.assertAlmostEqual(f.energy, 9.0)
         self.assertAlmostEqual(c.food_eaten, 1.0)
-        self.assertEqual(w.total_bites, 1)
+        self.assertEqual((w.total_bites, c.last_action), (1, "EAT"))
 
-    def test_last_bite_goes_to_one(self):
+    def test_no_bite_without_choosing_to_eat(self):
         w = make_world()
-        eaters = [add(w, 10, 10, policy="brain", brain=fixed_brain(STAY)),
-                  add(w, 10.2, 10, policy="brain", brain=fixed_brain(STAY))]
+        c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
+        f = food(10, 10)
+        w.foods.append(f)
+        w.step()
+        self.assertEqual((f.energy, c.food_eaten, w.total_bites), (10.0, 0.0, 0))
+
+    def test_eat_miss_costs_energy(self):
+        w = make_world()
+        c = add(w, 10, 10, policy="brain", brain=fixed_brain(EAT))
+        w.step()
+        self.assertAlmostEqual(c.energy, 50.0 - EAT_MISS_COST - NO_FOOD.step_cost)
+        self.assertEqual(c.last_action, "EAT_MISS")
+
+    def test_second_eater_misses_last_bite(self):
+        w = make_world()
+        eaters = [add(w, 10, 10, policy="brain", brain=fixed_brain(EAT)),
+                  add(w, 10.2, 10, policy="brain", brain=fixed_brain(EAT))]
         f = food(10.1, 10, energy=1.0)
         w.foods.append(f)
         w.step()
         self.assertNotIn(f, w.foods)
         self.assertEqual(sorted(c.food_eaten for c in eaters), [0.0, 1.0])
+        self.assertEqual(sorted(c.last_action for c in eaters), ["EAT", "EAT_MISS"])
         self.assertEqual(w.total_bites, 1)
 
     def test_energy_capped_at_max(self):
         w = make_world(evolving=False)
-        c = add(w, 10, 10, energy=99.99, policy="brain", brain=fixed_brain(STAY))
+        c = add(w, 10, 10, energy=99.99, policy="brain", brain=fixed_brain(EAT))
         w.foods.append(food(10, 10))
         w.step()
         self.assertEqual(c.energy, c.max_energy)

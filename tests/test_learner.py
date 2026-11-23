@@ -28,7 +28,7 @@ def food_senses(angles: np.ndarray) -> np.ndarray:
 
 
 def toy_rewards(actions, angles: np.ndarray) -> np.ndarray:
-    """Reward = cosine between the move and the food direction; attacking earns nothing."""
+    """Reward = cosine between the move and the food direction; eating or attacking earns nothing."""
     rewards = []
     for (choice, (dx, dy)), angle in zip(actions, angles):
         length = math.hypot(dx, dy)
@@ -49,17 +49,17 @@ class TestLearner(unittest.TestCase):
         actions = learner.act([0, 1, 2, 3], np.zeros((4, 12)), attacks_on=True)
         self.assertEqual(len(actions), 4)
         for choice, (dx, dy) in actions:
-            self.assertIn(choice, (0, 1))  # move or attack
+            self.assertIn(choice, (0, 1, 2))  # move, eat or attack
             self.assertTrue(-1.0 <= dx <= 1.0 and -1.0 <= dy <= 1.0)
 
     def test_attack_masked(self):
         learner = learner_with(10)
         choices = [choice for _ in range(100)
                    for choice, _ in learner.act(list(range(10)), np.zeros((10, 12)), attacks_on=False, learning=False)]
-        self.assertEqual(set(choices), {0})
+        self.assertEqual(set(choices), {0, 1})  # move or eat: attack is masked
         allowed = [choice for _ in range(100)
                    for choice, _ in learner.act(list(range(10)), np.zeros((10, 12)), attacks_on=True, learning=False)]
-        self.assertEqual(set(allowed), {0, 1})
+        self.assertEqual(set(allowed), {0, 1, 2})
 
     def test_gae_matches_hand_example(self):
         values = np.array([0.5, 0.2, 0.4])

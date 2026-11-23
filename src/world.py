@@ -1,5 +1,5 @@
 """The living world: food, creatures, and one step of time. Nothing here ranks creatures or picks parents:
-a creature eats what it touches, has a baby when it has the energy, and dies of hunger, a hunter or old age."""
+a creature does what its brain chooses, has a baby when it has the energy, and dies of hunger, a hunter or old age."""
 from __future__ import annotations
 
 import math
@@ -131,11 +131,10 @@ class World:
         self.creature_steps += len(acting)
         energy_before = [creature.energy for creature in acting]
 
-        for phase in ("ATTACK", "MOVE"):
+        for phase in ("ATTACK", "EAT", "MOVE"):
             for creature, action in zip(acting, actions):
                 if action[0] == phase and creature in self.creatures:
                     creature.apply_action(action, self)
-        self._eat()
 
         mortal = self.evolving and self.stage.mortal
         for creature in list(self.creatures):
@@ -158,23 +157,6 @@ class World:
             if self.stage.mortal and len(self.creatures) < SOUP_MIN:
                 self.add_newcomer()
         self._decay_food()
-
-    def _eat(self) -> None:
-        """Eating on contact: each creature takes one bite of the nearest food it can reach. All distances are
-        computed at once; a food eaten up by an earlier creature this step is skipped by the next."""
-        if not self.foods or not self.creatures:
-            return
-        foods, eaters = list(self.foods), list(self.creatures)
-        distance = np.hypot(np.array([f.x for f in foods])[None, :] - np.array([c.x for c in eaters])[:, None],
-                            np.array([f.y for f in foods])[None, :] - np.array([c.y for c in eaters])[:, None])
-        reachable = distance <= Creature.eat_reach(np.array([c.radius for c in eaters])[:, None],
-                                                   np.array([f.radius for f in foods])[None, :])
-        for i, creature in enumerate(eaters):
-            in_reach = np.flatnonzero(reachable[i])
-            for j in in_reach[np.argsort(distance[i, in_reach], kind="stable")]:
-                if foods[j].energy > 0:
-                    creature.bite(foods[j], self)
-                    break
 
     def _teach(self, acting: List[Creature], energy_before: List[float]) -> None:
         """Each learner creature's reward for this step is its change in energy; dying ends its experience."""

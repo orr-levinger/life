@@ -42,11 +42,12 @@ class TestRulesPolicy(unittest.TestCase):
         self.assertGreater(dx, 0)
         self.assertAlmostEqual(dy, 0.0)
 
-    def test_stays_on_food_in_reach(self):
+    def test_eats_food_in_reach(self):
         w = make_world()
         me = add(w, 10, 10, policy="rules")
-        w.foods.append(Food(10.5, 10, remaining_duration=-1, energy=10.0))
-        self.assertEqual(rules_action(me, w, random.Random(0)), ("MOVE", (0.0, 0.0)))
+        f = Food(10.5, 10, remaining_duration=-1, energy=10.0)
+        w.foods.append(f)
+        self.assertEqual(rules_action(me, w, random.Random(0)), ("EAT", f))
 
 
 if __name__ == "__main__":

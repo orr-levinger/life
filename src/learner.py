@@ -18,8 +18,8 @@ from .stages import MUTATION_RATE, MUTATION_SCALE
 
 N_IN = 12
 N_HIDDEN = 32
-N_CHOICES = 2  # 0 move, 1 attack (eating is on contact, not a choice)
-ATTACK = 1
+N_CHOICES = 3  # 0 move, 1 eat, 2 attack
+ATTACK = 2
 ROLLOUT = 64
 LEARNING_RATE = 3e-4  # the Learning team's rate, and the first generation's in the Both team
 GAMMA = 0.99

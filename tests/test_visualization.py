@@ -18,7 +18,7 @@ class TestVisualization(unittest.TestCase):
 
     def test_render_with_creatures_and_food(self):
         w = make_world()
-        add(w, 10, 10, policy="brain", brain=fixed_brain([1, 0, -1]))
+        add(w, 10, 10, policy="brain", brain=fixed_brain([1, 0, -1, -1]))
         w.foods.append(Food(20, 20, remaining_duration=-1, energy=10.0))
         w.step()
         viz = Visualizer(50, 30)

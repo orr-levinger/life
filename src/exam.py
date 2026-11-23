@@ -13,7 +13,6 @@ from .levels import Level
 from .world import World
 
 WIDTH, HEIGHT = 50, 30
-PREFILL_STEPS = 100  # food spawn rounds before the exam starts, so it doesn't begin on an empty world
 START_ENERGY_SHARE = 0.5  # creatures start half full
 
 
@@ -28,8 +27,7 @@ def _exam_world(policy: str, brains: Sequence[Optional[Brain]], sizes: Sequence[
                 seed: int) -> World:
     world = World(WIDTH, HEIGHT, level, random.Random(seed + 2), np.random.default_rng(seed), random.Random(seed + 1),
                   evolving=False)
-    for _ in range(PREFILL_STEPS):
-        world.spawn_food()
+    world.prefill_food()
     spots = random.Random(seed)
     for brain, size in zip(brains, sizes):
         x, y = spots.uniform(1.0, WIDTH - 1.0), spots.uniform(1.0, HEIGHT - 1.0)

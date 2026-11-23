@@ -17,7 +17,6 @@ TOWARD_FOOD_ROWS = 10  # the last 10,000 steps
 FLEE_LEVEL = 4
 FLEE_MIN = 0.70
 SEEDS_AT_FLEE_LEVEL = 4
-NO_RESTART_ROWS = 20  # the last 20,000 steps
 
 Verdict = Tuple[str, Optional[bool], str]
 
@@ -74,10 +73,8 @@ def _flee(runs: Dict[str, List[Dict[str, str]]]) -> Verdict:
 def _survives(runs: Dict[str, List[Dict[str, str]]]) -> Verdict:
     ok, details = True, []
     for name, rows in runs.items():
-        alive = int(rows[-1]["population"]) > 0
-        late = {r["restarts"] for r in rows[-NO_RESTART_ROWS:]}
-        ok &= alive and len(late) == 1
-        details.append(f"{name}: population {rows[-1]['population']}, restarts in last rows {sorted(late)}")
+        ok &= int(rows[-1]["population"]) > 0
+        details.append(f"{name}: population {rows[-1]['population']} at the end")
     return ("4 survives", ok, "; ".join(details))
 
 

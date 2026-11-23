@@ -12,9 +12,10 @@ if TYPE_CHECKING:
     from .world import World
 
 ROW_KEYS = (
-    "step", "level", "population", "max_generation", "bites_per_creature_step", "toward_food", "flee",
-    "direction_concentration", "exam_ratio", "deaths_hunger", "deaths_attack", "deaths_age", "restarts",
+    "step", "level", "population", "round", "bites_per_creature_step", "toward_food", "flee",
+    "direction_concentration", "exam_ratio", "deaths_hunger", "deaths_attack",
 )
+DEATH_CAUSES = ("hunger", "attack")
 Value = Union[int, float, None]
 
 
@@ -27,13 +28,13 @@ def _mean(values: List[float]) -> Optional[float]:
 
 
 class Scoreboard:
-    """Scores cover the window since the last row; `restarts` is a running total, deaths are per window."""
+    """Scores and deaths cover the window since the last row."""
 
     def __init__(self) -> None:
         self._clear_samples()
         self._bites_seen = 0
         self._steps_seen = 0
-        self._deaths_seen = {"hunger": 0, "attack": 0, "age": 0}
+        self._deaths_seen = {cause: 0 for cause in DEATH_CAUSES}
 
     def _clear_samples(self) -> None:
         self._toward_food: List[float] = []
@@ -54,7 +55,7 @@ class Scoreboard:
             away = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) < 0
             self._fled.append(1.0 if away else 0.0)
 
-    def row(self, world: World, exam_ratio: Optional[float], restarts: int) -> Dict[str, Value]:
+    def row(self, world: World, exam_ratio: Optional[float], round_number: Optional[int]) -> Dict[str, Value]:
         steps = world.creature_steps - self._steps_seen
         bites = world.total_bites - self._bites_seen
         if self._unit_moves:
@@ -68,7 +69,7 @@ class Scoreboard:
             "step": world.step_count,
             "level": world.level.number,
             "population": len(world.creatures),
-            "max_generation": max((c.generation for c in world.creatures), default=None),
+            "round": round_number,
             "bites_per_creature_step": bites / steps if steps > 0 else None,
             "toward_food": _mean(self._toward_food),
             "flee": _mean(self._fled),
@@ -76,8 +77,6 @@ class Scoreboard:
             "exam_ratio": exam_ratio,
             "deaths_hunger": deaths["hunger"],
             "deaths_attack": deaths["attack"],
-            "deaths_age": deaths["age"],
-            "restarts": restarts,
         }
         self._clear_samples()
         self._bites_seen = world.total_bites

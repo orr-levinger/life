@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 from .levels import EAT_MISS_COST, HUNTER_SHARE
 
@@ -25,9 +25,6 @@ class Creature:
     POLICIES = ("brain", "random", "rules")
     MIN_SIZE = 0.5
     MAX_SIZE = 2.0
-    MUTATION_RATES = (0.1, 0.2)  # the two mutated children of a split
-    MUTATION_SCALE = 0.2
-    SIZE_MUTATION = 0.5  # a mutated child's size is the parent's × (1 ± up to this)
     CORPSE_ENERGY_PER_SIZE = 8.0
     CORPSE_STEPS = 5
 
@@ -53,7 +50,6 @@ class Creature:
         self.attack_damage = size * 5.0
         self.attack_cost = size * 1.0
 
-        self.age = 0
         self.food_eaten = 0.0
         self.last_action = "NONE"
         self.intent = "REST"  # display only
@@ -123,28 +119,6 @@ class Creature:
             world.foods.append(corpse)
             world.foods_created_this_step.add(id(corpse))
             world.kill(target, "attack")
-
-    def should_split(self) -> bool:
-        return self.energy >= self.max_energy
-
-    def split(self, world: World) -> List[Creature]:
-        """One exact copy and two mutated children share the energy; the caller removes the parent."""
-        share = self.energy / 3.0
-        children: List[Creature] = []
-        for rate in (None,) + self.MUTATION_RATES:
-            if rate is None:
-                brain = self.brain.copy() if self.brain is not None else None
-                size = self.size
-            else:
-                brain = self.brain.mutate(world.np_rng, rate, self.MUTATION_SCALE) if self.brain is not None else None
-                factor = 1.0 + world.rng.uniform(-self.SIZE_MUTATION, self.SIZE_MUTATION)
-                size = min(max(self.size * factor, self.MIN_SIZE), self.MAX_SIZE)
-            x = min(max(self.x + world.rng.uniform(-1.0, 1.0), 0.0), world.width)
-            y = min(max(self.y + world.rng.uniform(-1.0, 1.0), 0.0), world.height)
-            children.append(Creature(world.next_id(), x, y, size, share, self.policy, brain,
-                                     parent_id=self.id, generation=self.generation + 1))
-        self.energy = 0.0
-        return children
 
     def get_color(self) -> str:
         return "purple" if self.policy == "brain" else "green"

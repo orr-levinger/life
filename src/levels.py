@@ -28,7 +28,6 @@ LEVELS: tuple[Level, ...] = (
 )
 
 HUNTER_SHARE = 0.8  # share of the energy an attacker takes that it keeps
-MAX_AGE = 3000  # steps a creature lives at most
 EAT_MISS_COST = 0.2  # energy lost trying to eat with no food in reach
 
 

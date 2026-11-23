@@ -1,10 +1,9 @@
 import unittest
+from dataclasses import replace
 from unittest import mock
 
-import numpy as np
-
 from src.food import Food
-from src.levels import EAT_MISS_COST, LEVELS, MAX_AGE
+from src.levels import EAT_MISS_COST, LEVELS
 from tests.helpers import NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
 
 STAY = [0, 0, -1, -1]
@@ -106,40 +105,20 @@ class TestHunting(unittest.TestCase):
 
 
 class TestLifeCycle(unittest.TestCase):
-    def test_old_age_death(self):
+    def test_full_energy_does_not_split(self):
         w = make_world()
-        c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
-        c.age = MAX_AGE - 1
-        w.step()
-        self.assertNotIn(c, w.creatures)
-        self.assertEqual(w.deaths["age"], 1)
-
-    def test_split_three_children(self):
-        w = make_world()
-        parent_brain = fixed_brain(EAT)
-        parent = add(w, 10, 10, size=1.0, energy=100.0, policy="brain", brain=parent_brain)
+        add(w, 10, 10, size=1.0, energy=100.0, policy="brain", brain=fixed_brain(EAT))
         w.foods.append(Food(10, 10, remaining_duration=-1, energy=10.0))
         w.step()
-        self.assertNotIn(parent, w.creatures)
-        children = w.creatures
-        self.assertEqual(len(children), 3)
-        self.assertEqual(len({c.id for c in children} | {parent.id}), 4)
-        self.assertTrue(all(c.generation == 1 and c.parent_id == parent.id for c in children))
-        self.assertTrue(all(0.5 <= c.size <= 2.0 for c in children))
-        x = np.linspace(-1, 1, 12)
-        same = [np.array_equal(c.brain.forward(x), parent_brain.forward(x)) for c in children]
-        self.assertEqual(sorted(same), [False, False, True])
-        for c in children:
-            self.assertAlmostEqual(c.energy, min(parent.max_energy / 3, c.max_energy))
+        self.assertEqual(len(w.creatures), 1)
 
-    def test_no_split_at_cap_of_40(self):
-        w = make_world()
-        for i in range(40):
-            x, y = 2 + (i % 10) * 4.5, 3 + (i // 10) * 6
-            add(w, x, y, size=1.0, energy=100.0)
-            w.foods.append(Food(x, y, remaining_duration=-1, energy=10.0))
-        w.step()
-        self.assertEqual(len(w.creatures), 40)
+    def test_no_old_age(self):
+        w = make_world(replace(NO_FOOD, step_cost=0.0))
+        c = add(w, 10, 10, energy=100.0, policy="brain", brain=fixed_brain(STAY))
+        for _ in range(3000):
+            w.step()
+        self.assertEqual(w.creatures, [c])
+        self.assertEqual(sum(w.deaths.values()), 0)
 
     def test_food_respects_level(self):
         w = make_world(LEVELS[0])
@@ -165,7 +144,6 @@ class TestLifeCycle(unittest.TestCase):
             w.step()
         self.assertEqual(w.creatures, [c])
         self.assertEqual(sum(w.deaths.values()), 0)
-        self.assertEqual(c.age, 0)
 
     def test_brain_creatures_never_call_rules(self):
         w = make_world(LEVELS[0], seed=2)

@@ -11,17 +11,16 @@ ROWS = 100  # 100,000 steps
 
 
 def brain_rows(exam: float = 2.5, first_exam: float = 0.5, toward: float = 0.8, flee: float = 0.8,
-               level_four_at: int = 50, late_restart: bool = False, alive_at_end: bool = True) -> List[Dict]:
+               level_four_at: int = 50, alive_at_end: bool = True) -> List[Dict]:
     rows = []
     for i in range(ROWS):
         step = (i + 1) * 1000
         has_exam = step % 2000 == 0
         exam_value = first_exam if i < 10 else exam
         rows.append({
-            "step": step, "level": 4 if i >= level_four_at else 1, "population": 30, "max_generation": i,
+            "step": step, "level": 4 if i >= level_four_at else 1, "population": 30, "round": i + 1,
             "bites_per_creature_step": 0.3, "toward_food": toward, "flee": flee, "direction_concentration": 0.1,
-            "exam_ratio": exam_value if has_exam else "", "deaths_hunger": 3, "deaths_attack": 0, "deaths_age": 1,
-            "restarts": 2 if late_restart and i >= ROWS - 5 else 1,
+            "exam_ratio": exam_value if has_exam else "", "deaths_hunger": 3, "deaths_attack": 0,
         })
     if not alive_at_end:
         rows[-1]["population"] = 0
@@ -70,9 +69,6 @@ class TestCheckProof(unittest.TestCase):
 
     def test_low_flee_fails(self):
         self.assertFalse(verdicts(five(flee=0.6))["3 flee at level 4+"])
-
-    def test_late_restart_fails(self):
-        self.assertFalse(verdicts(five(late_restart=True))["4 survives"])
 
     def test_extinct_at_end_fails(self):
         self.assertFalse(verdicts(five(alive_at_end=False))["4 survives"])

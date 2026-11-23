@@ -6,14 +6,9 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-import numpy as np
-
-from src.brain import Brain
-from src.evolve import parse_args, restart_population, run, should_unlock
-from src.hall_of_fame import HallOfFame
+from src.evolve import parse_args, run, should_unlock
 from src.levels import LEVELS
 from src.scoreboard import ROW_KEYS
-from tests.helpers import make_world
 
 
 def quiet_run(argv, levels=LEVELS):
@@ -27,13 +22,14 @@ def read_rows(path: Path):
 
 
 class TestEvolve(unittest.TestCase):
-    def test_short_run_writes_two_rows(self):
+    def test_evolution_team_writes_rounds(self):
         with tempfile.TemporaryDirectory() as folder:
-            path = quiet_run(["--seed", "1", "--steps", "2000", "--out", folder])
+            path = quiet_run(["--seed", "1", "--steps", "2000", "--team", "evolution", "--out", folder])
             with open(path, newline="") as f:
                 self.assertEqual(tuple(next(csv.reader(f))), ROW_KEYS)
             rows = read_rows(path)
-        self.assertEqual([r["step"] for r in rows], ["1000", "2000"])
+        self.assertEqual([(r["step"], r["round"]) for r in rows], [("1000", "1"), ("2000", "2")])
+        self.assertNotEqual(rows[1]["exam_ratio"], "")
 
     def test_same_seed_same_csv(self):
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
@@ -49,18 +45,14 @@ class TestEvolve(unittest.TestCase):
         self.assertFalse(should_unlock([1.6, 1.7], 10, 5, 5))
         self.assertFalse(should_unlock([1.7], 10, 1, 5))
 
-    def test_extinction_restarts_from_hall_of_fame(self):
+    def test_baseline_replaces_dead(self):
         starving = (replace(LEVELS[0], max_food=0, food_per_step=0, step_cost=5.0),)
         with tempfile.TemporaryDirectory() as folder:
-            rows = read_rows(quiet_run(["--seed", "4", "--steps", "1000", "--out", folder], starving))
-        self.assertGreaterEqual(int(rows[-1]["restarts"]), 1)
-
-        world = make_world()
-        hall = HallOfFame()
-        hall.offer(Brain.random(np.random.default_rng(0)), 0.0)
-        restart_population(world, hall, "brain")
-        self.assertEqual(len(world.creatures), 20)
-        self.assertEqual({c.policy for c in world.creatures}, {"brain"})
+            rows = read_rows(quiet_run(["--seed", "4", "--steps", "1000", "--policy", "random", "--out", folder],
+                                       starving))
+        self.assertGreater(int(rows[-1]["deaths_hunger"]), 0)
+        self.assertEqual(rows[-1]["population"], "30")
+        self.assertEqual(rows[-1]["round"], "")
 
     def test_baseline_never_unlocks(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -10,7 +10,7 @@ import numpy as np
 
 from .creature import Creature
 from .food import Food
-from .levels import MAX_AGE, Level
+from .levels import Level
 from .policies import Action, decide
 from .senses import Senses, display_intent, sense
 
@@ -20,11 +20,11 @@ Observer = Callable[[Creature, Senses, Action], None]
 class World:
     MIN_SPAWN_DISTANCE = 0.5  # gap kept between new food and anything already there
     FOOD_RADIUS_MARGIN = 0.4  # a new food's largest radius (energy 40 × 0.01): keeps candidates inside the world
-    MAX_CREATURES = 40
+    PREFILL_STEPS = 100  # food spawn rounds before a fresh world starts, so it doesn't begin empty
 
     def __init__(self, width: int, height: int, level: Level, rng: random.Random, np_rng: np.random.Generator,
                  food_rng: random.Random, evolving: bool = True) -> None:
-        """`evolving=False` is an exam world: no splits, no deaths, no aging, food placed without looking at creatures."""
+        """`evolving=False` is an exam world: nobody dies, and food is placed without looking at creatures."""
         self.width = width
         self.height = height
         self.level = level
@@ -72,6 +72,10 @@ class World:
                 self.foods.append(food)
                 self.foods_created_this_step.add(id(food))
 
+    def prefill_food(self) -> None:
+        for _ in range(self.PREFILL_STEPS):
+            self.spawn_food()
+
     def _fits(self, food: Food) -> bool:
         neighbours = list(self.foods) + (list(self.creatures) if self.evolving else [])
         return all(
@@ -101,25 +105,15 @@ class World:
                 if action[0] == phase and creature in self.creatures:
                     creature.apply_action(action, self)
 
-        if self.evolving:
-            self._deaths_and_births()
-        else:
-            for creature in self.creatures:
-                creature.energy = max(creature.energy, 0.0)
+        for creature in list(self.creatures):
+            if creature.energy > 0:
+                continue
+            if self.evolving:
+                self.kill(creature, "hunger")
+            else:
+                creature.energy = 0.0
 
         self._decay_food()
-
-    def _deaths_and_births(self) -> None:
-        for creature in list(self.creatures):
-            creature.age += 1
-            if creature.energy <= 0:
-                self.kill(creature, "hunger")
-            elif creature.age >= MAX_AGE:
-                self.kill(creature, "age")
-        for creature in list(self.creatures):
-            if creature.should_split() and len(self.creatures) + 2 <= self.MAX_CREATURES:
-                self.creatures.remove(creature)
-                self.creatures.extend(creature.split(self))
 
     def _decay_food(self) -> None:
         kept = []

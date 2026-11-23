@@ -82,10 +82,12 @@ class TestScoreboard(unittest.TestCase):
 
     def test_row_has_exact_keys(self):
         self.assertEqual(ROW_KEYS, (
-            "step", "level", "population", "max_generation", "bites_per_creature_step", "toward_food", "flee",
-            "direction_concentration", "exam_ratio", "deaths_hunger", "deaths_attack", "deaths_age", "restarts",
+            "step", "level", "population", "round", "bites_per_creature_step", "toward_food", "flee",
+            "direction_concentration", "exam_ratio", "deaths_hunger", "deaths_attack",
         ))
-        self.assertEqual(tuple(Scoreboard().row(make_world(), None, 0).keys()), ROW_KEYS)
+        row = Scoreboard().row(make_world(), None, 7)
+        self.assertEqual(tuple(row.keys()), ROW_KEYS)
+        self.assertEqual(row["round"], 7)
 
 
 if __name__ == "__main__":

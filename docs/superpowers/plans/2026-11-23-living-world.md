@@ -478,17 +478,17 @@ sort, the explanations on hover, the same explanations on a running world's card
 - In the page: `scores(run) -> {steps, hardest, ended, smart, smartWas, brains, wanderers, steer, generation, alive,
   fed}` from the run's rows, and `explain(kind, scores) -> str` the plain words for each number.
 
-- [ ] **Step 1: Write the failing tests:** `test_runs_say_how_many_saves`, `test_page_has_the_history_rows` (the
+- [x] **Step 1: Write the failing tests:** `test_runs_say_how_many_saves`, `test_page_has_the_history_rows` (the
   words Smartest first, Hardest survived, Intelligence, × random, Steers to food).
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_viewer` · Expected: `KeyError: 'saves'` and
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_viewer` · Expected: `KeyError: 'saves'` and
   the missing words.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 5: Look at it** in the app's browser: History shows one row per world with the numbers the scoreboards
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 5: Look at it** in the app's browser: History shows one row per world with the numbers the scoreboards
   hold (checked against a script reading the same scoreboards), best first; hovering intelligence on the 18:36 world
   explains 0.71 vs 0.41; the sort changes the order; a click opens the charts and saves; a running world's card
   explains its numbers too. No errors in the browser's console. Each in the ledger.
-- [ ] **Step 6: Commit** as `feat: History rows with their scores, explained on hover`; `git show --stat HEAD` lists
+- [x] **Step 6: Commit** as `feat: History rows with their scores, explained on hover`; `git show --stat HEAD` lists
   exactly this task's files. Tell the owner it is ready.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")

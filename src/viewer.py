@@ -68,6 +68,7 @@ def runs(folder: Path) -> List[Dict]:
             **json.loads(record.read_text()), "name": run.name, "status": status,
             "mode": control.mode if control is not None else "auto",
             "paused": control.paused if control is not None else False,
+            "saves": len(saves_of(run)),
             "rows": [{key: _number(row[key]) for key in ROW_KEYS} for row in rows],
             "seconds": float(timing.read_text()) if timing.exists() else None,
         })

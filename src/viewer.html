@@ -52,12 +52,23 @@
   .knob input:disabled { opacity: 0.55; }
   .switch { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 8px; }
   .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
-  #runs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; margin-bottom: 12px; }
-  .run { background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 8px 10px;
-         font: inherit; color: inherit; text-align: left; cursor: pointer; }
-  .run.picked { border-color: var(--ink); }
-  .run b { font-weight: 600; }
-  .run div { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  #runs { margin-bottom: 12px; }
+  #runs .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  #runs .bar select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
+  .table { overflow-x: auto; border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); }
+  .row { display: grid; grid-template-columns: minmax(200px, 2.2fr) repeat(8, minmax(78px, 1fr)); align-items: center;
+         gap: 0 10px; padding: 8px 12px; border-top: 1px solid var(--grid); min-width: 900px; cursor: pointer; }
+  .row.head { border-top: 0; cursor: default; color: var(--muted); font-size: 12px; }
+  .row:not(.head):hover, .row.picked { background: var(--page); }
+  .row b { font-weight: 600; }
+  .row small { display: block; color: var(--muted); font-size: 12px; }
+  .row .num { font-variant-numeric: tabular-nums; }
+  .row .num strong { font-weight: 600; font-size: 15px; }
+  .good { color: var(--eat); } .bad { color: var(--warn); }
+  .mark { font-size: 11px; border: 1px solid var(--ink); border-radius: 5px; padding: 0 5px; margin-left: 6px; }
+  [data-tip] { cursor: help; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+  #tip { position: fixed; z-index: 5; max-width: 340px; background: var(--surface); border: 1px solid var(--muted);
+         border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.45; pointer-events: none; display: none; }
   #charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; }
   .panel { background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 12px 12px 6px; position: relative; }
   .panel h2 { font-size: 13px; margin: 0 0 4px; font-weight: 600; }
@@ -132,6 +143,7 @@
 </section>
 <div id="runs"></div>
 <div id="charts"></div>
+<div id="tip" role="tooltip"></div>
 
 <script>
 const PANELS = [
@@ -302,8 +314,8 @@ function drawCharts(runs) {
   const byKind = new Map();
   for (const run of runs) { if (!byKind.has(run.kind)) byKind.set(run.kind, []); byKind.get(run.kind).push(run); }
   const kinds = [...byKind.entries()];
-  document.getElementById("legend").innerHTML = kinds.length < 2 ? "" : kinds.map(([kind, of]) =>
-    `<span>${swatch(kind)}${kind} (${of.length} seed${of.length > 1 ? "s" : ""})</span>`).join("");
+  document.getElementById("legend").innerHTML = kinds.map(([kind, of]) =>
+    `<span>${swatch(kind)}${KIND_WORDS[kind.split("-")[0]] || kind}${of.length > 1 ? ` (${of.length} seeds)` : ""}</span>`).join("");
   const xMax = Math.max(1000, ...runs.flatMap((r) => r.rows.map((row) => row.step)));
   const marks = runs.flatMap(changes);
   document.getElementById("charts").replaceChildren(...PANELS.map((panel) => drawPanel(panel, kinds, xMax, marks)));
@@ -379,8 +391,11 @@ function makeCard(run) {
 function updateCard(state) {
   const { card, run } = state, last = lastRow(run), manual = run.mode === "manual", now = Date.now();
   for (const button of card.querySelectorAll(".seg button")) button.classList.toggle("on", button.dataset.mode === run.mode);
+  const s = scores(run);
   card.querySelector(".where").innerHTML = (run.paused ? '<span class="paused">Paused</span> · ' : "") + (last
-    ? `step ${last.step.toLocaleString()} · difficulty ${fmt(last.level)} · ${last.population} alive · energy ${last.energy === null ? "-" : Math.round(last.energy * 100) + " %"}`
+    ? `step ${last.step.toLocaleString()} · ${tipped("hardest", `difficulty ${fmt(last.level)}`, { ...s, hardest: last.level, ended: last.level }, run)} · ` +
+      `${tipped("end", `${last.population} alive · ${s.fed} % fed`, s, run)} · ` +
+      `${tipped("smart", `intelligence ${s.smart === null ? "-" : two(s.smart) + "× random"}`, s, run)}`
     : "starting… (the first numbers come after 250 steps)");
   card.querySelector(".pause").textContent = run.paused ? "Continue" : "Pause";
   card.querySelector(".hint").textContent = manual
@@ -527,20 +542,120 @@ document.getElementById("watch-speed").addEventListener("change", (event) => {
   if (watching) send("/control", { run: watching.name, watch: true, watch_speed: Number(event.target.value) }).catch(() => {});
 });
 
-function historyCard(run) {
-  const last = lastRow(run);
-  const card = document.createElement("button");
-  card.type = "button";
-  card.className = "run" + (run.name === picked ? " picked" : "");
-  const limit = run.steps === null ? "no limit" : `of ${thousands(run.steps)}`;
-  const reached = last ? `${thousands(last.step)} steps (${limit}) · difficulty ${fmt(last.level)}` : "no steps";
-  const minutes = run.seconds === null ? null : (run.seconds / 60).toFixed(1);
-  const end = run.status !== "finished" ? "ended without finishing"
-    : run.steps === null || (last && last.step < run.steps) ? `stopped after ${minutes} min` : `finished in ${minutes} min`;
-  card.innerHTML = `<b>${swatch(run.kind)}${title(run)}</b><div>${run.started.replace("T", " ")}</div><div>${reached}</div><div>${end}</div>`;
-  card.addEventListener("click", () => { picked = run.name; render(); });
-  return card;
+// ---- History: one row per world, its scores, each explained on hover ----
+const KIND_WORDS = { learning: "blue: learning animals (they learn during life)", instinct: "orange: instinct animals (never learn)" };
+const SORTS = { smart: "Smartest first", hard: "Hardest world survived", new: "Newest first" };
+let sortBy = "smart";
+const two = (v) => v === null ? "-" : v.toFixed(2);
+
+function scores(run) {
+  const rows = run.rows, last = lastRow(run) || null;
+  const exams = rows.filter((r) => r.intelligence !== null && r.wanderers);
+  const first = exams[0] || null, latest = exams[exams.length - 1] || null;
+  const recent = last ? rows.filter((r) => r.step > last.step - 1000 && r.toward_food !== null) : [];
+  return {
+    steps: last ? last.step : 0, limit: run.steps,
+    hardest: rows.length ? Math.max(...rows.map((r) => r.level)) : null, ended: last ? last.level : null,
+    brains: latest && latest.intelligence, wanderers: latest && latest.wanderers,
+    smart: latest ? latest.intelligence / latest.wanderers : null,
+    smartWas: first ? first.intelligence / first.wanderers : null,
+    firstBrains: first && first.intelligence, firstWanderers: first && first.wanderers,
+    steer: recent.length ? recent.reduce((s, r) => s + r.toward_food, 0) / recent.length : null,
+    generation: last ? last.generation : null, alive: last ? last.population : null,
+    fed: last && last.energy !== null ? Math.round(last.energy * 100) : null,
+  };
 }
+
+function explain(what, s, run) {
+  const percent = (x) => Math.round(Math.abs(x - 1) * 100);
+  switch (what) {
+    case "smart":
+      if (s.smart === null) return "No intelligence test yet: the first one comes at step 2,000.";
+      return `In the test, these creatures got ${two(s.brains)} energy back for each 1 they spent; creatures wandering at ` +
+        `random got ${two(s.wanderers)}. That is ${two(s.smart)}× random: ${percent(s.smart)} % ${s.smart >= 1 ? "better" : "worse"} ` +
+        `than wandering at random. Above 1× means smarter than random. At the first test it was ${two(s.smartWas)}× ` +
+        `(${two(s.firstBrains)} against ${two(s.firstWanderers)}).`;
+    case "hardest":
+      return `The hardest world these creatures lived through: difficulty ${fmt(s.hardest)}. Difficulty counts how many small ` +
+        `5 % nudges harder than the easy start the world was (less food, poorer food, costlier moves and living, shorter ` +
+        `lives). Higher means they survived a tougher world.` + (s.ended !== null && s.ended < s.hardest - 0.05
+          ? ` It ended at ${fmt(s.ended)}: the world was made easier again because they were struggling.` : "");
+    case "steer":
+      return s.steer === null ? "No steering measured yet." : `When a creature saw food and moved, how straight it went ` +
+        `at it, over the last 1,000 steps: 1 means straight at the food, 0 means no better than random, below 0 means ` +
+        `away from it. This world: ${two(s.steer)}.`;
+    case "generation":
+      return `The most parent-to-baby steps between a creature alive at the end and the first creatures: ${s.generation}. ` +
+        `More generations means evolution has had more rounds to work.`;
+    case "end":
+      return `${s.alive} creatures were alive at the end (80 is the most the world allows). On average each had ${s.fed} % ` +
+        `of a full tank of energy: at 70 % a creature has a baby; past its lifespan, below 30 % it dies.`;
+    case "steps":
+      return `How long this world ran: ${s.steps.toLocaleString()} steps` +
+        (s.limit === null ? ", with no limit (it ran until it was stopped)." : ` of the ${s.limit.toLocaleString()} it was set to run.`);
+    case "mode":
+      return run.mode === "manual" ? "Manual: you turned the knobs by hand (at the end)." :
+        "Auto: the world turned its own knobs (at the end): harder when many and well fed, easier when few or hungry.";
+    case "saves":
+      return `This world saved itself ${run.saves} time${run.saves === 1 ? "" : "s"} (every 2,000 steps, and when it stopped). ` +
+        `Open it to resume from any save.`;
+  }
+  return "";
+}
+
+const tipped = (what, text, s, run, cls = "") => `<span data-tip="${explain(what, s, run).replace(/"/g, "&quot;")}" class="${cls}">${text}</span>`;
+const tone = (good, bad) => good ? "good" : bad ? "bad" : "";
+
+function historyRow(run, best) {
+  const s = scores(run);
+  const row = document.createElement("div");
+  row.className = "row" + (run.name === picked ? " picked" : "");
+  row.innerHTML = `
+    <div><b>${swatch(run.kind)}${title(run)}</b>${best ? '<span class="mark">Smartest</span>' : ""}<small>${run.started.replace("T", " ").slice(0, 16)}</small></div>
+    <div class="num">${tipped("steps", thousands(s.steps), s, run)}</div>
+    <div class="num">${tipped("hardest", `<strong>${fmt(s.hardest)}</strong>`, s, run)}${s.ended !== null && s.ended < s.hardest - 0.05 ? `<small>ended ${fmt(s.ended)}</small>` : ""}</div>
+    <div class="num">${tipped("smart", `<strong>${s.smart === null ? "-" : two(s.smart) + "×"}</strong>`, s, run, tone(s.smart >= 1, s.smart !== null && s.smart < 1))}${s.smartWas !== null ? `<small>was ${two(s.smartWas)}×</small>` : ""}</div>
+    <div class="num">${tipped("steer", `<strong>${two(s.steer)}</strong>`, s, run, tone(s.steer >= 0.2, s.steer !== null && s.steer < 0))}</div>
+    <div class="num">${tipped("generation", s.generation === null ? "-" : s.generation, s, run)}</div>
+    <div class="num">${s.alive === null ? "-" : tipped("end", `${s.alive} · ${s.fed} %`, s, run, tone(false, s.alive < 30 || s.fed < 35))}</div>
+    <div>${tipped("mode", run.mode === "manual" ? "Manual" : "Auto", s, run)}</div>
+    <div class="num">${tipped("saves", run.saves, s, run)}</div>`;
+  row.addEventListener("click", () => { picked = run.name; render(); });
+  return row;
+}
+
+function historyTable(past) {
+  const smartest = past.reduce((best, run) => {
+    const smart = scores(run).smart;
+    return smart !== null && (best === null || smart > best.smart) ? { name: run.name, smart } : best;
+  }, null);
+  const order = { smart: (r) => -(scores(r).smart ?? -Infinity), hard: (r) => -(scores(r).hardest ?? -Infinity), new: () => 0 };
+  const sorted = past.slice().sort((a, b) => order[sortBy](a) - order[sortBy](b));
+  const box = document.createElement("div");
+  box.innerHTML = `<div class="bar"><span>Sort</span><select aria-label="Sort">${Object.entries(SORTS).map(([key, words]) =>
+    `<option value="${key}"${key === sortBy ? " selected" : ""}>${words}</option>`).join("")}</select>
+    <span>${Object.values(KIND_WORDS).join(" · ")}</span><span>Point at any number to see what it means.</span></div>`;
+  box.querySelector("select").addEventListener("change", (event) => { sortBy = event.target.value; render(); });
+  const table = document.createElement("div");
+  table.className = "table";
+  const head = document.createElement("div");
+  head.className = "row head";
+  head.innerHTML = "<div>World</div><div>Steps</div><div>Hardest survived</div><div>Intelligence × random</div>" +
+    "<div>Steers to food</div><div>Generation</div><div>Alive · fed at the end</div><div>Mode</div><div>Saves</div>";
+  table.append(head, ...sorted.map((run) => historyRow(run, smartest && run.name === smartest.name)));
+  box.append(table);
+  return box;
+}
+
+document.addEventListener("mouseover", (event) => {  // every number explains itself
+  const tip = document.getElementById("tip"), target = event.target.closest("[data-tip]");
+  if (!target) { tip.style.display = "none"; return; }
+  tip.textContent = target.dataset.tip;
+  tip.style.display = "block";
+  const box = target.getBoundingClientRect();
+  tip.style.left = `${Math.max(8, Math.min(box.left, innerWidth - tip.offsetWidth - 8))}px`;
+  tip.style.top = `${box.bottom + 6 + tip.offsetHeight > innerHeight ? box.top - tip.offsetHeight - 6 : box.bottom + 6}px`;
+});
 
 function render() {
   for (const name of ["live", "history"]) document.getElementById(`tab-${name}`).classList.toggle("on", view === name);
@@ -556,7 +671,7 @@ function render() {
     return drawCharts(running);
   }
   const past = data.filter((run) => run.status !== "running");
-  document.getElementById("runs").replaceChildren(...past.map(historyCard));
+  document.getElementById("runs").replaceChildren(historyTable(past));
   if (!past.length) return message("No past runs yet", "A run appears here when it ends.");
   const chosen = past.find((run) => run.name === picked);
   if (!chosen) return message("Pick a run", "Click a run above to see its charts and its saves.");

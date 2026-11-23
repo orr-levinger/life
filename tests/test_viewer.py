@@ -315,6 +315,16 @@ class TestControlRoom(unittest.TestCase):
         self.server.post("/control", {"run": name, "paused": False})
         self.assertFalse(read_control(self.root / name).paused)
 
+    def test_runs_say_how_many_saves(self):
+        name = self.saved_world()
+        self.assertEqual([run["saves"] for run in runs(self.root)], [2])
+
+    def test_page_has_the_history_rows(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("Smartest first", "Hardest survived", "Intelligence", "× random", "Steers to food"):
+            self.assertIn(words, page)
+
     def test_page_has_pause_and_resume(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

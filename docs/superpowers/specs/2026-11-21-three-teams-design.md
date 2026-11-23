@@ -1,5 +1,11 @@
 # Three teams: evolution, learning, and both: design
 
+> **History only. Replaced on 2026-11-23 by `2026-11-23-living-world-design.md`; the goal is in `README.md`.**
+> What this design got wrong: "rounds" let a program pick the parents and restart the world (not evolution by nature);
+> the "learning" team passed nothing on, so it could never improve (it scored 0.33 × random wandering); babies of the
+> "both" team inherited only the born brain, so learning never built up across generations. What is kept: the PPO
+> learner and the comparison table.
+
 Date: 2026-11-21 · Repo: `orr-levinger/life` · Branch: `evolve-from-scratch`
 
 This design replaces the evolution part of `2026-11-21-evolve-brains-from-scratch-design.md` and adds learning. What

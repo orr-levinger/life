@@ -1,5 +1,10 @@
 # Brains that learn from scratch by evolution: design
 
+> **History only. Replaced on 2026-11-23 by `2026-11-23-living-world-design.md`; the goal is in `README.md`.**
+> What this design got wrong: it dropped learning during life (the owner wants reinforcement learning and evolution
+> together), it tuned the levels to the exam so the first level was not the easiest, and creatures could die from the
+> first step. What it got right and is kept: the senses, the steering fix, the exam idea, the scoreboard.
+
 Date: 2026-11-21 · Repo: `orr-levinger/life` · Branch: `evolve-from-scratch`
 
 ## Intent, in the owner's words

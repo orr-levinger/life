@@ -1,5 +1,8 @@
 # Brains That Learn From Scratch by Evolution: Implementation Plan
 
+> **Closed on 2026-11-23. History only; do not execute.** Tasks 1–8 were built; Tasks 9–11 were never run. The design
+> it implements is replaced by `docs/superpowers/specs/2026-11-23-living-world-design.md`; the goal is in `README.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

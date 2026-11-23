@@ -21,6 +21,9 @@ learning during life and evolution across generations, in a world that starts ea
    need to learn? Does anything carry over between lives? If the numbers say it cannot work, do not build it.
 5. **Never chase a score away from the goal.** A higher exam ratio that needed a non-biological rule is a failure.
 6. **Never leave a long run in the background.** Open the live graphs first (owner's rule, 2026-11-23).
+7. **Never take a decision away from the creature.** Moving, eating and attacking are actions its brain chooses. On
+   2026-11-23 eating was made automatic "on contact" to help beginners, without telling the owner it changed their
+   rule ("It was always an action!! Why did u change that"). If beginners struggle, make the world gentler instead.
 
 ## How to work here
 

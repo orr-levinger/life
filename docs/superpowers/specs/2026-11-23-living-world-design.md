@@ -35,9 +35,13 @@ and what the world's rules do to them.
 
 - **Senses** (as built): its own energy and size, whether it stands on food, the nearest food (seen?, how far, which
   way), the nearest stranger (seen?, how far, which way, how much bigger or smaller). Family is never a target.
-- **A brain** that turns senses into a move (direction and speed) and, once hunting exists, an attack.
-- **Eating is on contact:** a creature within reach of food takes a bite each step. The brain does not decide to eat;
-  the skill is steering to food and staying on it.
+- **A brain** that turns senses into one action each step: move (direction and speed), eat, or, once hunting exists,
+  attack.
+- **Eating is the creature's own action** (the owner, 2026-11-23: "Eat must be action creature does. It was always an
+  action!!"). Choosing to eat takes one bite of food within reach; with no food in reach it is a miss that costs 0.2
+  energy, as in the original simulation. An earlier version of this design made eating automatic "on contact"; that
+  was Claude's change, made without saying it changed the owner's rule, and it is reverted.
+- **The exam's random wanderers** move randomly and eat whenever food is within reach, as in the original yardstick.
 
 ### How brains improve
 

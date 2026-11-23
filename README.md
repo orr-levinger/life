@@ -20,6 +20,8 @@ Everything in this repo serves that goal. A change that raises a score but moves
 ## What the goal means: the rules of this project
 
 1. **Creatures have a brain and senses.** A brain is a neural network. Nothing hand-written tells a creature what to do.
+   **Everything a creature does is its own action:** each step its brain chooses to move, to eat, or to attack. Eating
+   is never automatic (the owner, 2026-11-23: "Eat must be action creature does. It was always an action!!").
 2. **Brains improve in two ways, together.**
    - **Learning during life:** reinforcement learning. A creature's brain changes from its own experience: eating is
      good, wasting energy is bad, and the whole walk that led to food gets the credit, not only the last step.
@@ -44,8 +46,6 @@ These are Claude's calls; each can be overruled.
   with mutations. This is the one deliberate step away from strict genetics (in biology a baby inherits only what the
   parent was born with). It is chosen because it is what makes learning improve from generation to generation, which is
   the goal. Strict-genes inheritance stays available as an experiment to compare.
-- **Eating happens on contact.** A creature touching food eats; its brain does not decide to eat. The skill to learn
-  and evolve is steering to food and staying on it.
 - **The learning method is PPO** (an actor that tries moves by rolling dice on its own odds, and a critic that judges
   how good each moment is).
 - **A primordial soup:** while very few creatures live, random newcomers keep appearing. Once life sustains itself,

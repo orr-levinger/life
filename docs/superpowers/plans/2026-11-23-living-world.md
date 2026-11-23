@@ -7,7 +7,7 @@
 through five stages from "nobody dies" to "hunters", watched live.
 
 **Architecture:** `src/stages.py` replaces `src/levels.py` (five stages and the world's constants). `World` owns life
-and death: eating on contact, births from energy, deaths by stage, old age, the primordial soup, and making babies and
+and death: births from energy, deaths by stage, old age, the primordial soup, and making babies and
 newcomers of its species. `src/rounds.py` and the teams are deleted. The learner hands out and takes back slots as
 animals are born and die. `src/evolve.py` runs one species in one world; `src/viewer.py` serves the live page.
 
@@ -63,7 +63,7 @@ works."). The goal: `README.md`. Rules of work: `CLAUDE.md`.
 - `World(width, height, stage: Stage, species: str, rng, np_rng, food_rng, evolving=True, learner=None,
   inherit="learned")` with `species` one of `"brain" | "learner" | "random" | "rules"`; `add_newcomer() -> Creature`
   (a random brain of the species at a random spot); `step(observer=None)` in this order: food, sense, decide, attacks,
-  moves, eating on contact (one bite from the nearest food in reach), deaths (mortal stages: hunger, old age; Garden:
+  eating, moves, deaths (mortal stages: hunger, old age; Garden:
   energy floored at 0), births (energy ≥ 70 %, below the limit), soup (mortal stages, fewer than 10 alive: one
   newcomer), aging; counters `births`, `newcomers`, `deaths` (`hunger`, `attack`, `age`), `total_bites`,
   `creature_steps`; `evolving=False` (the exam): no deaths, births, soup or aging.
@@ -73,7 +73,7 @@ works."). The goal: `README.md`. Rules of work: `CLAUDE.md`.
   deaths_attack, deaths_age` (births, newcomers and deaths per 1,000-step window; `generation` the deepest alive).
 - `check_proof` judges the spec's criteria 2–6 (criterion 1 only when the run started in the Garden).
 
-- [ ] **Step 1: Write the failing tests** (new or changed behavior; existing tests are updated to the new interfaces):
+- [x] **Step 1: Write the failing tests** (new or changed behavior; existing tests are updated to the new interfaces):
   `test_stages`: `test_five_stages_garden_first`, `test_food_never_increases`, `test_only_garden_is_immortal`,
   `test_hunting_from_stage_three`. `test_world_rules`: `test_eating_on_contact`, `test_last_bite_goes_to_one`,
   `test_garden_never_kills`, `test_hunger_kills_in_mortal_stage`, `test_old_age_kills_in_mortal_stage`,
@@ -84,13 +84,13 @@ works."). The goal: `README.md`. Rules of work: `CLAUDE.md`.
   `test_evolve`: `test_instinct_run_writes_rows` (new columns), `test_same_seed_same_csv`,
   `test_stage_goes_up_after_two_passed_exams`, `test_baseline_never_changes_stage`. `test_check_proof`: one passing
   and one failing case per criterion.
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: `ModuleNotFoundError: No
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: `ModuleNotFoundError: No
   module named 'src.stages'` and failures naming the new behavior.
-- [ ] **Step 3: Implement** the files above; delete the four files.
-- [ ] **Step 4: Run them to see them pass** · `$PY -m unittest discover tests` · Expected: `OK`. Then
+- [x] **Step 3: Implement** the files above; delete the four files.
+- [x] **Step 4: Run them to see them pass** · `$PY -m unittest discover tests` · Expected: `OK`. Then
   `grep -rn "rounds\|next_generation\|EAT_MISS\|\"EAT\"\|src.levels\|--team" src tests` · Expected: no output; and
   `grep -ln "tensorflow" src/*.py` · Expected: only `src/learner.py`.
-- [ ] **Step 5: Commit** as `feat: the living world (births from energy, stages from Garden to Harsh)`;
+- [x] **Step 5: Commit** as `feat: the living world (births from energy, stages from Garden to Harsh)`;
   `git show --stat HEAD` lists exactly this task's files.
 
 ### Task 2: Learning animals in the living world
@@ -108,16 +108,16 @@ deaths and newcomers of learner creatures; rewards), `src/exam.py`, `src/evolve.
 - A learner baby's network = `current(parent.slot)` (inherit `"learned"`) or `inborn(parent.slot)` (`"inborn"`), mutated,
   with the parent's learning speed × e^N(0, 0.2).
 
-- [ ] **Step 1: Write the failing tests:** `test_learner`: `test_allocate_and_release`, `test_slot_reuse_starts_clean`,
+- [x] **Step 1: Write the failing tests:** `test_learner`: `test_allocate_and_release`, `test_slot_reuse_starts_clean`,
   `test_attack_masked` (2 choices), `test_learns_toy_task` (unchanged bar: ≥ 0.8). `test_world_rules`:
   `test_learner_baby_inherits_learned_brain`, `test_learner_baby_inherits_born_brain_when_inborn`,
   `test_birth_is_not_a_negative_reward`, `test_dead_learner_frees_its_slot`, `test_garden_learner_keeps_learning_at_zero_energy`.
   `test_evolve`: `test_learning_run_starts_in_the_garden`, `test_same_seed_same_csv_learning`.
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: failures naming `allocate`
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: failures naming `allocate`
   and the new behavior.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run them to see them pass** · `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 5: Commit** as `feat: learning animals are born, learn, and pass on their brains`; `git show --stat HEAD`
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run them to see them pass** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 5: Commit** as `feat: learning animals are born, learn, and pass on their brains`; `git show --stat HEAD`
   lists exactly this task's files.
 
 ### Task 3: The live viewer
@@ -129,14 +129,39 @@ finished and its seconds); `python -m src.viewer [--runs runs] [--port 8765]` se
 list as JSON). The page redraws every 2 seconds: stage, population, births, generation, exam score, bites, steering to
 food, per-run progress.
 
-- [ ] **Step 1: Write the failing tests:** `test_runs_lists_scoreboards`, `test_unfinished_run_has_no_seconds`,
+- [x] **Step 1: Write the failing tests:** `test_runs_lists_scoreboards`, `test_unfinished_run_has_no_seconds`,
   `test_server_answers_page_and_data` (a server on a free port, two requests).
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_viewer -v` · Expected: `ModuleNotFoundError`.
-- [ ] **Step 3: Implement** the viewer (from the scratchpad viewer of 2026-11-23, with the new columns).
-- [ ] **Step 4: Run them, then the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
-- [ ] **Step 5: Open it** in the app's browser on `http://localhost:8765`; check the page shows a finished run and has
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_viewer -v` · Expected: `ModuleNotFoundError`.
+- [x] **Step 3: Implement** the viewer (from the scratchpad viewer of 2026-11-23, with the new columns).
+- [x] **Step 4: Run them, then the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [x] **Step 5: Open it** in the app's browser on `http://localhost:8765`; check the page shows a finished run and has
   no console errors.
-- [ ] **Step 6: Commit** as `feat: live viewer`; `git show --stat HEAD` lists exactly this task's files.
+- [x] **Step 6: Commit** as `feat: live viewer`; `git show --stat HEAD` lists exactly this task's files.
+
+### Task 3b: Eating is the creature's action again (added 2026-11-23; the owner: "Eat must be action creature does")
+
+Tasks 1 and 2 were built with eating "on contact" (Claude's change, reverted here). The brain chooses to eat.
+
+**Files:** Modify: `src/stages.py` (`EAT_MISS_COST = 0.2`), `src/brain.py` (4 outputs: move x, move y, eat, attack),
+`src/learner.py` (3 choices: move, eat, attack), `src/policies.py`, `src/creature.py` (the eat action and its miss),
+`src/world.py` (no eating on contact; actions in the order attack, eat, move), tests (`test_brain`, `test_policies`,
+`test_rules_policy`, `test_world_rules`, `test_learner`, `tests/helpers.py`).
+
+**Interfaces:** actions are `("MOVE", (dx, dy))`, `("EAT", Food | None)` and `("ATTACK", Creature)`. A brain eats when
+its eat output is above 0 (and attack does not win), a learner when it picks choice 1; the target is the food it stands
+on, else the nearest food within reach, else `None` (a miss: `EAT_MISS_COST`, no bite). The random wanderer and the rules
+yardstick eat whenever food is within reach.
+
+- [ ] **Step 1: Write the failing tests:** `test_brain_eat_in_reach`, `test_brain_eat_miss_when_nothing_in_reach`,
+  `test_random_walker_eats_in_reach`, `test_eats_food_in_reach` (rules), `test_eat_action_takes_a_bite`,
+  `test_eat_miss_costs_energy`, `test_second_eater_misses_last_bite`, `test_no_bite_without_choosing_to_eat`,
+  `test_learner_eat_choice`; the brain has 4 outputs and the learner 3 choices.
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` · Expected: failures naming `EAT`.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run them to see them pass** · `$PY -m unittest discover tests` · Expected: `OK`. Then
+  `grep -rn "on contact" src` · Expected: no output.
+- [ ] **Step 5: Commit** as `fix: eating is the creature's own action again`; `git show --stat HEAD` lists exactly this
+  task's files.
 
 ### Task 4: The check that could prove the design wrong (the Garden)
 

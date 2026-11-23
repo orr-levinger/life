@@ -419,6 +419,53 @@ slider, the renewal every 2 seconds), their tests.
 - [x] **Step 7: Commit** as `feat: jump into a running world and watch it slowly`; `git show --stat HEAD` lists exactly
   this task's files. Tell the owner it is ready.
 
+### Task 4j: Saves every 2,000 steps, resuming from any save, and Pause (added 2026-11-23; the owner's request)
+
+Spec: "Saves, resuming from any save, and Pause".
+
+**Files:** Create: `src/saves.py`, `tests/test_saves.py`. Modify: `src/learner.py` (`state()` / `load_state(state)`),
+`src/dial.py` (`Dial.state()` / `Dial.from_state(state)`), `src/evolve.py` (a save every 2,000 steps and at Stop;
+`--resume <save>`; Pause), `src/control.py` (`Control.paused: bool`), `src/viewer.py` (`GET /saves?run=`, `POST /start`
+with `from: {run, step}`, `POST /control` with `paused`), `src/viewer.html` (Pause / Continue; the saves of a world and
+Resume from here), their tests, `README.md`.
+
+**Interfaces:**
+- `SAVE_EVERY = 2000`; `SAVE_FORMAT = 1`; a save is `runs/<run>/saves/step-<step:07d>.npz` (arrays) with its
+  description inside it (JSON: format, step, the run's seed and kind, creatures, food, settings, Auto's state, counters,
+  generator states).
+- `save_world(path: Path, world: World, dial: Dial, extra: dict) -> None` (written to a temporary file and renamed);
+  `load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, dict]`; `saves_of(run: Path) -> List[int]` (steps);
+  `SaveError` for a save of another format or a broken file.
+- `Learner.state() -> Dict[str, np.ndarray]` and `Learner.load_state(state)`: every slot's weights, inborn weights,
+  optimizer moments, step counts, learning speeds and which slots are free.
+- `python -m src.evolve --resume runs/<run>/saves/step-0016000.npz [--mode auto|manual] [--out DIR]`: the seed and
+  species come from the save; the new run's `run.json` adds `from: {run, step}`; its scoreboard starts with the old
+  run's rows up to that step.
+- `GET /saves?run=<name>` → `[2000, 4000, …]`; `POST /start {from: {run, step}, mode}`; `POST /control {run, paused}`.
+
+- [ ] **Step 1: Write the failing tests:** `test_saves`: `test_save_and_load_give_the_same_world` (creatures, food,
+  knobs, counters equal), `test_a_resumed_world_goes_on_as_the_old_one_did` (instinct: 2,000 steps from a save at 2,000
+  equal the old world's steps 2,001-4,000), `test_learners_keep_what_they_learned` (weights, inborn weights, optimizer
+  moments and learning speeds equal after loading), `test_auto_keeps_its_nudges` (a take-back after resuming undoes the
+  same nudge it would have), `test_a_save_of_another_format_is_refused`, `test_saves_of_lists_the_steps`;
+  `test_evolve`: `test_a_save_every_2000_steps`, `test_stop_saves`, `test_resume_starts_a_new_world_from_the_save`
+  (new folder, `from` in run.json, the old rows up to the step, the next row at step + 250, the old world untouched),
+  `test_pause_takes_no_steps` (paused for 1 s: no step taken, then it goes on); `test_control`: `test_paused_round_trip`;
+  `test_viewer`: `test_saves_are_listed`, `test_resume_from_a_save_launches_a_world`, `test_resume_from_a_missing_save_is_refused`,
+  `test_pause_is_written_to_the_run`, `test_page_has_pause_and_resume` (the words Pause, Continue, Resume from here).
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_saves tests.test_evolve tests.test_control
+  tests.test_viewer` · Expected: `No module named 'src.saves'` and failures naming `paused`, `/saves`.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [ ] **Step 5: Measure** a learning world's save: its size on disk and how long it takes; and that saving every 2,000
+  steps leaves the speed within 2 % (2,000 instinct steps with and without the save). Numbers in the ledger.
+- [ ] **Step 6: Try it** in the app's browser: start a learning world; after 4,000 steps see its saves 2k and 4k; Pause
+  and see the step counter hold, Continue and see it go on; stop it; in History pick it, pick 2k, Resume from here; the
+  new world's charts start with the old history up to 2k and go on from there; Jump in shows its creatures. No errors in
+  the browser's console. Each in the ledger with what was seen.
+- [ ] **Step 7: Commit** as `feat: a save every 2,000 steps, resume from any save, and Pause`; `git show --stat HEAD`
+  lists exactly this task's files. Tell the owner it is ready.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.
@@ -491,4 +538,4 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
    Step 5 showed intelligence and the level reached not below Task 4d's.
 7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,
    first, with its numbers.
-8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 5 and 6.
+8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 4j, 5 and 6.

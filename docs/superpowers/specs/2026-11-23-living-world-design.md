@@ -172,6 +172,33 @@ are doing then jump out back to fast mode".
 watched it looks at the control file every step and, after each step, writes `view.json` (where every creature and
 food is) the same safe way as the control file; the page asks the server for it 10 times a second (`GET /view?run=`).
 
+### Saves, resuming from any save, and Pause (the owner, 2026-11-23)
+
+The owner: "we should be able to save the state of the world, update the code, update the UI and resume with the level
+of intelligence we arrived at" · "let's auto save the game every 2000 steps so I can jump into how the world looked
+like at this stage of evolution in the past" · "basically just the every 2000 steps save is enough actually" · "load
+world simulation A at step 16k for example, I should be able to" · "we need also a pause button".
+
+- **A save every 2,000 steps**, by itself, in every world, kept for good (no Save button: the owner said the automatic
+  save is enough). A world also saves when it is stopped.
+- **What a save holds:** everything that makes the world what it is at that step: every creature (where it is, its
+  size, energy, age, own lifespan, generation, parent, how much it has eaten), every brain as it is now (a learning
+  animal's learned network, the network it was born with, its learning speed and its learning state), every piece of
+  food, the knobs and Auto's state (the nudges it can take back, whose turn it is), the counters, and the random number
+  generators' state. Only a learning animal's last few unfinished steps of experience (fewer than 65) are not kept: it
+  starts its next batch of learning afresh.
+- **Resume from a save:** in History or on a running world's card, pick the world and one of its saves (2k, 4k …
+  16k …) and press **Resume from here**, in Auto or Manual. A new world starts from that save, with today's code and
+  page, and runs until Stop. Its charts begin with the old world's history up to that step, so the story is continuous;
+  its name says where it came from ("from seed 1 at 16k"). The world it came from is never changed.
+- **Pause:** a running world's card gets **Pause** / **Continue**. Paused, the world takes no steps (nothing changes,
+  nothing is learned) until Continue; Jump in still shows it, frozen.
+- **Code changes:** each save says which save format it is. A change of code that changes what a save holds (the
+  brain's size evolving, Task 5, will) also brings the conversion of older saves, written and tested with it. A save
+  the code cannot read is refused in plain words; it is never half-loaded or guessed.
+- **Size,** measured 2026-11-23: a learning animal's network has 1,032 numbers; a learning world's save is about
+  1.3 MB before compression (80 animals × 4 copies × 4 bytes), so 100,000 steps of saves is about 65 MB.
+
 ### The intelligence exam
 
 The owner: "At the end, whoever survives is smart in nature." · "Intelligence should be rewards / waste or something

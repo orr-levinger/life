@@ -382,6 +382,43 @@ control file read every 25 steps; a scoreboard row every 250 steps; Auto's revie
 - [x] **Step 6: Commit** as `feat: the control room (Auto, Manual, live knobs, Start and Stop)`; `git show --stat HEAD`
   lists exactly this task's files. Tell the owner it is ready to play with.
 
+### Task 4i: Jump into the world (added 2026-11-23; the owner's request)
+
+Spec: "Jump into the world".
+
+**Files:** Modify: `src/control.py` (`Control.watch_until: Optional[float]`, `Control.watch_speed: float`;
+`WATCH_SPEEDS = (1, 30)`, `WATCH_SPEED = 10`, `WATCH_LEASE = 10` seconds), `src/evolve.py` (while watched: the control
+file every step, `view.json` after each step, a wait that holds the speed), `src/viewer.py` (`GET /view?run=`;
+`POST /control` takes `watch: bool` and `watch_speed`), `src/viewer.html` (Jump in / Jump out, the picture, the speed
+slider, the renewal every 2 seconds), their tests.
+
+**Interfaces:**
+- `world_view(world) -> dict`: `{step, creatures: [{x, y, size, energy, heading: [dx, dy], did, generation}],
+  foods: [{x, y, energy}]}` (`energy` of a creature as a share of its maximum); in `src/evolve.py`.
+- `POST /control {run, watch: true, watch_speed?}` sets `watch_until` to now + 10 s; `{run, watch: false}` clears it;
+  a speed outside 1-30 is refused in plain words.
+- `GET /view?run=<name>` → the run's `view.json`; `404` when the world is not being watched.
+
+- [ ] **Step 1: Write the failing tests:** `test_control`: `test_watch_round_trip`, `test_watch_speed_outside_its_ends_is_refused`;
+  `test_evolve`: `test_watched_world_writes_its_view` (creatures and food where the world has them),
+  `test_watching_never_changes_the_world` (the same scoreboard watched at 1,000 steps a second and not watched),
+  `test_watch_runs_out_by_itself` (a lease in the past: no view written, no wait), `test_watched_world_waits`
+  (100 steps at 50 a second take at least 1.8 s); `test_viewer`: `test_jump_in_sets_the_lease`,
+  `test_jump_out_clears_it`, `test_view_of_a_watched_world`, `test_no_view_when_not_watched`,
+  `test_page_has_jump_in` (the words Jump in, Jump out).
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_control tests.test_evolve tests.test_viewer` ·
+  Expected: failures naming `watch_until`, `world_view` and `/view`.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`.
+- [ ] **Step 5: Measure** full speed is untouched: 2,000 instinct steps not watched, before and after this task ·
+  Expected: within 2 %. Both times in the ledger.
+- [ ] **Step 6: Try it** in the app's browser: Jump in on a running world; the picture moves at about 10 steps a second
+  and the creatures' circles, headings and food are visible; the speed slider changes the pace; Jump out and the step
+  counter races again; close the tab while watching and see the world back at full speed within 15 seconds. No errors in
+  the browser's console. Each in the ledger with what was seen.
+- [ ] **Step 7: Commit** as `feat: jump into a running world and watch it slowly`; `git show --stat HEAD` lists exactly
+  this task's files. Tell the owner it is ready.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.
@@ -454,4 +491,4 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
    Step 5 showed intelligence and the level reached not below Task 4d's.
 7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,
    first, with its numbers.
-8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 5 and 6.
+8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 5 and 6.

@@ -151,6 +151,27 @@ this machine only and accepts only JSON requests, which another website cannot s
 which the run looks at every 25 steps. Every value from the page is checked against the knob's ends before it is
 written; a value outside them is refused in plain words.
 
+### Jump into the world (the owner, 2026-11-23)
+
+The owner: "add a jump into world button that show me the world in slower motion so can actually see what the creatures
+are doing then jump out back to fast mode".
+
+- Each running world's card gets **Jump in**. It opens a picture of that same world (not a copy) above the charts and
+  slows the world to **10 steps a second**, with a speed slider from 1 to 30. **Jump out** closes the picture and the
+  world goes back to full speed at once.
+- **The picture:** the 50 × 30 world; each creature a circle as big as its size, filled as full as its energy, with a
+  short line showing where it is heading; its outline says what it did this step (eat, eat at nothing, attack, move);
+  food as green dots as big as their energy. The step number, how many live, and a legend.
+- **Slowing never changes what happens:** the world only waits between steps, so the same seed gives the same world
+  watched or not.
+- **Never stuck slow:** the page renews the slow mode every 2 seconds while it is open; when it stops renewing (the
+  tab is closed, the laptop sleeps), the world goes back to full speed by itself 10 seconds later.
+- The charts keep updating, slowly (a point every 250 steps, about every 25 seconds at 10 steps a second).
+
+**Underneath.** The control file gets `watch_until` (a time) and `watch_speed` (steps a second). While a world is
+watched it looks at the control file every step and, after each step, writes `view.json` (where every creature and
+food is) the same safe way as the control file; the page asks the server for it 10 times a second (`GET /view?run=`).
+
 ### The intelligence exam
 
 The owner: "At the end, whoever survives is smart in nature." · "Intelligence should be rewards / waste or something

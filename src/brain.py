@@ -6,6 +6,12 @@ from pathlib import Path
 import numpy as np
 
 
+def jitter(values: np.ndarray, rng: np.random.Generator, rate: float, scale: float) -> np.ndarray:
+    """The one mutation rule for any brain's weights: each, with probability `rate`, gets normal noise of std `scale`."""
+    mask = rng.random(values.shape) < rate
+    return values + mask * rng.normal(0.0, scale, values.shape)
+
+
 class Brain:
     N_IN = 12
     N_HIDDEN = 16
@@ -48,11 +54,7 @@ class Brain:
 
     def mutate(self, rng: np.random.Generator, rate: float, scale: float) -> Brain:
         """A new brain: each weight and bias, with probability `rate`, gets normal noise of std `scale`."""
-        def jitter(values: np.ndarray) -> np.ndarray:
-            mask = rng.random(values.shape) < rate
-            return values + mask * rng.normal(0.0, scale, values.shape)
-
-        return Brain(jitter(self.w1), jitter(self.b1), jitter(self.w2), jitter(self.b2))
+        return Brain(*(jitter(values, rng, rate, scale) for values in (self.w1, self.b1, self.w2, self.b2)))
 
     def save(self, path: str | Path) -> None:
         np.savez(path, w1=self.w1, b1=self.b1, w2=self.w2, b2=self.b2)

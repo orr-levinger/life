@@ -35,7 +35,7 @@ TEST_WORLD = Stage(-1, "Test world", False, (10, 25), 80, 3, 1.0, 0.10, False)
 
 BIRTH_AT = 0.7  # a creature with this share of its maximum energy has a baby
 BABY_SHARE = 0.4  # the share of the parent's energy the baby gets
-MAX_AGE = 5000  # steps a creature lives at most, at every stage
+LIFESPAN = (4000, 6000)  # each creature's own lifespan in steps is drawn from this range when it is born
 MAX_CREATURES = 80  # a safety limit that only pauses births, to keep the simulation fast
 SOUP_MIN = 10  # random newcomers appear while fewer than this many live
 START_ENERGY = (50.0, 100.0)  # a newcomer's energy

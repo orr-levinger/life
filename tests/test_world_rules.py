@@ -6,7 +6,7 @@ import numpy as np
 
 from src.food import Food
 from src.learner import LEARNING_RATE, Learner, NetWeights
-from src.stages import BABY_SHARE, EAT_MISS_COST, MAX_AGE, MAX_CREATURES, STAGES
+from src.stages import BABY_SHARE, EAT_MISS_COST, LIFESPAN, MAX_CREATURES, STAGES
 from tests.helpers import GARDEN_NO_FOOD, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
 from tests.test_learner import live, same
 
@@ -147,16 +147,40 @@ class TestLifeAndDeath(unittest.TestCase):
         w = make_world(GARDEN_NO_FOOD)
         crowd(w)
         c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
-        c.age = MAX_AGE - 1
+        c.lifespan, c.age = 100, 99
         w.step()
         self.assertNotIn(c, w.creatures)
         self.assertEqual((w.deaths["age"], w.deaths["hunger"]), (1, 0))
+
+    def test_every_creature_has_its_own_lifespan(self):
+        w = make_world(STAGES[0], species="random")
+        populate(w, 30)
+        spans = [c.lifespan for c in w.creatures]
+        self.assertTrue(all(LIFESPAN[0] <= span <= LIFESPAN[1] for span in spans))
+        self.assertGreater(len(set(spans)), 20)
+        for creature in w.creatures:
+            creature.energy = 90.0
+        w.step()
+        babies = [c for c in w.creatures if c.generation == 1]
+        self.assertTrue(babies)
+        self.assertTrue(all(LIFESPAN[0] <= baby.lifespan <= LIFESPAN[1] for baby in babies))
+
+    def test_a_creature_dies_at_its_own_lifespan(self):
+        w = make_world(GARDEN_NO_FOOD)
+        crowd(w)
+        young = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
+        old = add(w, 20, 10, policy="brain", brain=fixed_brain(STAY))
+        young.lifespan, old.lifespan = 200, 50
+        young.age = old.age = 49
+        w.step()
+        self.assertIn(young, w.creatures)
+        self.assertNotIn(old, w.creatures)
 
     def test_a_death_of_old_age_makes_room_for_a_baby(self):
         w = make_world(GARDEN_NO_FOOD, species="random")
         for i in range(MAX_CREATURES):
             add(w, 1 + (i % 10) * 4.5, 1 + (i // 10) * 3.4, energy=90.0)
-        w.creatures[0].age = MAX_AGE - 1
+        w.creatures[0].lifespan, w.creatures[0].age = 100, 99
         w.step()
         self.assertEqual((len(w.creatures), w.deaths["age"], w.births), (MAX_CREATURES, 1, 1))
 
@@ -170,7 +194,7 @@ class TestLifeAndDeath(unittest.TestCase):
     def test_old_age_kills_in_mortal_stage(self):
         w = make_world(NO_FOOD)
         c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
-        c.age = MAX_AGE - 1
+        c.lifespan, c.age = 100, 99
         w.step()
         self.assertNotIn(c, w.creatures)
         self.assertEqual(w.deaths["age"], 1)
@@ -236,7 +260,7 @@ class TestLifeAndDeath(unittest.TestCase):
         w = make_world(NO_FOOD, evolving=False)
         rich = add(w, 10, 10, energy=90.0, policy="brain", brain=fixed_brain(STAY))
         poor = add(w, 30, 20, energy=0.01, policy="brain", brain=fixed_brain(STAY))
-        poor.age = MAX_AGE
+        poor.lifespan, poor.age = 100, 100
         for _ in range(10):
             w.step()
         self.assertEqual(w.creatures, [rich, poor])

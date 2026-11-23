@@ -15,7 +15,7 @@ from .creature import Creature
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, sense_all
-from .stages import (BABY_SHARE, BIRTH_AT, LR_MUTATION, MAX_AGE, MAX_CREATURES, MUTATION_RATE, MUTATION_SCALE,
+from .stages import (BABY_SHARE, BIRTH_AT, LIFESPAN, LR_MUTATION, MAX_CREATURES, MUTATION_RATE, MUTATION_SCALE,
                      SIZE_MUTATION, SOUP_MIN, START_ENERGY, Stage)
 
 if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to it
@@ -86,6 +86,7 @@ class World:
         brain = Brain.random(self.np_rng) if self.species == "brain" else None
         slot = self.learner.newcomer(self.np_rng) if self.species == "learner" else None
         newcomer = Creature(self.next_id(), x, y, size, self.rng.uniform(*START_ENERGY), self.species, brain, slot=slot)
+        newcomer.lifespan = self.rng.randint(*LIFESPAN)
         self.creatures.append(newcomer)
         self.newcomers += 1
         return newcomer
@@ -142,7 +143,7 @@ class World:
                 creature.age += 1
             if self.evolving and self.stage.hunger and creature.energy <= 0:
                 self.kill(creature, "hunger")
-            elif self.evolving and creature.age >= MAX_AGE:
+            elif self.evolving and creature.lifespan is not None and creature.age >= creature.lifespan:
                 self.kill(creature, "age")  # old age at every stage: each death makes room for a baby
             elif creature.energy < 0:
                 creature.energy = 0.0  # where nobody starves, an empty creature simply stays empty
@@ -190,8 +191,10 @@ class World:
         y = min(max(parent.y + self.rng.uniform(-1.0, 1.0), 0.0), self.height)
         brain = parent.brain.mutate(self.np_rng, MUTATION_RATE, MUTATION_SCALE) if parent.brain is not None else None
         parent.energy -= gift
-        self.creatures.append(Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
-                                       parent_id=parent.id, generation=parent.generation + 1, slot=slot))
+        baby = Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
+                        parent_id=parent.id, generation=parent.generation + 1, slot=slot)
+        baby.lifespan = self.rng.randint(*LIFESPAN)
+        self.creatures.append(baby)
         self.births += 1
 
     def _decay_food(self) -> None:

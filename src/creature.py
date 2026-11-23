@@ -55,6 +55,7 @@ class Creature:
         self.attack_cost = size * 1.0
 
         self.age = 0
+        self.lifespan: Optional[int] = None  # steps it lives; the world sets it when the creature is born
         self.food_eaten = 0.0
         self.last_action = "NONE"
         self.intent = "REST"  # display only

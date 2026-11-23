@@ -59,6 +59,9 @@
   .row { display: grid; grid-template-columns: minmax(200px, 2.2fr) repeat(8, minmax(78px, 1fr)); align-items: center;
          gap: 0 10px; padding: 8px 12px; border-top: 1px solid var(--grid); min-width: 900px; cursor: pointer; }
   .row.head { border-top: 0; cursor: default; color: var(--muted); font-size: 12px; }
+  .row.head .sort { background: none; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+  .row.head .sort:hover { color: var(--ink); }
+  #runs .bar label { display: inline-flex; align-items: center; gap: 5px; }
   .row:not(.head):hover, .row.picked { background: var(--page); }
   .row b { font-weight: 600; }
   .row small { display: block; color: var(--muted); font-size: 12px; }
@@ -544,8 +547,24 @@ document.getElementById("watch-speed").addEventListener("change", (event) => {
 
 // ---- History: one row per world, its scores, each explained on hover ----
 const KIND_WORDS = { learning: "blue: learning animals (they learn during life)", instinct: "orange: instinct animals (never learn)" };
-const SORTS = { smart: "Smartest first", hard: "Hardest world survived", new: "Newest first" };
-let sortBy = "smart";
+const COLUMNS = [  // each column's title and what it sorts by
+  { key: "world", label: "World", by: (run) => run.started },
+  { key: "steps", label: "Steps", by: (run, s) => s.steps },
+  { key: "hardest", label: "Hardest survived", by: (run, s) => s.hardest },
+  { key: "smart", label: "Intelligence × random", by: (run, s) => s.smart },
+  { key: "steer", label: "Steers to food", by: (run, s) => s.steer },
+  { key: "generation", label: "Generation", by: (run, s) => s.generation },
+  { key: "end", label: "Alive · fed at the end", by: (run, s) => s.alive === null ? null : s.alive * 1000 + s.fed },
+  { key: "mode", label: "Mode", by: (run) => run.mode },
+  { key: "saves", label: "Saves", by: (run) => run.saves },
+];
+const SHORTCUTS = { smart: "Smartest first", hardest: "Hardest world survived", world: "Newest first" };
+const STEP_FLOORS = [0, 1000, 5000, 10000, 50000];
+const NO_FILTERS = { animals: "all", mode: "all", minSteps: 0, smarter: false, withSaves: false };
+const KEPT = "life.history";  // the sort and filters, remembered in this browser only
+let hist = { sort: "smart", desc: true, ...NO_FILTERS };
+try { hist = { ...hist, ...JSON.parse(localStorage.getItem(KEPT) || "{}") }; } catch (error) { /* the page works without it */ }
+const keep = () => { try { localStorage.setItem(KEPT, JSON.stringify(hist)); } catch (error) { /* not kept: fine */ } };
 const two = (v) => v === null ? "-" : v.toFixed(2);
 
 function scores(run) {
@@ -624,25 +643,77 @@ function historyRow(run, best) {
   return row;
 }
 
+function shown(past) {
+  const kept = past.filter((run) => {
+    const sc = scores(run);
+    return (hist.animals === "all" || run.kind.split("-")[0] === hist.animals)
+      && (hist.mode === "all" || run.mode === hist.mode)
+      && sc.steps >= hist.minSteps
+      && (!hist.smarter || (sc.smart !== null && sc.smart > 1))
+      && (!hist.withSaves || run.saves > 0);
+  });
+  const column = COLUMNS.find((c) => c.key === hist.sort) || COLUMNS[3];
+  const value = (run) => column.by(run, scores(run));
+  return kept.sort((a, b) => {  // worlds with nothing to sort by go last, whichever way
+    const x = value(a), y = value(b);
+    if (x === null || x === undefined) return 1;
+    if (y === null || y === undefined) return -1;
+    const order = x < y ? -1 : x > y ? 1 : 0;
+    return hist.desc ? -order : order;
+  });
+}
+
 function historyTable(past) {
   const smartest = past.reduce((best, run) => {
     const smart = scores(run).smart;
     return smart !== null && (best === null || smart > best.smart) ? { name: run.name, smart } : best;
   }, null);
-  const order = { smart: (r) => -(scores(r).smart ?? -Infinity), hard: (r) => -(scores(r).hardest ?? -Infinity), new: () => 0 };
-  const sorted = past.slice().sort((a, b) => order[sortBy](a) - order[sortBy](b));
+  const rows = shown(past);
+  const options = (pairs, chosen) => pairs.map(([value, words]) =>
+    `<option value="${value}"${String(value) === String(chosen) ? " selected" : ""}>${words}</option>`).join("");
+  const filtered = JSON.stringify({ ...NO_FILTERS, ...Object.fromEntries(Object.keys(NO_FILTERS).map((k) => [k, hist[k]])) })
+    !== JSON.stringify(NO_FILTERS);
   const box = document.createElement("div");
-  box.innerHTML = `<div class="bar"><span>Sort</span><select aria-label="Sort">${Object.entries(SORTS).map(([key, words]) =>
-    `<option value="${key}"${key === sortBy ? " selected" : ""}>${words}</option>`).join("")}</select>
-    <span>${Object.values(KIND_WORDS).join(" · ")}</span><span>Point at any number to see what it means.</span></div>`;
-  box.querySelector("select").addEventListener("change", (event) => { sortBy = event.target.value; render(); });
+  box.innerHTML = `<div class="bar">
+      <label>Sort <select data-f="shortcut">${options([["", "by column"], ...Object.entries(SHORTCUTS)],
+        hist.desc && SHORTCUTS[hist.sort] ? hist.sort : "")}</select></label>
+      <label>Animals <select data-f="animals">${options([["all", "all"], ["learning", "learning"], ["instinct", "instinct"]], hist.animals)}</select></label>
+      <label>Mode <select data-f="mode">${options([["all", "all"], ["auto", "Auto"], ["manual", "Manual"]], hist.mode)}</select></label>
+      <label>At least <select data-f="minSteps">${options(STEP_FLOORS.map((n) => [n, n ? `${thousands(n)} steps` : "any steps"]), hist.minSteps)}</select></label>
+      <label><input type="checkbox" data-f="smarter"${hist.smarter ? " checked" : ""}> Only smarter than random</label>
+      <label><input type="checkbox" data-f="withSaves"${hist.withSaves ? " checked" : ""}> Only with saves</label>
+    </div>
+    <div class="bar"><span>Showing ${rows.length} of ${past.length} worlds</span>
+      ${filtered ? '<button type="button" class="act" data-f="clear">Clear filters</button>' : ""}
+      <span>${Object.values(KIND_WORDS).join(" · ")}</span><span>Point at any number to see what it means.</span></div>`;
+  box.querySelectorAll("[data-f]").forEach((control) => control.addEventListener(control.tagName === "BUTTON" ? "click" : "change", () => {
+    const f = control.dataset.f;
+    if (f === "clear") Object.assign(hist, NO_FILTERS);
+    else if (f === "shortcut") { if (control.value) Object.assign(hist, { sort: control.value, desc: true }); }
+    else if (control.type === "checkbox") hist[f] = control.checked;
+    else hist[f] = f === "minSteps" ? Number(control.value) : control.value;
+    keep();
+    render();
+  }));
   const table = document.createElement("div");
   table.className = "table";
   const head = document.createElement("div");
   head.className = "row head";
-  head.innerHTML = "<div>World</div><div>Steps</div><div>Hardest survived</div><div>Intelligence × random</div>" +
-    "<div>Steers to food</div><div>Generation</div><div>Alive · fed at the end</div><div>Mode</div><div>Saves</div>";
-  table.append(head, ...sorted.map((run) => historyRow(run, smartest && run.name === smartest.name)));
+  for (const column of COLUMNS) {
+    const title = document.createElement("button");
+    title.type = "button";
+    title.className = "sort";
+    title.textContent = column.label + (hist.sort === column.key ? (hist.desc ? " ↓" : " ↑") : "");
+    title.addEventListener("click", () => {
+      hist.desc = hist.sort === column.key ? !hist.desc : true;  // a second click reverses it
+      hist.sort = column.key;
+      keep();
+      render();
+    });
+    head.append(title);
+  }
+  table.append(head, ...rows.map((run) => historyRow(run, smartest && run.name === smartest.name)));
+  if (!rows.length) table.insertAdjacentHTML("beforeend", '<div class="empty">No world matches these filters.</div>');
   box.append(table);
   return box;
 }

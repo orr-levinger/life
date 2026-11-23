@@ -325,6 +325,12 @@ class TestControlRoom(unittest.TestCase):
         for words in ("Smartest first", "Hardest survived", "Intelligence", "× random", "Steers to food"):
             self.assertIn(words, page)
 
+    def test_page_has_history_filters(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("Animals", "Mode", "At least", "Only smarter than random", "Only with saves", "Clear filters"):
+            self.assertIn(words, page)
+
     def test_page_has_pause_and_resume(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

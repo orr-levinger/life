@@ -125,6 +125,14 @@ numbers we use should be in the rules grouped in a sensible nice way" · "do it"
   charts picks the span (10k, 50k, all), the smoothing (none, light, strong) and one point per how many steps (250,
   1,000, 5,000; each point the average of its stretch: the owner, "make it configurable so I can see dots per x time"),
   remembered in the browser.
+- **The creature look comes from its genes** (the owner, on the Creature Shapes page: "Yes, use it"): eye spacing from
+  its cone's width, eye size from its reach, ear size from hearing, head size from neurons and a fold a layer, quills from
+  fear of death, roundness from love of babies, antennae from learning from others, stripes from learning speed; hunger
+  stays the body's colour, the age arc and the action's flash ring stay. The legend shows each.
+- **Zoom and follow** (the owner: "add zoom to the world, and add follow creature mode if I click a creature I zoom to its
+  perspective and follow it.. I should still be able to follow it and zoom out a bit to see more of what's around"):
+  the wheel, a pinch or + and − zoom the world; a click on a creature centres the view on it, zoomed in, and keeps it
+  centred as it moves while the zoom still works; a click on empty ground or Esc stops following.
 - **A vision cone has a visible edge** in Jump in: a thin outline at the cone's end, so how far each creature sees is
   clear; hearing stays the faint dotted circle.
 - This replaces the approved "table of live worlds" (Task 4x), which one world at a time makes pointless.

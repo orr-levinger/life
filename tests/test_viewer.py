@@ -442,7 +442,8 @@ class TestControlRoom(unittest.TestCase):
     def test_page_explains_the_creature_look(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ('id="watch-legend"', "eyes:, very smart", "past its, lifespan", "food"):  # the drawn legend's labels
+        for words in ('id="watch-legend"', "past its, lifespan", "food", "function creatureShape", "big ears:, hears far",
+                      "big head:, many neurons", "folds:, layers", "quills:, fears death", "stripes:, learns fast"):
             self.assertIn(words, page)
         self.assertNotIn("tan diamond: food", page)  # the owner: the words-only key "is not helping"
 

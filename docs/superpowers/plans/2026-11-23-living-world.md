@@ -537,6 +537,33 @@ for an unknown world; `null` before its first numbers (or for a world made by ol
   sideways scrolling. No errors in the console. In the ledger.
 - [x] **Step 7: Commit** as `feat: live tiles beside the knobs`; `git show --stat HEAD` lists exactly this task's files.
 
+### Task 4n: Auto's steps sized by the distance to the sweet spot (added 2026-11-24; the owner's request)
+
+Spec: "Auto's steps are sized by how far the world is from the sweet spot".
+
+**Files:** Modify: `src/dial.py`, `tests/test_dial.py`, `src/evolve.py` (`REVIEW_EVERY = 500`; the review gets the
+number alive at the last look), `tests/test_evolve.py`, `docs` (the spec's earlier Auto rule marked as replaced).
+
+**Interfaces:** `SWEET_ALIVE = (50, 75)`, `SWEET_ENERGY = (0.40, 0.55)`, `MAX_NUDGES = 4`;
+`Dial.review(alive: int, energy: Optional[float], newcomers: int, alive_before: Optional[int]) -> int` — the nudges made
+(+ harder, − easier, 0 hold); `nudges_for(alive, energy, newcomers, alive_before) -> int` (the rule alone, for tests and the
+page); `MANY`, `WELL_FED`, `FEW`, `HUNGRY` go.
+
+- [ ] **Step 1: Write the failing tests** (`test_dial`): `test_sweet_spot_holds`, `test_far_too_easy_nudges_four_at_once`,
+  `test_a_little_too_easy_nudges_once`, `test_a_fall_eases_even_above_the_lines` (80 → 44 alive at 36 %: −4),
+  `test_too_few_eases_by_the_gap`, `test_hungry_eases_by_the_gap`, `test_newcomers_ease_four`, `test_never_more_than_four`,
+  `test_easier_takes_back_the_newest_harder_nudges_first`, `test_harder_nudges_take_turns`, the knobs-within-ends,
+  hunters and max-level tests kept on the new signature; (`test_evolve`): `test_auto_looks_every_500_steps`.
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_dial` · Expected: failures naming
+  `nudges_for` and `SWEET_ALIVE`.
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`. `grep -rn "WELL_FED|HUNGRY" -E src tests`
+  · Expected: no output.
+- [ ] **Step 5: Watch it**, viewer open: a learning world in Auto for 20,000 steps · Expected: it reaches the sweet spot
+  and stays near it; a hand-made hard jump is eased within 1,000 steps. Numbers in the ledger; shown to the owner.
+- [ ] **Step 6: Commit** as `feat: Auto's steps sized by the distance to the sweet spot`; `git show --stat HEAD` lists
+  exactly this task's files.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.
@@ -609,4 +636,4 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
    Step 5 showed intelligence and the level reached not below Task 4d's.
 7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,
    first, with its numbers.
-8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 4j, 4k, 4l, 4m, 5 and 6.
+8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 4j, 4k, 4l, 4m, 4n, 5 and 6.

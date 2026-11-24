@@ -348,6 +348,40 @@ class TestControlRoom(unittest.TestCase):
         for words in ("steps a second", "Average energy", "Born", "Died"):
             self.assertIn(words, page)
 
+    def test_update_relaunches_the_world_in_its_own_run(self):
+        name = self.running_world()
+        folder = self.root / name
+        self.assertEqual(self.server.post("/control", {"run": name, "update": True})[0], 200)
+        self.assertTrue(read_control(folder).stop)  # the world is asked to save and end
+        (folder / "saves").mkdir()
+        (folder / "saves" / "step-0004321.npz").write_bytes(b"")
+        (folder / "time.txt").write_text("1.0\n")  # it ended
+        for _ in range(100):
+            if self.recorder.launched:
+                break
+            time.sleep(0.05)
+        command, launched_in = self.recorder.launched[0]
+        self.assertEqual(launched_in, folder)
+        self.assertEqual(Path(command[command.index("--resume") + 1]), (folder / "saves" / "step-0004321.npz").resolve())
+        self.assertIn("--continue", command)
+        self.assertEqual(Path(command[command.index("--out") + 1]), folder.resolve())
+        self.assertFalse((folder / "time.txt").exists())
+        self.assertFalse(read_control(folder).stop)
+
+    def test_hunters_in_auto_is_written(self):
+        name = self.running_world()
+        self.assertEqual(self.server.post("/control", {"run": name, "settings": {"hunters": True}})[0], 200)
+        control = read_control(self.root / name)
+        self.assertEqual((control.mode, control.hunters, control.settings), ("auto", True, None))
+        status, answer = self.server.post("/control", {"run": name, "settings": {"lifespan": 7000}})
+        self.assertEqual((status, answer["error"]), (409, "switch to Manual to turn the knobs"))
+
+    def test_page_has_update_code_and_the_hunting_chart(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("Update code", "Fleeing and chasing"):
+            self.assertIn(words, page)
+
     def test_page_has_pause_and_resume(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

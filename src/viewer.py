@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -33,6 +34,8 @@ REPO = Path(__file__).resolve().parent.parent
 RUNNING_WITHIN = 180.0  # seconds: a run with no end that wrote its scoreboard this recently is still running
 MAX_RUNNING = 2  # the box has 4 cores
 MAX_BODY = 10_000  # bytes a request may send
+HANDOVER_WAIT = 300.0  # seconds Update code waits for a world to save and end before giving up
+HANDOVER_LOOK = 0.2
 KNOB_LABELS = {  # what the page calls each knob, and how far one notch of its slider moves it
     "max_food": ("Food pieces at most", 1.0),
     "food_energy": ("Energy per food", 0.5),
@@ -92,10 +95,19 @@ def knobs() -> Dict:
     return {"knobs": sliders, HUNTERS: START.attacks}
 
 
+def _on_its_own() -> Dict:
+    """How a world is started so it does not belong to the page server: restarting the server leaves it running."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                | subprocess.CREATE_BREAKAWAY_FROM_JOB}
+    return {"start_new_session": True}
+
+
 def _launch(command: List[str], folder: Path) -> subprocess.Popen:
     environment = {**os.environ, "TF_CPP_MIN_LOG_LEVEL": "3"}
-    with open(folder / "run.log", "w") as log:  # the world keeps its own copy of the handle
-        return subprocess.Popen(command, cwd=REPO, stdout=log, stderr=subprocess.STDOUT, env=environment)
+    with open(folder / "run.log", "a") as log:  # the world keeps its own copy of the handle
+        return subprocess.Popen(command, cwd=REPO, stdout=log, stderr=subprocess.STDOUT, env=environment,
+                                **_on_its_own())
 
 
 class Refused(Exception):
@@ -178,10 +190,17 @@ class Controls:
         if mode not in MODES:
             raise Refused(400, f"mode must be one of {', '.join(MODES)}")
         settings = current.settings if mode == "manual" else None
+        hunters = current.hunters if mode == "auto" else None
         if body.get("settings") is not None:
-            if mode != "manual":
+            given = body["settings"]
+            if mode != "manual" and isinstance(given, dict) and set(given) == {HUNTERS}:
+                if not isinstance(given[HUNTERS], bool):
+                    raise Refused(400, "hunters must be true or false")
+                hunters = given[HUNTERS]  # the hunters switch works in Auto too
+            elif mode != "manual":
                 raise Refused(409, "switch to Manual to turn the knobs")
-            settings = self._settings(body["settings"], settings or self._now(running[name]))
+            else:
+                settings = self._settings(given, settings or self._now(running[name]))
         stop, paused = body.get("stop", current.stop), body.get("paused", current.paused)
         if not isinstance(stop, bool):
             raise Refused(400, "stop must be true or false")
@@ -197,9 +216,37 @@ class Controls:
             if not isinstance(body["watch"], bool):
                 raise Refused(400, "watch must be true or false")
             watch_until = time.time() + WATCH_LEASE if body["watch"] else None  # the page renews it while it watches
-        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused))
+        update = body.get("update", False)
+        if not isinstance(update, bool):
+            raise Refused(400, "update must be true or false")
+        if update:  # the world saves and ends; then it goes on from that save with today's code, in the same run
+            stop, paused = True, False
+        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused, hunters))
+        if update:
+            threading.Thread(target=self._hand_over, args=(folder,), daemon=True).start()
         return {"mode": mode, "settings": None if settings is None else knob_values(settings), "stop": stop,
-                "paused": paused, "watching": watch_until is not None, "watch_speed": watch_speed}
+                "paused": paused, "watching": watch_until is not None, "watch_speed": watch_speed, "updating": update}
+
+    def _hand_over(self, folder: Path) -> None:
+        """Update code: waits for the world to save and end, then starts it again from its last save, same run."""
+        ended = folder / "time.txt"
+        deadline = time.monotonic() + HANDOVER_WAIT
+        while not ended.exists():
+            if time.monotonic() > deadline:
+                print(f"Update code: {folder.name} did not end within {HANDOVER_WAIT:.0f} s; nothing was restarted",
+                      flush=True)
+                return
+            time.sleep(HANDOVER_LOOK)
+        save = save_path(folder, saves_of(folder)[-1])
+        ended.unlink()
+        current = read_control(folder)
+        write_control(folder, Control(current.mode, current.settings, False, current.watch_until, current.watch_speed,
+                                      False, current.hunters))
+        steps = json.loads((folder / "run.json").read_text())["steps"]
+        length = ["--forever"] if steps is None else ["--steps", str(steps)]
+        command = [sys.executable, "-m", "src.evolve", "--resume", str(save.resolve()), "--continue", *length,
+                   "--out", str(folder.resolve())]
+        self.started[folder.name] = self.launch(command, folder)
 
     def view(self, name: Optional[str]) -> bytes:
         """The picture a watched world last drew (it is drawn 10 to 30 times a second, so no scoreboard is read)."""

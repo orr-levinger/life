@@ -133,5 +133,20 @@ class TestSaves(unittest.TestCase):
             self.assertEqual(saves_of(run_folder), [2000, 4000, 16000])
 
 
+    def test_a_format_1_save_is_converted(self):
+        world = make_world()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 1
+            del about["dial"]["hunters"]  # what a format 1 save held
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            _, dial, _ = load_world(path, learner_seed=0)
+        self.assertEqual(dial.state()["hunters"], None)
+
 if __name__ == "__main__":
     unittest.main()

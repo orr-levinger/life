@@ -4,6 +4,8 @@
                          [--inherit learned|inborn] [--level N] [--max-level M] [--window] [--out DIR]
     python -m src.evolve --seed 1 --steps 20000 --policy random|rules [--level N]      (a yardstick world)
     python -m src.evolve --resume runs/<run>/saves/step-0016000.npz [--steps N | --forever] [--mode auto|manual]
+    python -m src.evolve --resume runs/<run>/saves/step-0016000.npz --continue --out runs/<run>   (Update code: the
+                         same run goes on from its save with the code as it is now)
 
 The world is never restarted and no creature is ever ranked or picked: births, deaths and the soup are the world's own
 rules (src/world.py). This runner starts the world, takes the live page's control file every few steps (src/control.py:
@@ -33,7 +35,7 @@ from .exam import ExamResult, run_exam
 from .hall_of_fame import HallOfFame
 from .saves import (SAVE_EVERY, SaveError, load_world, random_state, save_header, save_path, save_world,
                     set_random_state)
-from .scoreboard import ROW_KEYS, Scoreboard, Value, read_rows
+from .scoreboard import ROW_KEYS, Scoreboard, Value, migrate_scoreboard, read_rows
 from .settings import MAX_CREATURES
 from .world import INHERIT, World
 
@@ -63,6 +65,8 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     kind.add_argument("--species", choices=tuple(SPECIES))
     kind.add_argument("--policy", choices=YARDSTICKS, help="a yardstick world instead of a species")
     kind.add_argument("--resume", help="a save to go on from, as a new run (its seed and kind come from the save)")
+    parser.add_argument("--continue", dest="continue_run", action="store_true",
+                        help="with --resume: go on in the save's own run (after an update of the code)")
     parser.add_argument("--mode", choices=MODES, default="auto",
                         help="auto: the world turns its own knobs; manual: only the owner does (from the live page)")
     parser.add_argument("--level", type=float, default=None,
@@ -73,6 +77,8 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser.add_argument("--window", action="store_true", help="draw every step (no added delay)")
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
+    if args.continue_run and not args.resume:
+        parser.error("--continue goes with --resume")
     if args.resume:
         if args.seed is not None or args.level is not None or args.inherit is not None:
             parser.error("a resumed world takes its seed, difficulty and inheritance from its save")
@@ -103,7 +109,7 @@ def world_view(world: World) -> Dict[str, Any]:
     """Where everything is, for the page's picture of a watched world."""
     return {
         "step": world.step_count,
-        "creatures": [{"x": round(c.x, 3), "y": round(c.y, 3), "radius": round(c.radius, 3),
+        "creatures": [{"id": c.id, "x": round(c.x, 3), "y": round(c.y, 3), "radius": round(c.radius, 3),
                        "energy": round(max(c.energy, 0.0) / c.max_energy, 3),
                        "heading": [round(v, 3) for v in c.intended_vector], "did": c.last_action,
                        "generation": c.generation} for c in world.creatures],
@@ -133,12 +139,17 @@ class _Knobs:
     def __init__(self, control: Control) -> None:
         self.control = control
         self._applied = None
+        self._applied_hunters = None
 
     def take(self, control: Control, dial: Dial) -> bool:
         """Takes the newest control; returns whether the owner's settings changed the world's."""
         self.control = control
         if control.mode != "manual" or control.settings is None:
             self._applied = None  # back in Auto: the same settings sent again later are a new choice
+            if control.mode == "auto" and control.hunters is not None and control.hunters != self._applied_hunters:
+                self._applied_hunters = control.hunters  # the owner's hunters switch, in Auto
+                dial.set_hunters(control.hunters)
+                return True
             return False
         if control.settings == self._applied:
             return False
@@ -156,9 +167,15 @@ def _resumed_from(args: argparse.Namespace) -> Optional[Dict[str, Any]]:
     args.species = args.kind.split("-")[0]
     if args.species not in SPECIES:
         raise SaveError(f"{args.resume} is of a {args.kind} world; only a species world can be resumed")
-    if args.out is None:
+    old_run = Path(args.resume).parent.parent
+    if args.continue_run:
+        if args.out is not None and Path(args.out).resolve() != old_run.resolve():
+            raise SaveError(f"--continue goes on in the save's own run ({old_run}), not in {args.out}")
+        args.out = str(old_run)
+    elif args.out is None:
         args.out = new_run_folder(Path("runs"), args.seed, args.kind).as_posix()
-    return {"run": Path(args.resume).parent.parent, "step": header["step"]}
+    migrate_scoreboard(old_run / "scoreboard.csv")  # a run from before the chase and attacks columns
+    return {"run": old_run, "step": header["step"], "history": _history(old_run, header["step"])}
 
 
 def run(args: argparse.Namespace) -> Path:
@@ -166,8 +183,13 @@ def run(args: argparse.Namespace) -> Path:
     source = _resumed_from(args)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    record = {"seed": args.seed, "kind": args.kind, "steps": args.steps, "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
-    if source is not None:
+    if args.continue_run:  # the same run: its record gains the update
+        record = json.loads((out / "run.json").read_text())
+        record["steps"] = args.steps
+        record.setdefault("updates", []).append({"step": source["step"], "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+    else:
+        record = {"seed": args.seed, "kind": args.kind, "steps": args.steps, "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    if source is not None and not args.continue_run:
         record["from"] = {"run": source["run"].name, "step": source["step"]}
     (out / "run.json").write_text(json.dumps(record))  # the run's record, for the viewer's Live and History
     control = read_control(out)  # the live page may have written it before starting the run
@@ -209,8 +231,8 @@ def run(args: argparse.Namespace) -> Path:
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=ROW_KEYS)
         writer.writeheader()
-        if source is not None:  # the story so far: the old run's rows up to the save
-            history = _history(source["run"], source["step"])
+        if source is not None:  # the story so far: the old run's rows up to the save (read before this file was opened)
+            history = source["history"]
             writer.writerows(history)
             f.flush()
             recent.extend({key: _cell(row[key]) for key in ("step", "population", "energy")} for row in history)

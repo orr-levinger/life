@@ -147,7 +147,7 @@
   <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
   <div class="key">
     <span><i style="background:var(--food)"></i>food</span>
-    <span>circle: a creature, as big as it is, filled as full as its energy; the line shows where it is heading</span>
+    <span>circle: a creature, as big as it is (its size never changes); pale when hungry, solid when full; the line shows where it is heading</span>
     <span><i style="border:2px solid var(--eat)"></i>ate</span>
     <span><i style="border:2px solid var(--miss)"></i>ate at nothing</span>
     <span><i style="border:2px solid var(--warn)"></i>attacked</span>
@@ -175,6 +175,9 @@ const PANELS = [
   { key: "toward_food", title: "Steering to food", note: "When a creature sees food and moves: 1 = straight at it, 0 = random.", refs: [[0, "random"]] },
   { key: "generation", title: "Deepest generation alive", note: "How many parent-to-baby steps separate the newest creatures from the first ones." },
   { key: "bites_per_creature_step", title: "Bites per creature per step" },
+  { key: "flee", title: "Fleeing and chasing", hunters: true, beside: { key: "chase", label: "chasing" },
+    note: "While hunters are on. Solid: when a creature 1.5 times bigger is in sight, the share of moves away from it. Dashed: when one at most two-thirds its size is in sight, the share of moves toward it." },
+  { key: "attacks_rate", title: "Attacks tried per 1,000 steps", hunters: true },
 ];
 const W = 520, H = 250, M = { l: 44, r: 108, t: 10, b: 30 };
 const PENDING_FOR = 20000;  // ms a value moved by hand is shown before the world's own row must confirm it
@@ -331,7 +334,9 @@ function drawCharts(runs) {
     `<span>${swatch(kind)}${KIND_WORDS[kind.split("-")[0]] || kind}${of.length > 1 ? ` (${of.length} seeds)` : ""}</span>`).join("");
   const xMax = Math.max(1000, ...runs.flatMap((r) => r.rows.map((row) => row.step)));
   const marks = runs.flatMap(changes);
-  document.getElementById("charts").replaceChildren(...PANELS.map((panel) => drawPanel(panel, kinds, xMax, marks)));
+  const hunting = runs.some((run) => run.rows.some((row) => row.hunters));
+  document.getElementById("charts").replaceChildren(...PANELS.filter((panel) => !panel.hunters || hunting)
+    .map((panel) => drawPanel(panel, kinds, xMax, marks)));
 }
 
 function message(title, detail) {
@@ -347,6 +352,7 @@ function makeCard(run) {
       <div class="seg"><button type="button" data-mode="auto">Auto</button><button type="button" data-mode="manual">Manual</button></div>
       <button type="button" class="act jump">Jump in</button>
       <button type="button" class="act pause">Pause</button>
+      <button type="button" class="act update" data-tip="The world saves itself at the step it is at and goes on at once from there with the newest code, in the same run: nothing is lost.">Update code</button>
       <button type="button" class="act stop">Stop</button></div>
     <div class="where"></div><div class="knobs"></div>
     <label class="switch"><input type="checkbox" data-hunters> Hunters (creatures can attack each other)</label>
@@ -368,6 +374,14 @@ function makeCard(run) {
     button.addEventListener("click", () => send("/control", { run: state.run.name, mode: button.dataset.mode })
       .then(() => { state.run.mode = button.dataset.mode; updateCard(state); tell(null); }, tell));
   card.querySelector(".jump").addEventListener("click", () => jumpIn(state.run).catch(tell));
+  const update = card.querySelector(".update");
+  update.addEventListener("click", () => {
+    update.disabled = true;
+    update.textContent = "Updating…";
+    send("/control", { run: state.run.name, update: true })
+      .then(() => tell(null), (problem) => { update.disabled = false; update.textContent = "Update code"; tell(problem); });
+    setTimeout(() => { update.disabled = false; update.textContent = "Update code"; }, 60000);
+  });
   card.querySelector(".pause").addEventListener("click", () => {
     const paused = !state.run.paused;
     send("/control", { run: state.run.name, paused }).then(() => { state.run.paused = paused; updateCard(state); tell(null); }, tell);
@@ -434,7 +448,6 @@ function updateCard(state) {
     row.querySelector("output").textContent = knobFmt(value);
   });
   const hunters = card.querySelector("[data-hunters]");
-  hunters.disabled = !manual;
   hunters.checked = shownValue("hunters", last ? !!last.hunters : false, (a, b) => a === b);
 }
 
@@ -598,7 +611,8 @@ async function jumpIn(run) {
   document.getElementById("watch").hidden = false;
   const renew = () => watching && send("/control", { run: watching.name, watch: true,
     watch_speed: Number(document.getElementById("watch-speed").value) }).catch(() => {});
-  watching.timers.push(setInterval(renew, RENEW_EVERY), setInterval(drawView, VIEW_EVERY));
+  watching.timers.push(setInterval(renew, RENEW_EVERY), setInterval(fetchView, VIEW_EVERY));
+  requestAnimationFrame(paint);
 }
 
 async function jumpOut() {
@@ -610,11 +624,28 @@ async function jumpOut() {
   await send("/control", { run: name, watch: false }).catch(() => {});  // a world already ended needs no telling
 }
 
-async function drawView() {
+async function fetchView() {
   if (!watching) return;
   const response = await fetch(`/view?run=${encodeURIComponent(watching.name)}`, { cache: "no-store" }).catch(() => null);
   if (!response || !response.ok || !watching) return;
   const picture = await response.json();
+  if (watching.cur && picture.step === watching.cur.step) return;
+  const now = performance.now();
+  watching.span = watching.curAt ? Math.min(1000, now - watching.curAt) : VIEW_EVERY;  // glide over the time between pictures
+  watching.prev = watching.cur;
+  watching.cur = picture;
+  watching.curAt = now;
+  document.getElementById("watch-where").textContent =
+    `step ${picture.step.toLocaleString()} · ${picture.creatures.length} alive · ${picture.foods.length} food`;
+}
+
+function paint() {
+  if (!watching) return;
+  requestAnimationFrame(paint);
+  const picture = watching.cur;
+  if (!picture) return;
+  const t = watching.prev ? Math.min(1, (performance.now() - watching.curAt) / watching.span) : 1;
+  const before = new Map((watching.prev ? watching.prev.creatures : []).map((c) => [c.id, c]));
   const canvas = document.getElementById("watch-canvas"), ink = getComputedStyle(document.documentElement);
   const color = (name) => ink.getPropertyValue(name).trim();
   const width = canvas.clientWidth * devicePixelRatio, height = width * 30 / 50;
@@ -626,10 +657,12 @@ async function drawView() {
   const outline = { EAT: "--eat", EAT_MISS: "--miss", ATTACK: "--warn", ATTACK_MISS: "--warn" };
   const body = color(colorOf(watching.kind).slice(4, -1));
   for (const c of picture.creatures) {
-    const x = c.x * unit, y = c.y * unit, r = Math.max(c.radius * unit, 3);
-    g.globalAlpha = 0.85;
+    const from = before.get(c.id) || c;  // a newborn appears where it is
+    const x = (from.x + (c.x - from.x) * t) * unit, y = (from.y + (c.y - from.y) * t) * unit;
+    const r = Math.max(c.radius * unit, 3);  // its size: its genes, never smaller when hungry
+    g.globalAlpha = 0.15 + 0.85 * c.energy;  // energy: pale when hungry, solid when full
     g.fillStyle = body;
-    g.beginPath(); g.arc(x, y, r * Math.sqrt(c.energy), 0, 2 * Math.PI); g.fill();  // filled as full as its energy
+    g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
     g.globalAlpha = 1;
     g.strokeStyle = color(outline[c.did] || "--muted");
     g.lineWidth = Math.max(1.5, unit * 0.08);
@@ -640,8 +673,6 @@ async function drawView() {
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + (dx / length) * r * 1.8, y + (dy / length) * r * 1.8); g.stroke();
     }
   }
-  document.getElementById("watch-where").textContent =
-    `step ${picture.step.toLocaleString()} · ${picture.creatures.length} alive · ${picture.foods.length} food`;
 }
 
 document.getElementById("watch-out").addEventListener("click", () => jumpOut());
@@ -897,6 +928,7 @@ async function poll() {
       const gap = row.step - (i ? run.rows[i - 1].step : 0);  // rows every 250 steps (every 1,000 in older runs)
       row.deaths = (row.deaths_hunger + row.deaths_attack + row.deaths_age) * 1000 / gap;
       row.energy_percent = row.energy === null ? null : row.energy * 100;
+      row.attacks_rate = row.attacks === null ? null : row.attacks * 1000 / gap;
     });
     const now = JSON.stringify(next.map((r) => [r.name, r.rows.length, r.status, r.mode, r.paused]));
     if (now !== signature) { signature = now; data = next; lastChange = Date.now(); render(); }

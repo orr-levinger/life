@@ -27,7 +27,7 @@ from .settings import MAX_CREATURES
 from .world import World
 
 SAVE_EVERY = 2000  # steps between two saves of a world
-SAVE_FORMAT = 1
+SAVE_FORMAT = 2  # 2: Auto's state also keeps the owner's hunters switch (2026-11-24)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -100,6 +100,8 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         about = json.loads(str(arrays["about"]))
     except (OSError, ValueError, KeyError, zipfile.BadZipFile) as problem:
         raise SaveError(f"{path} cannot be read: {problem}") from problem
+    if about.get("format") == 1:
+        about = _from_format_1(about)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -110,6 +112,11 @@ def _food(saved: Dict[str, Any]) -> Food:
     food = Food(saved["x"], saved["y"], saved["remaining_duration"], saved["energy"])
     food.radius = saved["radius"]
     return food
+
+
+def _from_format_1(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 1 save had no owner's hunters switch: the owner had not set one."""
+    return {**about, "format": 2, "dial": {**about["dial"], "hunters": None}}
 
 
 def save_header(path: Path) -> Dict[str, Any]:

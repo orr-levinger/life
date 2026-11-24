@@ -270,7 +270,7 @@ class TestEvolve(unittest.TestCase):
         self.assertEqual(len(view["creatures"]), int(rows[-1]["population"]))
         self.assertGreater(len(view["foods"]), 0)
         creature = view["creatures"][0]
-        self.assertEqual(set(creature), {"x", "y", "radius", "energy", "heading", "did", "generation"})
+        self.assertEqual(set(creature), {"id", "x", "y", "radius", "energy", "heading", "did", "generation"})
         self.assertTrue(0.0 <= creature["energy"] <= 1.0)
         self.assertTrue(0.0 <= creature["x"] <= 50 and 0.0 <= creature["y"] <= 30)
         self.assertEqual(set(view["foods"][0]), {"x", "y", "radius"})
@@ -373,6 +373,45 @@ class TestEvolve(unittest.TestCase):
                 without = quiet_run(argv + [b]).read_text()  # never looked at, never written
         self.assertGreater(asked.call_count, 0)
         self.assertEqual(with_now, without)
+
+    def test_update_goes_on_in_the_same_run(self):
+        with tempfile.TemporaryDirectory() as folder:
+            quiet_run(["--seed", "1", "--steps", "2000", "--species", "instinct", "--out", folder])
+            (Path(folder) / "time.txt").unlink()  # the page server does this before handing over
+            save = Path(folder) / "saves" / "step-0002000.npz"
+            rows = read_rows(quiet_run(["--resume", str(save), "--continue", "--steps", "3000", "--out", folder]))
+            record = json.loads((Path(folder) / "run.json").read_text())
+            folders = [p.name for p in Path(folder).iterdir() if p.is_dir()]
+        self.assertEqual([int(r["step"]) for r in rows], [250 * i for i in range(1, 13)])
+        self.assertEqual([u["step"] for u in record["updates"]], [2000])
+        self.assertEqual((record["seed"], record["kind"]), (1, "instinct"))
+        self.assertEqual(sorted(folders), ["best", "saves"])  # no new run folder
+
+    def test_update_drops_rows_after_the_save(self):
+        with tempfile.TemporaryDirectory() as folder:
+            quiet_run(["--seed", "1", "--steps", "2500", "--species", "instinct", "--out", folder])
+            save = Path(folder) / "saves" / "step-0002000.npz"
+            rows = read_rows(quiet_run(["--resume", str(save), "--continue", "--steps", "3000", "--out", folder]))
+        steps = [int(r["step"]) for r in rows]
+        self.assertEqual(steps, sorted(set(steps)))
+        self.assertEqual(steps[-1], 3000)
+
+    def test_updated_world_is_the_same_world(self):
+        with tempfile.TemporaryDirectory() as whole, tempfile.TemporaryDirectory() as updated:
+            straight = (Path(quiet_run(["--seed", "4", "--steps", "3000", "--species", "instinct", "--out", whole]))).read_text()
+            quiet_run(["--seed", "4", "--steps", "2000", "--species", "instinct", "--out", updated])
+            save = Path(updated) / "saves" / "step-0002000.npz"
+            again = quiet_run(["--resume", str(save), "--continue", "--steps", "3000", "--out", updated]).read_text()
+        self.assertEqual(again, straight)
+
+    def test_continue_needs_resume(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            parse_args(["--seed", "1", "--species", "instinct", "--continue"])
+
+    def test_hunters_switch_in_auto(self):
+        with tempfile.TemporaryDirectory() as folder, owner_writes_at(500, Control("auto", None, False, hunters=True)):
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder]))
+        self.assertEqual([(r["hunters"], r["manual"]) for r in rows], [("0", "0"), ("1", "0"), ("1", "0"), ("1", "0")])
 
 if __name__ == "__main__":
     unittest.main()

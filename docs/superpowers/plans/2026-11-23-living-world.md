@@ -586,20 +586,20 @@ from the save's step (rows after it, written before the update, are dropped firs
 `updates: [{step, at}]`; `Scoreboard` columns `chase` (share of moves toward a smaller stranger in sight) and `attacks`
 (attacks that landed, in the window).
 
-- [ ] **Step 1: Write the failing tests:** `test_update_goes_on_in_the_same_run` (rows before the save kept, the next
+- [x] **Step 1: Write the failing tests:** `test_update_goes_on_in_the_same_run` (rows before the save kept, the next
   row at save + 250, one run folder, `updates` recorded), `test_update_drops_rows_after_the_save`,
   `test_updated_world_is_the_same_world` (instinct: steps after the update equal the old world's), `test_chase_counts_moving_toward_smaller`,
   `test_attacks_are_counted`, `test_hunters_switch_in_auto`, `test_update_is_written_to_the_run`,
   `test_page_has_update_code_and_the_hunting_chart`.
-- [ ] **Step 2: Run them to see them fail.**
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · Expected: `OK`.
-- [ ] **Step 5: The owner's world first:** with the owner watching, press Update code on the 21:22 world (34k+ steps):
+- [x] **Step 2: Run them to see them fail.**
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · Expected: `OK`.
+- [x] **Step 5: The owner's world first:** with the owner watching, press Update code on the 21:22 world (34k+ steps):
   the same card goes on from its step with the new code; its History row and charts are unbroken. Then restart the page
   server and see both worlds still running. In the ledger.
-- [ ] **Step 6: Look at it** in Jump in: creatures glide; circles keep their size as energy changes; the hunting chart
+- [x] **Step 6: Look at it** in Jump in: creatures glide; circles keep their size as energy changes; the hunting chart
   shows with hunters on; the hunters switch works in Auto. No console errors. In the ledger.
-- [ ] **Step 7: Commit** as `feat: running worlds take new code; smooth motion; the hunting chart`.
+- [x] **Step 7: Commit** as `feat: running worlds take new code; smooth motion; the hunting chart`.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 

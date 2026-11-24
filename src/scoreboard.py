@@ -19,8 +19,9 @@ ROW_KEYS = (
     "step", "level", "population", "energy", "births", "newcomers", "generation", "bites_per_creature_step",
     "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers", "deaths_hunger",
     "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost", "step_cost", "lifespan",
-    "hunters", "manual",
+    "hunters", "manual", "chase", "attacks",
 )
+BEFORE_HUNTING = ROW_KEYS[:-2]  # the columns of scoreboards written before 2026-11-24
 DEATH_CAUSES = ("hunger", "attack", "age")
 Value = Union[int, float, None]
 
@@ -29,6 +30,25 @@ def read_rows(path: Path) -> List[Dict[str, str]]:
     """A run's scoreboard CSV as rows of text; an empty cell is a score with nothing to measure."""
     with open(path, newline="") as f:
         return list(csv.DictReader(f))
+
+
+def migrate_scoreboard(path: Path) -> bool:
+    """Gives a scoreboard written before the chase and attacks columns those columns, empty. Returns whether it
+    changed it. A scoreboard of any other columns is refused."""
+    with open(path, newline="") as f:
+        header = tuple(next(csv.reader(f), ()))
+    if header == ROW_KEYS:
+        return False
+    if header != BEFORE_HUNTING:
+        raise ValueError(f"{path} has columns this code does not know how to bring up to date")
+    rows = read_rows(path)
+    temporary = path.with_name(path.name + ".tmp")
+    with open(temporary, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=ROW_KEYS)
+        writer.writeheader()
+        writer.writerows({**row, "chase": "", "attacks": ""} for row in rows)
+    temporary.replace(path)
+    return True
 
 
 def numbers(rows: List[Dict[str, str]], key: str) -> List[float]:
@@ -55,7 +75,8 @@ class Scoreboard:
     `energy` is the average, over the window, of each creature's energy as a share of its own maximum;
     `efficiency` is the living world's energy earned ÷ energy spent; `intelligence` and `wanderers` are the same
     measure from the exam in the fixed test world, in the rows that have an exam; `manual` is 1 while the owner holds
-    the knobs, 0 while Auto does."""
+    the knobs, 0 while Auto does; `chase` is the share of moves toward a smaller stranger in sight, `attacks` the
+    attacks tried in the window."""
 
     def __init__(self) -> None:
         self._clear_samples()
@@ -73,6 +94,8 @@ class Scoreboard:
         self._fled: List[float] = []
         self._unit_moves: List[tuple[float, float]] = []
         self._energy_shares: List[float] = []
+        self._chased: List[float] = []
+        self._attacks = 0
 
     def observe(self, creature: Creature, senses: Senses, action: Action) -> None:
         kind, param = action
@@ -88,6 +111,11 @@ class Scoreboard:
         if other is not None and other.size >= THREAT_RATIO * creature.size:
             away = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) < 0
             self._fled.append(1.0 if away else 0.0)
+        if other is not None and other.size * THREAT_RATIO <= creature.size:  # prey: at most two-thirds its size
+            toward = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) > 0
+            self._chased.append(1.0 if toward else 0.0)
+        if kind == "ATTACK":
+            self._attacks += 1
 
     def row(self, world: World, exam: Optional[ExamResult], manual: bool) -> Dict[str, Value]:
         now = {"bites": world.total_bites, "steps": world.creature_steps, "births": world.births,
@@ -127,6 +155,8 @@ class Scoreboard:
             "lifespan": sum(settings.lifespan) / 2,
             "hunters": int(settings.attacks),
             "manual": int(manual),
+            "chase": _mean(self._chased),
+            "attacks": self._attacks,
         }
         self._clear_samples()
         self._seen = now

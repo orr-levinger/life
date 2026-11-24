@@ -194,5 +194,27 @@ class TestDial(unittest.TestCase):
         self.assertEqual(turned.settings, by_reviews.settings)
 
 
+    def test_owner_s_hunters_stay_as_set(self):
+        dial = Dial()
+        dial.set_hunters(True)
+        self.assertTrue(dial.settings.attacks)
+        for _ in range(6):
+            dial.review(*HARD)  # easing never takes the owner's hunters away
+        self.assertTrue(dial.settings.attacks)
+        off = Dial()
+        off.set_hunters(False)
+        while off.level < HUNTERS_AT + 2:
+            off.review(*EASY)  # nor does Auto switch them on at difficulty 24
+        self.assertFalse(off.settings.attacks)
+
+    def test_the_owner_s_hunters_are_kept_in_a_save(self):
+        dial = Dial()
+        dial.set_hunters(True)
+        dial.review(*EASY)
+        again = Dial.from_state(dial.state())
+        again.review(*HARD)
+        again.review(*HARD)
+        self.assertTrue(again.settings.attacks)
+
 if __name__ == "__main__":
     unittest.main()

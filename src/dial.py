@@ -129,6 +129,7 @@ class Dial:
         self._taken: List[Settings] = []  # the settings before each harder nudge Auto can still take back
         self._next_harder = 0  # whose turn it is, among the knobs
         self._next_easier = 0
+        self._hunters: Optional[bool] = None  # the owner's hunters switch, in Auto: Auto leaves hunters as set
         self.max_level = max_level
 
     @property
@@ -143,19 +144,27 @@ class Dial:
     def state(self) -> Dict:
         """What a save keeps: the knobs, the nudges Auto can take back, whose turn it is, and the top level."""
         return {"settings": settings_state(self._settings), "taken": [settings_state(s) for s in self._taken],
-                "next_harder": self._next_harder, "next_easier": self._next_easier, "max_level": self.max_level}
+                "next_harder": self._next_harder, "next_easier": self._next_easier, "max_level": self.max_level,
+                "hunters": self._hunters}
 
     @staticmethod
     def from_state(state: Dict) -> "Dial":
         dial = Dial(settings_from_state(state["settings"]), state["max_level"])
         dial._taken = [settings_from_state(s) for s in state["taken"]]
         dial._next_harder, dial._next_easier = state["next_harder"], state["next_easier"]
+        dial._hunters = state["hunters"]
         return dial
 
     def set(self, settings: Settings) -> None:
         """The owner's settings. Auto goes on from here; the nudges it made before are no longer its to take back."""
         self._settings = settings
         self._taken = []
+        self._hunters = None  # the owner's full settings say whether hunters are on
+
+    def set_hunters(self, on: bool) -> None:
+        """The owner's hunters switch while Auto turns the knobs: Auto never changes it afterwards."""
+        self._hunters = on
+        self._settings = replace(self._settings, attacks=on)
 
     def review(self, alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int) -> int:
         """One look: takes the step `step_for` says and returns the nudges it made (+ harder, - easier, 0 none)."""
@@ -174,7 +183,7 @@ class Dial:
     def _harder(self) -> str:
         if self.max_level is not None and self.level >= self.max_level - TOLERANCE:
             return "hold"
-        if not self._settings.attacks and self.level >= HUNTERS_AT - TOLERANCE:
+        if self._hunters is None and not self._settings.attacks and self.level >= HUNTERS_AT - TOLERANCE:
             return self._nudge(replace(self._settings, attacks=True))
         for _ in KNOBS:
             knob = KNOBS[self._next_harder % len(KNOBS)]
@@ -190,9 +199,10 @@ class Dial:
 
     def _easier(self) -> str:
         if self._taken:
-            self._settings = self._taken.pop()
+            taken = self._taken.pop()
+            self._settings = taken if self._hunters is None else replace(taken, attacks=self._hunters)
             return "easier"
-        if self._settings.attacks:
+        if self._hunters is None and self._settings.attacks:
             self._settings = replace(self._settings, attacks=False)
             return "easier"
         for _ in KNOBS:

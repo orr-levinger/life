@@ -35,6 +35,7 @@ class Control:
     watch_until: Optional[float] = None  # a time (time.time()): watched slowly until then; None: full speed
     watch_speed: float = WATCH_SPEED  # steps a second while watched
     paused: bool = False  # paused: the world takes no steps until it is continued
+    hunters: Optional[bool] = None  # the owner's hunters switch while in Auto (in Manual it is part of `settings`)
 
     def watched(self, now: float) -> bool:
         return self.watch_until is not None and now < self.watch_until
@@ -85,8 +86,10 @@ def read_control(folder: Path) -> Optional[Control]:
     if raw["mode"] not in MODES:
         raise ValueError(f"{path}: mode must be one of {MODES}, not {raw['mode']!r}")
     settings = None if raw["settings"] is None else settings_from(raw["settings"], START)
+    if raw["hunters"] not in (None, True, False):
+        raise ValueError(f"{path}: hunters must be true, false or null, not {raw['hunters']!r}")
     return Control(raw["mode"], settings, bool(raw["stop"]), raw["watch_until"], watch_speed_from(raw["watch_speed"]),
-                   bool(raw["paused"]))
+                   bool(raw["paused"]), raw["hunters"])
 
 
 def write_control(folder: Path, control: Control) -> None:
@@ -96,7 +99,7 @@ def write_control(folder: Path, control: Control) -> None:
     settings = None if control.settings is None else knob_values(control.settings)
     write_json(folder / CONTROL_FILE, {"mode": control.mode, "settings": settings, "stop": control.stop,
                                        "watch_until": control.watch_until, "watch_speed": control.watch_speed,
-                                       "paused": control.paused})
+                                       "paused": control.paused, "hunters": control.hunters})
 
 
 def write_json(path: Path, data: object) -> None:

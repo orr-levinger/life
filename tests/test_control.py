@@ -78,5 +78,12 @@ class TestControl(unittest.TestCase):
             write_control(Path(tmp), Control("manual", None, False))
             self.assertFalse(read_control(Path(tmp)).paused)
 
+    def test_hunters_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_control(Path(tmp), Control("auto", None, False, hunters=True))
+            self.assertIs(read_control(Path(tmp)).hunters, True)
+            write_control(Path(tmp), Control("auto", None, False))
+            self.assertIsNone(read_control(Path(tmp)).hunters)
+
 if __name__ == "__main__":
     unittest.main()

@@ -107,7 +107,7 @@ class TestScoreboard(unittest.TestCase):
             "step", "level", "population", "energy", "births", "newcomers", "generation", "bites_per_creature_step",
             "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers",
             "deaths_hunger", "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost",
-            "step_cost", "lifespan", "hunters", "manual",
+            "step_cost", "lifespan", "hunters", "manual", "chase", "attacks",
         ))
         w, me = food_world()
         me.generation = 4
@@ -124,6 +124,47 @@ class TestScoreboard(unittest.TestCase):
         self.assertEqual((row["move_cost"], row["step_cost"], row["lifespan"], row["hunters"]), (0.5, 0.05, 5000.0, 0))
         self.assertEqual((row["manual"], Scoreboard().row(w, None, True)["manual"]), (0, 1))
 
+
+    def test_chase_counts_moving_toward_smaller(self):
+        w = make_world()
+        me = add(w, 10, 10, size=1.5)
+        add(w, 12, 10, size=0.6)  # at most two-thirds my size: prey
+        board = Scoreboard()
+        s = sense(me, w)
+        board.observe(me, s, ("MOVE", (1.0, 0.0)))  # toward it
+        board.observe(me, s, ("MOVE", (-1.0, 0.0)))  # away
+        board.observe(me, s, STILL)
+        self.assertAlmostEqual(board.row(w, None, False)["chase"], 1 / 3)
+
+    def test_attacks_are_counted(self):
+        w, me = hunter_world()
+        board = Scoreboard()
+        s = sense(me, w)
+        board.observe(me, s, ("ATTACK", w.creatures[1]))
+        board.observe(me, s, ("ATTACK", w.creatures[1]))
+        board.observe(me, s, STILL)
+        first = board.row(w, None, False)
+        self.assertEqual(first["attacks"], 2)
+        self.assertEqual(board.row(w, None, False)["attacks"], 0)
+
+    def test_old_scoreboards_get_the_new_columns(self):
+        import csv
+        import tempfile
+        from pathlib import Path
+        from src.scoreboard import migrate_scoreboard
+        old_keys = [k for k in ROW_KEYS if k not in ("chase", "attacks")]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "scoreboard.csv"
+            with open(path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=old_keys)
+                writer.writeheader()
+                writer.writerow({k: "1" for k in old_keys})
+            self.assertTrue(migrate_scoreboard(path))
+            self.assertFalse(migrate_scoreboard(path))  # already in today's columns
+            with open(path, newline="") as f:
+                rows = list(csv.DictReader(f))
+        self.assertEqual(tuple(rows[0]), ROW_KEYS)
+        self.assertEqual((rows[0]["chase"], rows[0]["attacks"], rows[0]["step"]), ("", "", "1"))
 
 if __name__ == "__main__":
     unittest.main()

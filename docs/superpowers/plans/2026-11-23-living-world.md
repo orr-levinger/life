@@ -601,6 +601,18 @@ from the save's step (rows after it, written before the update, are dropped firs
   shows with hunters on; the hunters switch works in Auto. No console errors. In the ledger.
 - [x] **Step 7: Commit** as `feat: running worlds take new code; smooth motion; the hunting chart`.
 
+### Task 4p: Hunger is a colour in Jump in (added 2026-11-24; the owner's own instruction: "hunger should be a color")
+
+**Files:** Modify: `src/viewer.html` (a creature's circle is filled red when hungry, through yellow, to green at 70 % of
+a full tank, when it has a baby; the legend says so), `tests/test_viewer.py`.
+
+- [x] **Step 1: Write the failing test:** `test_page_explains_hunger_colours` (the words "red: hungry").
+- [x] **Step 2: Run it to see it fail.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run the viewer tests** · Expected: `OK`.
+- [x] **Step 5: Look at it** in Jump in on a running world: hungry creatures red, full ones green. In the ledger.
+- [x] **Step 6: Commit** as `feat: hunger is a colour in Jump in`.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.

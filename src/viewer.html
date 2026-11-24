@@ -147,7 +147,7 @@
   <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
   <div class="key">
     <span><i style="background:var(--food)"></i>food</span>
-    <span>circle: a creature, as big as it is (its size never changes); pale when hungry, solid when full; the line shows where it is heading</span>
+    <span>circle: a creature, as big as it is (its size never changes); its colour is its hunger, red: hungry, yellow: half full, green: full enough for a baby; the line shows where it is heading</span>
     <span><i style="border:2px solid var(--eat)"></i>ate</span>
     <span><i style="border:2px solid var(--miss)"></i>ate at nothing</span>
     <span><i style="border:2px solid var(--warn)"></i>attacked</span>
@@ -639,6 +639,20 @@ async function fetchView() {
     `step ${picture.step.toLocaleString()} · ${picture.creatures.length} alive · ${picture.foods.length} food`;
 }
 
+// Hunger as a colour: red when empty, yellow at half, green from 70 % of a full tank (enough for a baby).
+const HUNGER = [[0, [226, 75, 74]], [0.35, [237, 161, 0]], [0.7, [27, 175, 122]]];
+function hungerColour(energy) {
+  const e = Math.max(0, Math.min(1, energy));
+  for (let i = 1; i < HUNGER.length; i++) {
+    const [at, rgb] = HUNGER[i], [was, from] = HUNGER[i - 1];
+    if (e <= at) {
+      const t = (e - was) / (at - was);
+      return `rgb(${from.map((v, k) => Math.round(v + (rgb[k] - v) * t)).join(",")})`;
+    }
+  }
+  return `rgb(${HUNGER[HUNGER.length - 1][1].join(",")})`;
+}
+
 function paint() {
   if (!watching) return;
   requestAnimationFrame(paint);
@@ -655,15 +669,12 @@ function paint() {
   g.fillStyle = color("--food");
   for (const food of picture.foods) { g.beginPath(); g.arc(food.x * unit, food.y * unit, Math.max(food.radius * unit, 1.5), 0, 2 * Math.PI); g.fill(); }
   const outline = { EAT: "--eat", EAT_MISS: "--miss", ATTACK: "--warn", ATTACK_MISS: "--warn" };
-  const body = color(colorOf(watching.kind).slice(4, -1));
   for (const c of picture.creatures) {
     const from = before.get(c.id) || c;  // a newborn appears where it is
     const x = (from.x + (c.x - from.x) * t) * unit, y = (from.y + (c.y - from.y) * t) * unit;
     const r = Math.max(c.radius * unit, 3);  // its size: its genes, never smaller when hungry
-    g.globalAlpha = 0.15 + 0.85 * c.energy;  // energy: pale when hungry, solid when full
-    g.fillStyle = body;
+    g.fillStyle = hungerColour(c.energy);
     g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
-    g.globalAlpha = 1;
     g.strokeStyle = color(outline[c.did] || "--muted");
     g.lineWidth = Math.max(1.5, unit * 0.08);
     g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke();

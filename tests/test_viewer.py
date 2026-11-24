@@ -382,6 +382,11 @@ class TestControlRoom(unittest.TestCase):
         for words in ("Update code", "Fleeing and chasing"):
             self.assertIn(words, page)
 
+    def test_page_explains_hunger_colours(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        self.assertIn("red: hungry", page)
+
     def test_page_has_pause_and_resume(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

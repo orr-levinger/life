@@ -351,8 +351,14 @@ class TestControlRoom(unittest.TestCase):
     def test_page_has_pause_and_resume(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ("Pause", "Continue", "Resume from here"):
+        for words in ("Pause", "Continue"):
             self.assertIn(words, page)
+
+    def test_page_names_the_new_world_button(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        self.assertIn("Start a new world from this save", page)
+        self.assertNotIn("Resume from here", page)
 
     def test_page_has_jump_in(self):
         with urllib.request.urlopen(self.server.base + "/") as response:

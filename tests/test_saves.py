@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from src.dial import FEW, MANY, WELL_FED, Dial
+from src.dial import TARGET_ALIVE, Dial
 from src.evolve import parse_args, run
 from src.learner import Learner
 from src.saves import SAVE_FORMAT, SaveError, load_world, save_world, saves_of
@@ -93,15 +93,15 @@ class TestSaves(unittest.TestCase):
         world = make_world(seed=2)
         dial = Dial()
         for _ in range(3):
-            dial.review(MANY, WELL_FED, 0)
+            dial.review(TARGET_ALIVE + 8, 0.0, 0.0, 0)
         world.set_settings(dial.settings, dial.level)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "step.npz"
             save_world(path, world, dial, {})
             _, loaded, _ = load_world(path, learner_seed=0)
         for kept in (dial, loaded):
-            kept.review(FEW - 1, WELL_FED, 0)  # take one back
-            kept.review(MANY, WELL_FED, 0)  # and the next harder one comes from the same turn
+            kept.review(TARGET_ALIVE - 8, 0.0, 0.0, 0)  # take one back
+            kept.review(TARGET_ALIVE + 8, 0.0, 0.0, 0)  # and the next harder one comes from the same turn
         self.assertEqual(loaded.settings, dial.settings)
         self.assertEqual(loaded.level, dial.level)
 

@@ -10,13 +10,12 @@ from unittest import mock
 
 from src import control as control_module
 from src.control import Control, read_control, write_control
-from src.dial import FEW, MANY, WELL_FED, Dial, value, with_value
-from src.evolve import CONTROL_EVERY, FIRST_CREATURES, ROW_EVERY, parse_args, run
+from src.dial import TARGET_ALIVE, Dial, rates, value, with_value
+from src.evolve import CONTROL_EVERY, FIRST_CREATURES, REVIEW_EVERY, ROW_EVERY, parse_args, run
 from src.scoreboard import ROW_KEYS
 from src.settings import START
 
 EXAM_COLUMNS = ("intelligence", "wanderers")
-ROWS_PER_REVIEW = 4  # a row every 250 steps, a review every 1,000
 
 
 def quiet_run(argv):
@@ -39,12 +38,18 @@ def at_reviews(rows):
 
 
 def reviewing_as_if(life: str):
-    """Auto's review, told that the creatures are many and well fed ("easy") or few ("hard")."""
+    """Auto's review, told that the creatures are steady 8 above the target ("easy": one nudge harder) or 8 below it
+    ("hard": one nudge easier)."""
     real = Dial.review
+    alive = TARGET_ALIVE + 8 if life == "easy" else TARGET_ALIVE - 8
 
-    def review(dial, alive, energy, newcomers):
-        return real(dial, MANY, WELL_FED, 0) if life == "easy" else real(dial, FEW - 1, WELL_FED, 0)
+    def review(dial, *measured):
+        return real(dial, alive, 0.0, 0.0, 0)
     return mock.patch.object(Dial, "review", review)
+
+
+def by_step(rows):
+    return {int(row["step"]): row for row in rows}
 
 
 def owner_writes_at(step: int, control: Control):
@@ -121,46 +126,61 @@ class TestEvolve(unittest.TestCase):
             second = quiet_run(["--seed", "3", "--steps", "1000", "--species", "instinct", "--out", b]).read_text()
         self.assertEqual(first, second)
 
-    def test_auto_reviews_number_and_fedness(self):
+    def test_auto_looks_every_500_steps(self):
+        looks = []
+        real = Dial.review
+
+        def review(dial, *measured):
+            looks.append(dial)
+            return real(dial, *measured)
+
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(Dial, "review", review):
+            quiet_run(["--seed", "1", "--steps", "2000", "--species", "instinct", "--out", folder])
+        self.assertEqual((REVIEW_EVERY, len(looks)), (500, 4))
+
+    def test_auto_reviews_the_rates(self):
         reviews = []
         real = Dial.review
 
-        def review(dial, alive, energy, newcomers):
-            verdict = real(dial, alive, energy, newcomers)
-            reviews.append((alive, energy, newcomers, round(dial.level, 2)))
-            return verdict
+        def review(dial, alive, alive_rate, energy_rate, newcomers):
+            made = real(dial, alive, alive_rate, energy_rate, newcomers)
+            reviews.append((alive, alive_rate, energy_rate, newcomers, round(dial.level, 2)))
+            return made
 
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(Dial, "review", review):
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--out", folder]))
-        windows = [rows[i:i + ROWS_PER_REVIEW] for i in range(0, len(rows), ROWS_PER_REVIEW)]
-        self.assertEqual([alive for alive, _, _, _ in reviews], [int(w[-1]["population"]) for w in windows])
-        for (_, energy, _, _), window in zip(reviews, windows):  # the average energy of the 1,000 steps
-            self.assertAlmostEqual(energy, sum(float(r["energy"]) for r in window) / ROWS_PER_REVIEW)
-        soup = [sum(int(r["newcomers"]) for r in w) for w in windows]
-        soup[0] -= FIRST_CREATURES  # the first creatures are not the soup's
-        self.assertEqual([newcomers for _, _, newcomers, _ in reviews], soup)
-        self.assertEqual(levels([w[0] for w in windows[1:]]), [level for *_, level in reviews[:-1]])
+        numbers = [{"step": int(r["step"]), "population": int(r["population"]), "energy": float(r["energy"])} for r in rows]
+        for i, (alive, alive_rate, energy_rate, newcomers, level) in enumerate(reviews):
+            at = 2 * i + 1  # the row written at this look: steps 500, 1,000, 1,500 …
+            self.assertEqual(alive, numbers[at]["population"])
+            expected = rates(numbers[max(0, at - 3):at + 1])  # the points of the last 1,000 steps
+            self.assertAlmostEqual(alive_rate, expected[0])
+            self.assertAlmostEqual(energy_rate, expected[1])
+            soup = int(rows[at]["newcomers"]) + int(rows[at - 1]["newcomers"]) - (FIRST_CREATURES if i == 0 else 0)
+            self.assertEqual(newcomers, soup)
+            if at + 1 < len(rows):
+                self.assertEqual(levels([rows[at + 1]]), [level])
 
     def test_dial_turns_when_life_is_easy(self):
         with tempfile.TemporaryDirectory() as folder, reviewing_as_if("easy"):
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--out", folder]))
-        self.assertEqual(levels(at_reviews(rows)), [0, 1, 2])
-        changed = at_reviews(rows)
-        self.assertLess(float(changed[1]["max_food"]), float(changed[0]["max_food"]))  # first: less food at once
-        self.assertLess(float(changed[2]["food_energy"]), float(changed[1]["food_energy"]))  # then: less per food
-        self.assertEqual(changed[2]["max_food"], changed[1]["max_food"])  # one knob at a time
+            rows = by_step(read_rows(quiet_run(["--seed", "1", "--steps", "1500", "--species", "instinct",
+                                                "--out", folder])))
+        self.assertEqual(levels(rows.values()), [0, 0, 1, 1, 2, 2])  # one nudge at each look (500, 1,000)
+        self.assertLess(float(rows[750]["max_food"]), float(rows[500]["max_food"]))  # first: less food at once
+        self.assertLess(float(rows[1250]["food_energy"]), float(rows[1000]["food_energy"]))  # then: less per food
+        self.assertEqual(rows[1250]["max_food"], rows[1000]["max_food"])  # one knob at a time
 
     def test_dial_takes_nudges_back_when_life_is_hard(self):
         with tempfile.TemporaryDirectory() as folder, reviewing_as_if("hard"):
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--level", "2",
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1500", "--species", "instinct", "--level", "2",
                                         "--out", folder]))
-        self.assertEqual(levels(at_reviews(rows)), [2, 1, 0])
+        self.assertEqual(levels(rows), [2, 2, 1, 1, 0, 0])
 
     def test_dial_stops_at_the_max_level(self):
         with tempfile.TemporaryDirectory() as folder, reviewing_as_if("easy"):
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--max-level", "1",
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1500", "--species", "instinct", "--max-level", "1",
                                         "--out", folder]))
-        self.assertEqual(levels(at_reviews(rows)), [0, 1, 1])
+        self.assertEqual(levels(rows), [0, 0, 1, 1, 1, 1])
 
     def test_manual_knobs_reach_the_world(self):
         mine = with_value(START, "food_energy", 15)
@@ -184,11 +204,11 @@ class TestEvolve(unittest.TestCase):
             with owner_writes_at(1500, Control("auto", None, False)):
                 rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct",
                                             "--out", folder]))
-        by_step = {int(r["step"]): r for r in rows}
-        self.assertEqual(float(by_step[1000]["max_food"]), 100)  # Manual: the owner's, untouched by Auto
-        self.assertEqual(by_step[1500]["manual"], "0")
-        self.assertEqual(float(by_step[2250]["max_food"]), 95)  # Auto's first nudge, from the owner's 100
-        self.assertEqual(by_step[2250]["food_energy"], by_step[1000]["food_energy"])
+        rows = by_step(rows)
+        self.assertEqual(float(rows[1000]["max_food"]), 100)  # Manual: the owner's, untouched by Auto
+        self.assertEqual(rows[1500]["manual"], "0")
+        self.assertEqual(float(rows[1750]["max_food"]), 95)  # Auto's first nudge (at 1,500), from the owner's 100
+        self.assertEqual(rows[1750]["food_energy"], rows[1000]["food_energy"])
 
     def test_stop_ends_a_run_without_a_limit(self):
         with tempfile.TemporaryDirectory() as folder, owner_writes_at(750, Control("auto", None, True)):

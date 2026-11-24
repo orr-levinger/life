@@ -553,21 +553,21 @@ Auto's hint), `tests/test_viewer.py`.
 steps); `step_for(alive, alive_rate, energy_rate, newcomers) -> int`; `Dial.review(alive, alive_rate, energy_rate,
 newcomers) -> int` (the nudges made). `MANY`, `WELL_FED`, `FEW`, `HUNGRY` go.
 
-- [ ] **Step 1: Write the failing tests:** `test_dial`: `test_slope_of_a_straight_line`, `test_one_odd_point_does_not_swing_it`,
+- [x] **Step 1: Write the failing tests:** `test_dial`: `test_slope_of_a_straight_line`, `test_one_odd_point_does_not_swing_it`,
   `test_at_the_target_and_steady_holds`, `test_full_and_steady_two_harder`, `test_forty_and_steady_three_easier`,
   `test_recovering_world_is_left_alone`, `test_the_owner_s_crash_eases_four`, `test_falling_energy_eases`,
   `test_rising_energy_alone_never_eases`, `test_newcomers_ease_four`, `test_never_more_than_four`,
   `test_easier_takes_back_the_newest_harder_nudges_first`, `test_harder_nudges_take_turns`, the knobs-within-ends, hunters
   and max-level tests on the new signature; `test_evolve`: `test_auto_looks_every_500_steps`, `test_auto_reviews_the_rates`;
   `test_viewer`: `test_page_names_the_new_world_button`.
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_dial tests.test_evolve tests.test_viewer` ·
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_dial tests.test_evolve tests.test_viewer` ·
   Expected: failures naming `slope`, `step_for` and the button's words.
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`. `grep -rnE "WELL_FED|HUNGRY|Resume from here" src tests`
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`. `grep -rnE "WELL_FED|HUNGRY|Resume from here" src tests`
   · Expected: no output.
-- [ ] **Step 5: Watch it**, viewer open: a learning world in Auto for 20,000 steps, and a hand-made hard jump in it ·
+- [x] **Step 5: Watch it**, viewer open: a learning world in Auto for 20,000 steps, and a hand-made hard jump in it ·
   Expected: the number alive settles near 64; the jump is eased within 1,000 steps. Numbers in the ledger; shown to the owner.
-- [ ] **Step 6: Commit** as `feat: Auto aims at 64 alive by the distance and the rate`; `git show --stat HEAD` lists exactly
+- [x] **Step 6: Commit** as `feat: Auto aims at 64 alive by the distance and the rate`; `git show --stat HEAD` lists exactly
   this task's files.
 
 ### Task 4o: Running worlds take new code; smooth motion; energy as fill; the hunting chart; hunters in Auto (added 2026-11-24)

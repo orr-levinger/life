@@ -1,24 +1,26 @@
 """The difficulty dial: the hardness of survival drives intelligence, and it is turned delicately.
 
-Auto looks at the world every window of steps. Many creatures, well fed: survival is easy, so one knob is nudged 5 %
-harder, one knob at a time. Few creatures, or hungry ones, or the primordial soup had to add newcomers: the last harder
-nudge is taken back, and with none to take back one knob is nudged 5 % easier. Anything else: nothing changes.
+Auto steers the number alive toward 64, 80 % of the room (the owner: "80 creatures means too easy, 40 too hard"). Every
+look it takes one step, in nudges of 5 %, sized like gradient descent: alpha times how far the creatures are from 64,
+plus alpha times how fast their number moves (and how fast their energy falls), rounded and clipped to 4. Harder nudges
+turn one knob at a time; easier ones take back Auto's own newest harder nudges first.
 In Manual the owner turns the knobs (`Dial.set`); Auto goes on from wherever they are.
 """
 from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, replace
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .settings import START, Settings
 
 NUDGE = 0.05  # how much one nudge changes one knob
 HUNTERS_AT = 24  # at this difficulty the next harder nudge switches hunters on
-MANY = 60  # this many creatures or more, and well fed: survival is easy
-WELL_FED = 0.5  # average energy, as a share of full
-FEW = 30  # fewer creatures than this: survival is too hard
-HUNGRY = 0.35  # average energy below this share of full: survival is too hard
+TARGET_ALIVE = 64  # 80 % of the room for 80: life hard, but not too hard
+PER_CREATURES = 8  # one nudge per this many creatures away from the target
+PER_ALIVE_RATE = 0.10  # one nudge per 10 % a 1,000 steps the number alive moves
+PER_ENERGY_RATE = 0.05  # one nudge per 5 points of a full tank a 1,000 steps the average energy falls
+MAX_NUDGES = 4  # the most one look may move, either way
 TOLERANCE = 1e-9
 
 
@@ -87,6 +89,36 @@ def settings_from_state(state: Dict) -> Settings:
     return Settings(**{name: tuple(given) if isinstance(given, list) else given for name, given in state.items()})
 
 
+def slope(points: Sequence[Tuple[float, float]]) -> Optional[float]:
+    """The slope of the straight line closest to (step, value) points (least squares), per 1,000 steps."""
+    if len(points) < 2:
+        return None
+    mean_x = sum(x for x, _ in points) / len(points)
+    mean_y = sum(y for _, y in points) / len(points)
+    spread = sum((x - mean_x) ** 2 for x, _ in points)
+    return 1000.0 * sum((x - mean_x) * (y - mean_y) for x, y in points) / spread if spread else None
+
+
+def rates(rows: Sequence[Mapping[str, float]]) -> Tuple[Optional[float], Optional[float]]:
+    """From scoreboard rows: how fast the number alive moves (as a share of it) and how fast the average energy moves
+    (in shares of a full tank), each per 1,000 steps."""
+    alive = slope([(row["step"], row["population"]) for row in rows])
+    mean_alive = sum(row["population"] for row in rows) / len(rows) if rows else 0
+    energy = slope([(row["step"], row["energy"]) for row in rows if row["energy"] is not None])
+    return (alive / mean_alive if alive is not None and mean_alive else None), energy
+
+
+def step_for(alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int) -> int:
+    """Auto's step, in nudges (+ harder, - easier): the distance from the target and the rates, each times its alpha.
+    A rate not measured yet counts as steady; rising energy never eases."""
+    if newcomers > 0:
+        return -MAX_NUDGES  # the world nearly died out
+    step = (alive - TARGET_ALIVE) / PER_CREATURES
+    step += (alive_rate or 0.0) / PER_ALIVE_RATE
+    step += min(energy_rate or 0.0, 0.0) / PER_ENERGY_RATE
+    return max(-MAX_NUDGES, min(MAX_NUDGES, round(step)))
+
+
 def _at(knob: Knob, settings: Settings, end: float) -> bool:
     return abs(value(settings, knob.name) - end) <= TOLERANCE * max(1.0, abs(end))
 
@@ -125,14 +157,14 @@ class Dial:
         self._settings = settings
         self._taken = []
 
-    def review(self, alive: int, energy: Optional[float], newcomers: int) -> str:
-        """Look at one window: `alive` at its end, `energy` the creatures' average share of full energy over it (None
-        when nobody was measured), `newcomers` the primordial soup had to add. Returns "harder", "easier" or "hold"."""
-        if newcomers > 0 or alive < FEW or (energy is not None and energy < HUNGRY):
-            return self._easier()
-        if alive >= MANY and energy is not None and energy >= WELL_FED:
-            return self._harder()
-        return "hold"
+    def review(self, alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int) -> int:
+        """One look: takes the step `step_for` says and returns the nudges it made (+ harder, - easier, 0 none)."""
+        wanted, made = step_for(alive, alive_rate, energy_rate, newcomers), 0
+        while made < wanted and self._harder() == "harder":
+            made += 1
+        while made > wanted and self._easier() == "easier":
+            made -= 1
+        return made
 
     def turn_to(self, level: float) -> None:
         """Nudge harder until the difficulty is `level` (for a world that begins harder than the easy start)."""

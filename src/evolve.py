@@ -17,18 +17,18 @@ import argparse
 import csv
 import itertools
 import json
+from collections import deque
 import os
 import random
 import time
 from pathlib import Path
-from statistics import mean
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from .control import MODES, Control, new_run_folder, read_control, write_control, write_json
 from .creature import Creature
-from .dial import Dial
+from .dial import Dial, rates
 from .exam import ExamResult, run_exam
 from .hall_of_fame import HallOfFame
 from .saves import (SAVE_EVERY, SaveError, load_world, random_state, save_header, save_path, save_world,
@@ -42,7 +42,8 @@ FIRST_CREATURES = 30
 DEFAULT_STEPS = 100000
 CONTROL_EVERY = 25  # steps between two looks at the control file: a knob moved on the page arrives within a second
 ROW_EVERY = 250  # steps between two rows of the scoreboard (a new point on every chart)
-REVIEW_EVERY = 1000  # steps between two of Auto's reviews
+REVIEW_EVERY = 500  # steps between two of Auto's looks
+RATE_STEPS = 1000  # Auto's rates are measured over the last this many steps
 EXAM_EVERY = 2000
 PAUSE_LOOK = 0.25  # seconds between two looks at the control file while paused
 NOW_EVERY = 25  # steps between two looks at whether now.json is due (the live page's every-second numbers)
@@ -198,7 +199,8 @@ def run(args: argparse.Namespace) -> Path:
         save_world(save_path(out, world.step_count), world, dial,
                    {"seed": args.seed, "kind": args.kind, "exam_rng": random_state(exam_rng)})
         saved.add(world.step_count)
-    since_review: List[Dict[str, Value]] = []
+    since_review: List[Dict[str, Value]] = []  # the rows since Auto's last look (their newcomers)
+    recent = deque(maxlen=RATE_STEPS // ROW_EVERY)  # the rows of the last 1,000 steps (Auto's rates)
     next_tick = time.perf_counter()  # while watched: when the next step may start
     now_written = -NOW_SECONDS  # when now.json was last written
     viz = _open_window() if args.window else None
@@ -208,8 +210,10 @@ def run(args: argparse.Namespace) -> Path:
         writer = csv.DictWriter(f, fieldnames=ROW_KEYS)
         writer.writeheader()
         if source is not None:  # the story so far: the old run's rows up to the save
-            writer.writerows(_history(source["run"], source["step"]))
+            history = _history(source["run"], source["step"])
+            writer.writerows(history)
             f.flush()
+            recent.extend({key: _cell(row[key]) for key in ("step", "population", "energy")} for row in history)
         for step in itertools.count(world.step_count + 1):
             if args.steps is not None and step > args.steps:
                 break
@@ -248,12 +252,13 @@ def run(args: argparse.Namespace) -> Path:
                 f.flush()
                 print(_format(row), flush=True)
                 since_review.append(row)
+                recent.append(row)
 
             if step % REVIEW_EVERY == 0:
                 if args.species and knobs.control.mode == "auto":  # a yardstick world is held at its level
                     soup = sum(r["newcomers"] for r in since_review) - (first_creatures if step == REVIEW_EVERY else 0)
-                    energy = [r["energy"] for r in since_review if r["energy"] is not None]
-                    dial.review(len(world.creatures), mean(energy) if energy else None, soup)
+                    alive_rate, energy_rate = rates(list(recent))
+                    dial.review(len(world.creatures), alive_rate, energy_rate, soup)
                     world.set_settings(dial.settings, round(dial.level, 2))
                 since_review = []
 
@@ -294,6 +299,10 @@ def _new_world(args: argparse.Namespace) -> Tuple[World, Dial]:
     for _ in range(FIRST_CREATURES):
         world.add_newcomer()
     return world, dial
+
+
+def _cell(text: str) -> Optional[float]:
+    return None if text == "" else float(text)
 
 
 def _history(old_run: Path, step: int) -> List[Dict[str, str]]:

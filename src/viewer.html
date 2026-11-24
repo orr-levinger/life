@@ -352,7 +352,6 @@ function makeCard(run) {
     <label class="switch"><input type="checkbox" data-hunters> Hunters (creatures can attack each other)</label>
     <div class="hint"></div><div class="error"></div>`;
   const state = { card, run, pending: {}, dragging: null, stopArmed: 0, now: null, samples: [] };
-  card.append(resumePicker(run, (problem) => tell(problem)));
   const controls = document.createElement("div");
   controls.append(...card.childNodes);  // the knobs on the left, the live tiles on the right
   card.append(controls, makeTiles(state));
@@ -419,7 +418,7 @@ function updateCard(state) {
   updateTiles(state);
   card.querySelector(".hint").textContent = manual
     ? "Manual: only you turn the knobs. A change reaches the world within a second and shows on the charts at the next point."
-    : "Auto: the world turns its own knobs every 1,000 steps (harder when many and well fed, easier when few or hungry). Switch to Manual to turn them yourself.";
+    : "Auto: every 500 steps the world steers the number alive toward 64 (80 % of the room): harder when above it or rising, easier when below it or falling, by more the further off it is. Switch to Manual to turn the knobs yourself.";
   const shownValue = (name, fromRow, close) => {  // a value moved by hand is shown until the world's row confirms it
     const pending = state.pending[name];
     if (!pending) return fromRow;
@@ -558,7 +557,7 @@ function resumePicker(run, tell) {
   box.className = "resume";
   box.innerHTML = `<span>Saves</span><select aria-label="Save"><option value="">none yet</option></select>
     <select aria-label="Mode"><option value="auto">Auto</option><option value="manual">Manual</option></select>
-    <button type="button" class="act" disabled>Resume from here</button>`;
+    <button type="button" class="act" disabled>Start a new world from this save</button>`;
   const [steps, mode] = box.querySelectorAll("select"), go = box.querySelector("button");
   const load = async () => {
     const found = await (await fetch(`/saves?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })).json().catch(() => []);
@@ -853,7 +852,7 @@ function render() {
   document.getElementById("runs").replaceChildren(historyTable(past));
   if (!past.length) return message("No past runs yet", "A run appears here when it ends.");
   const chosen = past.find((run) => run.name === picked);
-  if (!chosen) return message("Pick a run", "Click a run above to see its charts and its saves.");
+  if (!chosen) return message("Pick a run", "Click a run above to see its charts and its saves. To carry on a paused world, press Continue on it in Live.");
   drawCharts([chosen]);
   const bar = document.createElement("div");
   bar.id = "resume-bar";

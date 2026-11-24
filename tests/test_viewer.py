@@ -194,6 +194,13 @@ class TestControlRoom(unittest.TestCase):
                       "/rules?run="):
             self.assertIn(words, page)
 
+    def test_charts_are_smoothed_over_a_chosen_span(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("CHART_SPANS = [[10000, \"10k\"], [50000, \"50k\"], [0, \"all\"]]", "CHART_POINTS", "CHART_SMOOTH",
+                      "span: 10000", "function chartRows", "function smoothed", "marks.filter((m) => m.byYou)"):
+            self.assertIn(words, page)
+
     def test_page_has_no_switches_and_no_read_only_rows(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

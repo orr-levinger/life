@@ -79,6 +79,8 @@
   .row .num strong { font-weight: 600; font-size: 15px; }
   .good { color: var(--eat); } .bad { color: var(--warn); }
   #rules-page { display: grid; gap: 14px; }
+  .chart-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: var(--muted); font-size: 12px; }
+  .chart-bar > span { display: inline-flex; align-items: center; gap: 6px; }
   .rules-table { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; overflow-x: auto; }
   .rules-table h2 { font-size: 15px; margin: 0 0 6px; } .rules-table h2 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
   .rules-table table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
@@ -243,7 +245,8 @@ function changes(run) {
       if (a !== null && b !== null && Math.abs(a - b) > 1e-9 * Math.max(1, Math.abs(a))) what.push(`${knob.label} ${knobFmt(a)} → ${knobFmt(b)}`);
     }
     if (before.hunters !== after.hunters) what.push(`hunters ${after.hunters ? "on" : "off"}`);
-    if (what.length) found.push({ step: after.step, color: colorOf(run.kind), text: `${what.join(", ")}, by ${after.manual ? "you" : "Auto"}` });
+    if (what.length) found.push({ step: after.step, color: colorOf(run.kind), byYou: !!after.manual,
+                                  text: `${what.join(", ")}, by ${after.manual ? "you" : "Auto"}` });
   }
   return found;
 }
@@ -269,7 +272,65 @@ function niceTicks(lo, hi, n = 5) {
 // A tick label with just enough decimals that neighbouring ticks never read the same.
 const tickLabel = (t, ticks) => t.toFixed((String(+(ticks[1] - ticks[0]).toFixed(6)).split(".")[1] || "").length);
 
-function drawPanel(panel, kinds, xMax, marks) {
+// How the charts read: which last steps they show, one point per how many steps, and how much they smooth.
+const CHART_SPANS = [[10000, "10k"], [50000, "50k"], [0, "all"]];
+const CHART_POINTS = [[250, "250"], [1000, "1,000"], [5000, "5,000"]];
+const CHART_SMOOTH = [[1, "none"], [3, "light"], [9, "strong"]];
+const chartView = (() => {
+  try { return { span: 10000, per: 1000, smooth: 3, ...JSON.parse(localStorage.getItem("life.charts") || "{}") }; }
+  catch (error) { return { span: 10000, per: 1000, smooth: 3 }; }
+})();
+
+function chartRows(rows, xMin) {  // the rows of the span, one point per stretch: each the average of its rows
+  const bins = new Map();
+  for (const row of rows) {
+    if (row.step <= xMin) continue;
+    const bin = Math.ceil(row.step / chartView.per) * chartView.per;
+    if (!bins.has(bin)) bins.set(bin, []);
+    bins.get(bin).push(row);
+  }
+  return [...bins.entries()].sort((a, b) => a[0] - b[0]).map(([bin, group]) => {
+    const point = { ...group[group.length - 1], step: bin };
+    for (const key of Object.keys(point)) {
+      if (key === "step" || typeof group[0][key] !== "number") continue;
+      const known = group.map((r) => r[key]).filter((v) => v !== null && v !== undefined);
+      point[key] = known.length ? known.reduce((a, b) => a + b, 0) / known.length : null;
+    }
+    return point;
+  });
+}
+
+function smoothed(rows) {  // a moving average over `chartView.smooth` points, each key on its own
+  const half = Math.floor(chartView.smooth / 2);
+  if (!half) return rows;
+  return rows.map((row, i) => {
+    const out = { ...row }, around = rows.slice(Math.max(0, i - half), i + half + 1);
+    for (const key of Object.keys(row)) {
+      if (key === "step" || typeof row[key] !== "number") continue;
+      const known = around.map((r) => r[key]).filter((v) => v !== null && v !== undefined);
+      out[key] = known.length ? known.reduce((a, b) => a + b, 0) / known.length : null;
+    }
+    return out;
+  });
+}
+
+function chartBar() {
+  const bar = document.createElement("div");
+  bar.className = "chart-bar";
+  const group = (label, key, options) => `<span>${label}<span class="seg">${options.map(([value, words]) =>
+    `<button type="button" data-chart="${key}" data-value="${value}" class="${chartView[key] === value ? "on" : ""}">${words}</button>`).join("")}</span></span>`;
+  bar.innerHTML = group("Last", "span", CHART_SPANS) + group("One point per", "per", CHART_POINTS) + group("Smoothing", "smooth", CHART_SMOOTH);
+  bar.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-chart]");
+    if (!button) return;
+    chartView[button.dataset.chart] = Number(button.dataset.value);
+    try { localStorage.setItem("life.charts", JSON.stringify(chartView)); } catch (error) { /* only remembered here */ }
+    render();
+  });
+  return bar;
+}
+
+function drawPanel(panel, kinds, xMin, xMax, marks, rawKinds) {
   const box = document.createElement("div");
   box.className = "panel";
   box.innerHTML = `<h2>${panel.title}</h2>` + (panel.note ? `<p>${panel.note}</p>` : "");
@@ -278,6 +339,8 @@ function drawPanel(panel, kinds, xMax, marks) {
     seeds: runs.map((r) => r.rows.filter((row) => row[panel.key] !== null).map((row) => [row.step, row[panel.key]])),
   })).filter((l) => l.mean.length);
   if (!lines.length) { box.insertAdjacentHTML("beforeend", '<div class="empty">no data yet</div>'); return box; }
+  const raw = chartView.smooth > 1 ? rawKinds.map(([kind, runs]) => ({ color: colorOf(kind), mean: meanLine(runs, panel.key) }))
+    .filter((l) => l.mean.length) : [];
   if (panel.beside) {  // the yardstick drawn beside the creatures' own line
     const mean = meanLine(kinds.flatMap(([, runs]) => runs), panel.beside.key);
     if (mean.length) lines.push({ name: panel.beside.label, color: "var(--muted)", mean, seeds: [mean], dashed: true });
@@ -291,7 +354,7 @@ function drawPanel(panel, kinds, xMax, marks) {
   const ys = lines.flatMap((l) => l.seeds.flat().map((p) => p[1])).concat(refs.map((r) => r[0]));
   const ticks = niceTicks(Math.min(...ys), Math.max(...ys));
   const y0 = ticks[0], y1 = ticks[ticks.length - 1];
-  const px = (x) => M.l + (x / xMax) * (W - M.l - M.r);
+  const px = (x) => M.l + ((x - xMin) / (xMax - xMin)) * (W - M.l - M.r);
   const py = (y) => H - M.b - ((y - y0) / (y1 - y0)) * (H - M.t - M.b);
   const path = (pts) => pts.map(([x, y], i) => {
     if (panel.step && i) return `H${px(x).toFixed(1)}V${py(y).toFixed(1)}`;
@@ -303,11 +366,13 @@ function drawPanel(panel, kinds, xMax, marks) {
     svg.append(el("text", { x: M.l - 6, y: py(t) + 4, "text-anchor": "end" }, tickLabel(t, ticks)));
   }
   for (let k = 0; k <= 5; k++) {
-    const x = (xMax / 5) * k;
-    svg.append(el("text", { x: px(x), y: H - M.b + 16, "text-anchor": "middle" }, `${(x / 1000).toFixed(xMax < 10000 ? 1 : 0)}k`));
+    const x = xMin + ((xMax - xMin) / 5) * k;
+    svg.append(el("text", { x: px(x), y: H - M.b + 16, "text-anchor": "middle" }, `${(x / 1000).toFixed(xMax - xMin < 10000 ? 1 : 0)}k`));
   }
-  for (const mark of marks)  // a knob changed here
-    svg.append(el("line", { x1: px(mark.step), x2: px(mark.step), y1: M.t, y2: H - M.b, stroke: mark.color, "stroke-width": 1, opacity: 0.35 }));
+  for (const mark of marks.filter((m) => m.byYou))  // the owner changed a knob here (Auto's changes are only in the hover text)
+    svg.append(el("line", { x1: px(mark.step), x2: px(mark.step), y1: M.t, y2: H - M.b, stroke: mark.color, "stroke-width": 1, opacity: 0.6 }));
+  for (const line of raw)  // the raw points, faint behind the smoothed line
+    svg.append(el("path", { d: path(line.mean), fill: "none", stroke: line.color, "stroke-width": 1, opacity: 0.25 }));
   for (const [value, label] of refs) {
     svg.append(el("line", { x1: M.l, x2: W - M.r, y1: py(value), y2: py(value), stroke: "var(--muted)", "stroke-dasharray": "2 4" }));
     svg.append(el("text", { x: M.l + 4, y: py(value) - 4 }, label));
@@ -340,7 +405,7 @@ function drawPanel(panel, kinds, xMax, marks) {
     tip.innerHTML = `<div><b>step ${step.toLocaleString()}</b></div>` + lines.map((l) => {
       const point = l.mean.find((p) => p[0] === step);
       return `<div><span><i class="swatch" style="background:${l.color}"></i>${l.name}</span><b>${fmt(point ? point[1] : null)}</b></div>`;
-    }).join("") + marks.filter((m) => m.step === step).map((m) => `<span class="change">${m.text}</span>`).join("");
+    }).join("") + marks.filter((m) => m.step > step - chartView.per && m.step <= step).map((m) => `<span class="change">${m.text}</span>`).join("");
     tip.style.display = "block";
     tip.style.left = `${Math.min((px(step) / W) * rect.width + 24, rect.width - tip.offsetWidth)}px`;
     tip.style.top = "44px";
@@ -356,10 +421,13 @@ function drawCharts(runs) {
   document.getElementById("legend").innerHTML = kinds.map(([kind, of]) =>
     `<span>${swatch(kind)}${KIND_WORDS[kind.split("-")[0]] || kind}${of.length > 1 ? ` (${of.length} seeds)` : ""}</span>`).join("");
   const xMax = Math.max(1000, ...runs.flatMap((r) => r.rows.map((row) => row.step)));
-  const marks = runs.flatMap(changes);
+  const xMin = chartView.span ? Math.max(0, xMax - chartView.span) : 0;
+  const marks = runs.flatMap(changes).filter((m) => m.step > xMin);
+  const rawKinds = kinds.map(([kind, of]) => [kind, of.map((run) => ({ ...run, rows: chartRows(run.rows, xMin) }))]);
+  const shown = rawKinds.map(([kind, of]) => [kind, of.map((run) => ({ ...run, rows: smoothed(run.rows) }))]);
   const hunting = runs.some((run) => run.rows.some((row) => row.hunters));
-  document.getElementById("charts").replaceChildren(...PANELS.filter((panel) => !panel.hunters || hunting)
-    .map((panel) => drawPanel(panel, kinds, xMax, marks)));
+  document.getElementById("charts").replaceChildren(chartBar(), ...PANELS.filter((panel) => !panel.hunters || hunting)
+    .map((panel) => drawPanel(panel, shown, xMin, Math.max(xMax, xMin + 1), marks, rawKinds)));
 }
 
 function message(title, detail) {

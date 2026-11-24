@@ -537,32 +537,36 @@ for an unknown world; `null` before its first numbers (or for a world made by ol
   sideways scrolling. No errors in the console. In the ledger.
 - [x] **Step 7: Commit** as `feat: live tiles beside the knobs`; `git show --stat HEAD` lists exactly this task's files.
 
-### Task 4n: Auto's steps sized by the distance to the sweet spot (added 2026-11-24; the owner's request)
+### Task 4n: Auto follows the rates of change (added 2026-11-24; the owner: "it should be based on derivatives")
 
-Spec: "Auto's steps are sized by how far the world is from the sweet spot".
+Spec: "Auto follows the rates of change, not the amounts". Also, from the owner's mix-up of 2026-11-24: "Resume from
+here" is renamed "Start a new world from this save" and shown only in History (Continue carries on a paused world).
 
 **Files:** Modify: `src/dial.py`, `tests/test_dial.py`, `src/evolve.py` (`REVIEW_EVERY = 500`; the review gets the
-number alive at the last look), `tests/test_evolve.py`, `docs` (the spec's earlier Auto rule marked as replaced).
+scoreboard points of the last 1,000 steps), `tests/test_evolve.py`, `src/viewer.html` (the save picker's button and
+place; Auto's hint), `tests/test_viewer.py`.
 
-**Interfaces:** `SWEET_ALIVE = (50, 75)`, `SWEET_ENERGY = (0.40, 0.55)`, `MAX_NUDGES = 4`;
-`Dial.review(alive: int, energy: Optional[float], newcomers: int, alive_before: Optional[int]) -> int` — the nudges made
-(+ harder, − easier, 0 hold); `nudges_for(alive, energy, newcomers, alive_before) -> int` (the rule alone, for tests and the
-page); `MANY`, `WELL_FED`, `FEW`, `HUNGRY` go.
+**Interfaces:** `slope(points: Sequence[Tuple[int, float]]) -> Optional[float]` (least squares, per 1,000 steps);
+`rates(rows) -> Tuple[Optional[float], Optional[float]]` (creatures as a share per 1,000 steps, energy in points per
+1,000 steps); `nudges_for(alive_rate, energy_rate, newcomers) -> int` (+ harder, − easier, 0 when nothing is measured);
+`Dial.review(alive_rate, energy_rate, newcomers) -> int` (the nudges made); `FALLING = -0.05`, `PER_ALIVE = 0.10`,
+`PER_ENERGY = 0.05`, `MAX_NUDGES = 4`. `MANY`, `WELL_FED`, `FEW`, `HUNGRY` go.
 
-- [ ] **Step 1: Write the failing tests** (`test_dial`): `test_sweet_spot_holds`, `test_far_too_easy_nudges_four_at_once`,
-  `test_a_little_too_easy_nudges_once`, `test_a_fall_eases_even_above_the_lines` (80 → 44 alive at 36 %: −4),
-  `test_too_few_eases_by_the_gap`, `test_hungry_eases_by_the_gap`, `test_newcomers_ease_four`, `test_never_more_than_four`,
-  `test_easier_takes_back_the_newest_harder_nudges_first`, `test_harder_nudges_take_turns`, the knobs-within-ends,
-  hunters and max-level tests kept on the new signature; (`test_evolve`): `test_auto_looks_every_500_steps`.
-- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_dial` · Expected: failures naming
-  `nudges_for` and `SWEET_ALIVE`.
+- [ ] **Step 1: Write the failing tests:** `test_dial`: `test_slope_of_a_straight_line`, `test_one_odd_point_does_not_swing_it`,
+  `test_steady_world_one_nudge_harder`, `test_rising_world_more_nudges_harder`, `test_falling_world_eases_by_the_rate`
+  (the owner's crash: −4), `test_slow_fall_eases_once`, `test_newcomers_ease_four`, `test_never_more_than_four`,
+  `test_easier_takes_back_the_newest_harder_nudges_first`, `test_harder_nudges_take_turns`, the knobs-within-ends, hunters
+  and max-level tests on the new signature; `test_evolve`: `test_auto_looks_every_500_steps`,
+  `test_auto_reviews_the_rates`; `test_viewer`: `test_page_names_the_new_world_button`.
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_dial tests.test_evolve tests.test_viewer` ·
+  Expected: failures naming `slope`, `nudges_for` and the button's words.
 - [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`. `grep -rn "WELL_FED|HUNGRY" -E src tests`
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` · Expected: `OK`. `grep -rnE "WELL_FED|HUNGRY|Resume from here" src tests`
   · Expected: no output.
-- [ ] **Step 5: Watch it**, viewer open: a learning world in Auto for 20,000 steps · Expected: it reaches the sweet spot
-  and stays near it; a hand-made hard jump is eased within 1,000 steps. Numbers in the ledger; shown to the owner.
-- [ ] **Step 6: Commit** as `feat: Auto's steps sized by the distance to the sweet spot`; `git show --stat HEAD` lists
-  exactly this task's files.
+- [ ] **Step 5: Watch it**, viewer open: a learning world in Auto for 20,000 steps, and a hand-made hard jump in it ·
+  Expected: the jump is eased within 1,000 steps; the difficulty climbs while life holds. Numbers in the ledger; shown
+  to the owner.
+- [ ] **Step 6: Commit** as `feat: Auto follows the rates of change`; `git show --stat HEAD` lists exactly this task's files.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 

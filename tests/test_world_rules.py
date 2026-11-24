@@ -151,6 +151,22 @@ class TestSenseGenes(unittest.TestCase):
             picked.update(changed)
         self.assertEqual(picked, set(genes))  # every gene is picked sometime
 
+    def test_bigger_brain_costs_more_energy(self):
+        learner = Learner(MAX_CREATURES, 0)
+        w = make_world(learner=learner, species="learner")
+        small = add(w, 10, 10, policy="learner", slot=learner.allocate(NetWeights.random(w.np_rng), LEARNING_RATE))
+        big_brain = NetWeights.random(w.np_rng).with_layer(on=True)
+        big = add(w, 20, 10, policy="learner", slot=learner.allocate(big_brain, LEARNING_RATE))
+        w.count_neurons()
+        self.assertEqual((small.neurons, big.neurons), (32, 64))
+        spent = []
+        for c in (small, big):
+            before = c.energy
+            c.apply_action(("MOVE", (0.0, 0.0)), w)
+            spent.append(before - c.energy)
+        self.assertAlmostEqual(spent[1] - spent[0], 32 * w.rules["neuron_cost"])
+        self.assertEqual(w.rules["neuron_cost"], 0.0005)
+
     def test_babies_inherit_senses_in_the_limits(self):
         limits = lambda gene: (rule(f"gene.{gene}.low").start, rule(f"gene.{gene}.high").start)
         VISION_WIDTH_LIMITS, VISION_REACH_LIMITS, HEARING_LIMITS = (limits(g) for g in ("vision_width", "vision_reach", "hearing"))

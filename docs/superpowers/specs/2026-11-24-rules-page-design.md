@@ -92,12 +92,39 @@ The owner: "every gene can change up to 20%?" · "yes 20 too much" · "just chan
   copies every other gene exactly. Learning speed is one of the genes it may pick. The brain's weights keep their own
   rule. The owner's running world gets the 0.05 through its Rules page.
 
+## 2c. Layers, neurons and weights are three genes; every number is a rule, grouped
+
+The owner: "Layers is a gene and adding or removing neuron is another gene" · "Weights of neuron should not all randomly
+change by 10% it's too much" · "how much is changing a little?" · "ok make all this configurable in the rules! all the
+numbers we use should be in the rules grouped in a sensible nice way" · "do it".
+
+- **Three brain genes in the one-change-a-baby draw:** *layers* (a baby whose changed gene it is gains or loses a layer),
+  *neurons* (gains or loses one neuron in one of its layers) and *weights* (2 % of its weights move by a little, normal
+  noise of 0.02, about a tenth of a typical weight). Every other baby copies its parent's brain exactly. The "layer
+  share" rule goes.
+- **Every number the world uses is a rule**, on the Rules page in these groups: Costs · World · Body and movement ·
+  Senses and hunting · Birth and death · Genes · Learning (its rollout, passes, clip, discount, the weight of exploring
+  and of its own guess, the first spread of its moves) · Auto (its target, how strongly it steers by the distance from
+  the target, the alive rate and the energy rate, its most nudges a look, how long it measures, how often it looks,
+  when hunters come, its nudge size) · Exam (its test world, how often, how many brains, how many steps) · Runner (how
+  often it saves, writes a row, looks at the control file, writes its live numbers). The owner: "no number should be hard
+  coded" — so nothing is left out; a row whose change has a side effect says it (the exam's: older scores no longer
+  compare; the nudge size: the difficulty number changes scale).
+- **Kept and at once** (the owner: "if I change something there it should take effect immediately in the world and stored
+  on disk so that restarting the app doesn't lose my changes"): a change is written to the world's control file on the
+  spot, reaches the world within 25 steps, is in every save, and a restarted world or page reads it back.
+
 ## 3. One world at a time
 
 - **At most one running world.** Start is refused while one runs ("Stop the running world first").
 - **Live shows that one world:** its controls, tiles and charts; nothing of any other world.
 - **Charts mark only the owner's own changes:** a line where a knob or rule was changed by hand; Auto's nudges are words
   in the hover text only.
+- **Smooth charts of the last steps** (the owner: "let's smoothen the graphs and maybe show only last 10K steps?"): each
+  line is a moving average (its raw values faint behind it) over the last 10,000 steps by default; a selector above the
+  charts picks the span (10k, 50k, all), the smoothing (none, light, strong) and one point per how many steps (250,
+  1,000, 5,000; each point the average of its stretch: the owner, "make it configurable so I can see dots per x time"),
+  remembered in the browser.
 - **A vision cone has a visible edge** in Jump in: a thin outline at the cone's end, so how far each creature sees is
   clear; hearing stays the faint dotted circle.
 - This replaces the approved "table of live worlds" (Task 4x), which one world at a time makes pointless.

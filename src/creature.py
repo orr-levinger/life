@@ -58,6 +58,8 @@ class Creature:
         self.fear_of_death = fear_of_death  # how bad dying feels to its learning: a gene
         self.love_of_babies = love_of_babies  # how good a baby feels to its learning: a gene
         self.learns_from_others = learns_from_others  # how much a lesson from another counts: a gene
+        self.neurons = 0  # the neurons its brain uses (a learner's, which the world sets); each costs energy
+        self.layers = 0
         self.hurt: Optional[Tuple[float, float, float]] = None  # one step after a hit: share taken, direction to the hitter
 
         self.age = 0
@@ -121,7 +123,8 @@ class Creature:
         else:
             raise ValueError(f"unknown action {kind!r}")
         living = (world.settings.step_cost * self.size  # being alive: a bigger body pays more
-                  + self.rules["vision_cost"] * self.vision_area() + self.rules["hearing_cost"] * self.hearing_area())
+                  + self.rules["vision_cost"] * self.vision_area() + self.rules["hearing_cost"] * self.hearing_area()
+                  + self.rules["neuron_cost"] * self.neurons)  # and each neuron of its brain
         self.energy = min(self.energy - living, self.max_energy)
         self._spend(living, world)
 

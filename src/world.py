@@ -23,7 +23,8 @@ if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to 
 
 Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
-GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed")  # a baby changes one
+GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
+         "brain")  # a baby changes one
 
 
 class World:
@@ -107,7 +108,8 @@ class World:
         r = self.rules
         size = self.rng.uniform(r["gene.size.new_low"], r["gene.size.new_high"])
         brain = Brain.random(self.np_rng) if self.species == "brain" else None
-        slot = self.learner.newcomer(self.np_rng, r["gene.learning_speed.start"]) if self.species == "learner" else None
+        slot = (self.learner.newcomer(self.np_rng, r["gene.learning_speed.start"], round(r["gene.layers.start"]),
+                                      round(r["gene.neurons.start"])) if self.species == "learner" else None)
         energy = self.rng.uniform(r["newcomer_energy_low"], r["newcomer_energy_high"])
         newcomer = Creature(self.next_id(), x, y, size, energy, self.species, brain, slot=slot, rules=r)
         newcomer.lifespan = round(self.rng.uniform(*self.settings.lifespan))
@@ -116,6 +118,7 @@ class World:
         newcomer.hearing = self.rng.uniform(r["gene.hearing.new_low"], r["gene.hearing.new_high"])
         newcomer.fear_of_death, newcomer.love_of_babies = r["gene.fear.start"], r["gene.love.start"]
         newcomer.learns_from_others = r["gene.learns.start"]
+        self._brain_size(newcomer)
         self.creatures.append(newcomer)
         self.newcomers += 1
         return newcomer
@@ -246,8 +249,11 @@ class World:
                 return
             change = self.rules["gene.learning_speed.change"]
             lr_factor = 1.0 + self.rng.uniform(-change, change) if picked == "learning_speed" else 1.0
+            grow = None if picked != "brain" else {
+                "rng": self.rng, "layer_share": self.rules["brain_layer_share"],
+                "neurons": gene_limits(self.rules, "neurons"), "layers": gene_limits(self.rules, "layers")}
             slot = self.learner.baby(parent.slot, self.np_rng, lr_factor, self.inherit, self.rules["brain_change_share"],
-                                     self.rules["brain_change_size"])
+                                     self.rules["brain_change_size"], grow)
         gift = self.rules["baby_share"] * parent.energy
         size = self._inherited(parent.size, "size", picked)
         x = min(max(parent.x + self.rng.uniform(-1.0, 1.0), 0.0), self.width)
@@ -264,10 +270,21 @@ class World:
         baby.fear_of_death = self._inherited(parent.fear_of_death, "fear", picked)
         baby.love_of_babies = self._inherited(parent.love_of_babies, "love", picked)
         baby.learns_from_others = self._inherited(parent.learns_from_others, "learns", picked)
+        self._brain_size(baby)
         self.creatures.append(baby)
         self.births += 1
         if parent.policy == "learner":
             self._had_baby.add(id(parent))
+
+    def _brain_size(self, creature: Creature) -> None:
+        """A learner's brain size, from its network (what it pays for each step)."""
+        if creature.policy == "learner":
+            creature.neurons, creature.layers = self.learner.active_neurons(creature.slot), self.learner.layers(creature.slot)
+
+    def count_neurons(self) -> None:
+        """Every creature's brain size, from the learner (after a load, or creatures added by hand)."""
+        for creature in self.creatures:
+            self._brain_size(creature)
 
     def _inherited(self, value: float, gene: str, picked: str) -> float:
         """A parent's gene for its baby: the picked gene × (1 ± up to its change), any other copied; kept in the gene's

@@ -116,7 +116,8 @@ def world_view(world: World) -> Dict[str, Any]:
                        "facing": [round(v, 3) for v in c.facing], "vision_width": round(c.vision_width, 1),
                        "vision_reach": round(c.vision_reach, 2), "hearing": round(c.hearing, 2),
                        "fear_of_death": round(c.fear_of_death, 2), "love_of_babies": round(c.love_of_babies, 2),
-                       "learns_from_others": round(c.learns_from_others, 3)} for c in world.creatures],
+                       "learns_from_others": round(c.learns_from_others, 3), "neurons": c.neurons,
+                       "layers": c.layers} for c in world.creatures],
         "foods": [{"x": round(f.x, 3), "y": round(f.y, 3), "radius": round(f.radius, 3)} for f in world.foods],
     }
 
@@ -184,7 +185,7 @@ def _resumed_from(args: argparse.Namespace) -> Optional[Dict[str, Any]]:
         args.out = str(old_run)
     elif args.out is None:
         args.out = new_run_folder(Path("runs"), args.seed, args.kind).as_posix()
-    migrate_scoreboard(old_run / "scoreboard.csv")  # a run from before the chase, attacks, senses or values columns
+    migrate_scoreboard(old_run / "scoreboard.csv")  # a run from before the chase, attacks, senses, values or brain columns
     return {"run": old_run, "step": header["step"], "history": _history(old_run, header["step"])}
 
 

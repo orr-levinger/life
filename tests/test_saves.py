@@ -271,6 +271,40 @@ class TestSaves(unittest.TestCase):
         self.assertEqual((loaded.rules["vision_cost"], loaded.rules["hearing_cost"]), (sense, sense))
         self.assertEqual((loaded.rules["gene.vision_width.high"], loaded.rules["sprint_power"]), (120.0, 2.0))
 
+    def test_a_format_7_save_gets_room_to_grow(self):
+        learner = Learner(MAX_CREATURES, 0)
+        world = make_world(seed=11, learner=learner, species="learner")
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 7  # a format 7 brain: 1 layer of 32, no room to grow, no brain genes
+            about["rules"] = {k: v for k, v in about["rules"].items()
+                              if not k.startswith(("gene.neurons", "gene.layers", "neuron_cost", "brain_layer_share"))}
+            arrays["about"] = np.array(json.dumps(about))
+            for kind in ("params", "m", "v", "inborn"):
+                arrays[f"learner.{kind}.w1"] = arrays[f"learner.{kind}.w1"][..., :32]
+                arrays[f"learner.{kind}.b1"] = arrays[f"learner.{kind}.b1"][..., :32]
+                arrays[f"learner.{kind}.wc"] = arrays[f"learner.{kind}.wc"][..., :32, :]
+                arrays[f"learner.{kind}.wm"] = arrays[f"learner.{kind}.wm"][..., :32, :]
+                for name in ("w2", "b2", "s2", "w3", "b3", "s3"):
+                    del arrays[f"learner.{kind}.{name}"]
+            del arrays["learner.size"], arrays["learner.inborn_size"]
+            old_w1 = arrays["learner.params.w1"]
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        for c in loaded.creatures:
+            brain = loaded.learner.current(c.slot)
+            self.assertEqual(list(brain.size), [1, 32, 0, 0])
+            self.assertEqual(brain.w1.shape, (20, 64))
+            self.assertTrue(np.allclose(brain.w1[:, :32], old_w1[c.slot]))  # the old brain, room to grow beside it
+            self.assertTrue(np.allclose(brain.w1[:, 32:], 0.0))
+            self.assertEqual(c.neurons, 32)
+        self.assertEqual(loaded.rules["neuron_cost"], 0.0005)
+
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)

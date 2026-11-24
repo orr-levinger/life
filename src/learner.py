@@ -33,21 +33,36 @@ ADAM_EPS = 1e-8
 MASKED = -1e9
 LOG_2PI = math.log(2.0 * math.pi)
 
+ROOM = 64  # neurons a layer has room for
+MAX_LAYERS = 3
+FIRST_LAYERS, FIRST_NEURONS = 1, 32  # the first animals' brain
+N_CRITIC = 32  # the critic's own hidden layer: learning's machinery, not a gene
+
 SHAPES: Dict[str, Tuple[int, ...]] = {
-    "w1": (N_IN, N_HIDDEN), "b1": (N_HIDDEN,),
-    "wc": (N_HIDDEN, N_CHOICES), "bc": (N_CHOICES,),
-    "wm": (N_HIDDEN, 2), "bm": (2,), "log_std": (2,),
-    "wh": (N_IN, N_HIDDEN), "bh": (N_HIDDEN,),  # the critic's own hidden layer: its large errors never reach the actor's
-    "wv": (N_HIDDEN, 1), "bv": (1,),
+    "w1": (N_IN, ROOM), "b1": (ROOM,),
+    "w2": (ROOM, ROOM), "b2": (ROOM,), "s2": (1,),  # layers 2 and 3 add to what they receive, × their strength s
+    "w3": (ROOM, ROOM), "b3": (ROOM,), "s3": (1,),
+    "wc": (ROOM, N_CHOICES), "bc": (N_CHOICES,),
+    "wm": (ROOM, 2), "bm": (2,), "log_std": (2,),
+    "wh": (N_IN, N_CRITIC), "bh": (N_CRITIC,),  # the critic's own hidden layer: its large errors never reach the actor's
+    "wv": (N_CRITIC, 1), "bv": (1,),
 }
+_LAYER_WEIGHTS = (("w1", "b1"), ("w2", "b2"), ("w3", "b3"))
 
 
 @dataclass(frozen=True)
 class NetWeights:
-    """One creature's actor-critic network: the actor's hidden layer, choice head, move head and spread; the critic's
-    own hidden layer and value head."""
+    """One creature's actor-critic network: room for 3 actor layers of 64 neurons, its choice head, move head and
+    spread; the critic's own hidden layer and value head. `size` is its brain's genes: [layers, neurons of layer 1, 2,
+    3] (a layer not in use has 0); only those neurons and layers act."""
     w1: np.ndarray
     b1: np.ndarray
+    w2: np.ndarray
+    b2: np.ndarray
+    s2: np.ndarray
+    w3: np.ndarray
+    b3: np.ndarray
+    s3: np.ndarray
     wc: np.ndarray
     bc: np.ndarray
     wm: np.ndarray
@@ -57,24 +72,68 @@ class NetWeights:
     bh: np.ndarray
     wv: np.ndarray
     bv: np.ndarray
+    size: np.ndarray
 
     @classmethod
-    def random(cls, np_rng: np.random.Generator) -> NetWeights:
-        """Hidden and critic weights scaled 1/sqrt(inputs); the policy heads start small so the first odds are even."""
+    def random(cls, np_rng: np.random.Generator, layers: int = FIRST_LAYERS, neurons: int = FIRST_NEURONS) -> NetWeights:
+        """Hidden and critic weights scaled 1/sqrt(inputs); the policy heads start small so the first odds are even; a
+        deeper layer starts with strength 0, so it says nothing until it learns or mutates."""
+        size = np.array([layers] + [neurons if layer < layers else 0 for layer in range(MAX_LAYERS)], dtype=float)
         return cls(
-            w1=np_rng.normal(0.0, 1.0 / math.sqrt(N_IN), SHAPES["w1"]), b1=np.zeros(N_HIDDEN),
+            w1=np_rng.normal(0.0, 1.0 / math.sqrt(N_IN), SHAPES["w1"]), b1=np.zeros(ROOM),
+            w2=np_rng.normal(0.0, 1.0 / math.sqrt(ROOM), SHAPES["w2"]), b2=np.zeros(ROOM), s2=np.zeros(1),
+            w3=np_rng.normal(0.0, 1.0 / math.sqrt(ROOM), SHAPES["w3"]), b3=np.zeros(ROOM), s3=np.zeros(1),
             wc=np_rng.normal(0.0, 0.01, SHAPES["wc"]), bc=np.zeros(N_CHOICES),
             wm=np_rng.normal(0.0, 0.01, SHAPES["wm"]), bm=np.zeros(2),
             log_std=np.full(2, math.log(INITIAL_SPREAD)),
-            wh=np_rng.normal(0.0, 1.0 / math.sqrt(N_IN), SHAPES["wh"]), bh=np.zeros(N_HIDDEN),
-            wv=np_rng.normal(0.0, 1.0 / math.sqrt(N_HIDDEN), SHAPES["wv"]), bv=np.zeros(1),
+            wh=np_rng.normal(0.0, 1.0 / math.sqrt(N_IN), SHAPES["wh"]), bh=np.zeros(N_CRITIC),
+            wv=np_rng.normal(0.0, 1.0 / math.sqrt(N_CRITIC), SHAPES["wv"]), bv=np.zeros(1),
+            size=size,
         )
 
     def arrays(self) -> Tuple[np.ndarray, ...]:
         return tuple(getattr(self, f.name) for f in fields(self))
 
+    def _with(self, **changes) -> NetWeights:
+        return NetWeights(**{**{f.name: getattr(self, f.name) for f in fields(self)}, **changes})
+
     def mutate(self, np_rng: np.random.Generator, rate: float, scale: float) -> NetWeights:
-        return NetWeights(*(jitter(values, np_rng, rate, scale) for values in self.arrays()))
+        """The weights changed a little (each with probability `rate`, by normal noise of std `scale`); its size kept."""
+        return self._with(**{name: jitter(getattr(self, name), np_rng, rate, scale) for name in SHAPES})
+
+    def with_neuron(self, layer: int, on: bool) -> NetWeights:
+        """One more neuron in `layer` (0-based), silent at first (its incoming weights 0, so it says 0), or one fewer."""
+        size = self.size.copy()
+        if not on:
+            size[1 + layer] -= 1
+            return self._with(size=size)
+        j = int(size[1 + layer])
+        w_name, b_name = _LAYER_WEIGHTS[layer]
+        w, bias = getattr(self, w_name).copy(), getattr(self, b_name).copy()
+        w[:, j], bias[j] = 0.0, 0.0
+        size[1 + layer] += 1
+        return self._with(size=size, **{w_name: w, b_name: bias})
+
+    def with_layer(self, on: bool) -> NetWeights:
+        """One more layer (as many neurons as the first, strength 0, so it says nothing at first), or the last one gone."""
+        size, layers = self.size.copy(), int(self.size[0])
+        if on:
+            size[0], size[1 + layers] = layers + 1, size[1]
+            return self._with(size=size, **{f"s{layers + 1}": np.zeros(1)})
+        size[0], size[layers] = layers - 1, 0.0
+        return self._with(size=size)
+
+    def grown(self, rng, layer_share: float, neurons: Tuple[float, float], layers: Tuple[float, float]) -> NetWeights:
+        """One change to the brain's size, kept in its limits: with probability `layer_share` a layer added or taken
+        away, else a neuron added or taken away in one of its layers."""
+        count = int(self.size[0])
+        if rng.random() < layer_share:
+            choices = [on for on, ok in ((True, count < layers[1]), (False, count > layers[0])) if ok]
+            return self.with_layer(rng.choice(choices)) if choices else self
+        layer = rng.randrange(count)
+        n = self.size[1 + layer]
+        choices = [on for on, ok in ((True, n < neurons[1]), (False, n > neurons[0])) if ok]
+        return self.with_neuron(layer, rng.choice(choices)) if choices else self
 
     def save(self, path: str | Path) -> None:
         np.savez(path, **{f.name: getattr(self, f.name) for f in fields(self)})
@@ -94,9 +153,15 @@ def gae(rewards: np.ndarray, values: np.ndarray, dones: np.ndarray, last_value: 
     return advantages, advantages + values
 
 
-def _heads(p: Dict[str, tf.Tensor], x: tf.Tensor, attacks: tf.Tensor):
-    """x [K, T, 12], attacks [K, T] (1 allowed, 0 masked) -> choice logits, move mean, log spread, critic value."""
-    h = tf.tanh(tf.einsum("kti,kih->kth", x, p["w1"]) + p["b1"][:, None, :])
+def _heads(p: Dict[str, tf.Tensor], x: tf.Tensor, attacks: tf.Tensor, size: tf.Tensor):
+    """x [K, T, 20], attacks [K, T] (1 allowed, 0 masked), size [K, 4] (layers, neurons of each) -> choice logits, move
+    mean, log spread, critic value. Only a creature's own neurons and layers act."""
+    neuron = tf.range(ROOM, dtype=tf.float32)[None, :]
+    mask = [tf.cast(neuron < size[:, 1 + layer:2 + layer], tf.float32)[:, None, :] for layer in range(MAX_LAYERS)]
+    h = tf.tanh(tf.einsum("kti,kih->kth", x, p["w1"]) + p["b1"][:, None, :]) * mask[0]
+    for layer, (w, b, s) in enumerate((("w2", "b2", "s2"), ("w3", "b3", "s3")), start=1):
+        on = tf.cast(size[:, 0:1] > layer, tf.float32) * p[s]  # [K, 1]: its strength, 0 when it is not in use
+        h = h + on[:, None, :] * tf.tanh(tf.einsum("kth,khg->ktg", h, p[w]) + p[b][:, None, :]) * mask[layer]
     logits = tf.einsum("kth,khc->ktc", h, p["wc"]) + p["bc"][:, None, :]
     logits += MASKED * (1.0 - attacks)[..., None] * tf.one_hot(ATTACK, N_CHOICES)
     mean = tf.tanh(tf.einsum("kth,khm->ktm", h, p["wm"]) + p["bm"][:, None, :])
@@ -121,7 +186,7 @@ def lesson_weight(ratio, learns):
 def lesson_loss(p: Dict[str, tf.Tensor], lb: Dict[str, tf.Tensor]) -> tf.Tensor:
     """Each slot's loss from its lessons [K]: per lesson, its weight times (minus the advantage, plus the value error);
     summed over a slot's lessons and divided by a rollout's steps, so a lesson counts against an own step's mean."""
-    logits, mean, log_std, value = _heads(p, lb["obs"], lb["attacks"])
+    logits, mean, log_std, value = _heads(p, lb["obs"], lb["attacks"], lb["size"])
     logp = _log_prob(logits, mean, log_std, lb["choice"], lb["move"])
     weight = tf.stop_gradient(lesson_weight(tf.exp(logp - lb["logp"]), lb["weight"])) * lb["mask"]
     policy = -tf.exp(logp - tf.stop_gradient(logp)) * lb["adv"]  # its value is -adv; its gradient -adv × d logp
@@ -149,6 +214,7 @@ class Learner:
         self._buffers: List[List[dict]] = [[] for _ in range(slots)]
         self._pending: Dict[int, dict] = {}
         self._free: List[int] = list(range(slots))
+        self._size = np.zeros((slots, 1 + MAX_LAYERS))  # each slot's brain genes: layers, neurons of each
         self._lessons: List[List[dict]] = [[] for _ in range(slots)]  # steps of others each slot saw: {step, next_obs}
         self._last: Dict[int, dict] = {}  # each slot's last recorded step, which a watcher may take as a lesson
         self._awaiting: Dict[int, List[dict]] = {}  # lessons of a slot's last step, waiting for what it senses next
@@ -166,6 +232,7 @@ class Learner:
         self._t[slot] = 0
         self._lr[slot] = lr
         self._inborn[slot] = weights
+        self._size[slot] = weights.size
         self._buffers[slot] = []
         self._pending.pop(slot, None)
         self._lessons[slot] = []
@@ -184,7 +251,8 @@ class Learner:
         state = {"t": self._t.copy(), "lr": self._lr.copy(),
                  "free": np.array([slot in self._free for slot in range(self.slots)]),
                  "has_inborn": np.array([weights is not None for weights in self._inborn]),
-                 "generator": self._gen.state.numpy()}
+                 "generator": self._gen.state.numpy(), "size": self._size.copy(),
+                 "inborn_size": np.stack([np.zeros(1 + MAX_LAYERS) if w is None else w.size for w in self._inborn])}
         for name in SHAPES:
             state[f"params.{name}"] = self._params[name].numpy()
             state[f"m.{name}"] = self._m[name].numpy()
@@ -202,7 +270,9 @@ class Learner:
         self._t = state["t"].copy()
         self._lr = state["lr"].copy()
         self._free = [slot for slot in range(self.slots) if state["free"][slot]]
-        self._inborn = [NetWeights(**{name: state[f"inborn.{name}"][slot] for name in SHAPES})
+        self._size = state["size"].copy()
+        self._inborn = [NetWeights(**{name: state[f"inborn.{name}"][slot] for name in SHAPES},
+                                   size=state["inborn_size"][slot].copy())
                         if state["has_inborn"][slot] else None for slot in range(self.slots)]
         self._gen.reset(state["generator"])
         self._buffers = [[] for _ in range(self.slots)]
@@ -213,16 +283,26 @@ class Learner:
     def has_room(self) -> bool:
         return bool(self._free)
 
-    def newcomer(self, np_rng: np.random.Generator, lr: float) -> int:
-        """A newcomer of the primordial soup: a random network learning at `lr`. Returns its slot."""
-        return self.allocate(NetWeights.random(np_rng), lr)
+    def newcomer(self, np_rng: np.random.Generator, lr: float, layers: int, neurons: int) -> int:
+        """A newcomer of the primordial soup: a random network of `layers` layers of `neurons`, learning at `lr`."""
+        return self.allocate(NetWeights.random(np_rng, layers, neurons), lr)
 
     def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str, rate: float,
-             scale: float) -> int:
+             scale: float, grow: Optional[dict] = None) -> int:
         """A baby's network: the parent's brain as it is now ("learned") or as the parent was born ("inborn"),
-        mutated, with the parent's learning speed × `lr_factor`. Returns the baby's slot."""
+        mutated, with the parent's learning speed × `lr_factor`; when `grow` is given (the brain is the gene this baby
+        changes), its size changes once (`NetWeights.grown`'s arguments). Returns the baby's slot."""
         genes = self.current(parent_slot) if inherit == "learned" else self.inborn(parent_slot)
-        return self.allocate(genes.mutate(np_rng, rate, scale), self.lr(parent_slot) * lr_factor)
+        genes = genes.mutate(np_rng, rate, scale)
+        return self.allocate(genes.grown(**grow) if grow else genes, self.lr(parent_slot) * lr_factor)
+
+    def active_neurons(self, slot: int) -> int:
+        """How many neurons a slot's brain uses: the neurons of each layer it has."""
+        layers = int(self._size[slot][0])
+        return int(self._size[slot][1:1 + layers].sum())
+
+    def layers(self, slot: int) -> int:
+        return int(self._size[slot][0])
 
     def lr(self, slot: int) -> float:
         return float(self._lr[slot])
@@ -234,7 +314,7 @@ class Learner:
         return weights
 
     def current(self, slot: int) -> NetWeights:
-        return NetWeights(**{name: self._params[name][slot].numpy() for name in SHAPES})
+        return NetWeights(**{name: self._params[name][slot].numpy() for name in SHAPES}, size=self._size[slot].copy())
 
     def act(self, slots: Sequence[int], senses: np.ndarray, attacks_on: bool,
             learning: bool = True) -> List[Tuple[int, Tuple[float, float]]]:
@@ -243,7 +323,7 @@ class Learner:
         p = {name: tf.gather(var, idx) for name, var in self._params.items()}
         x = tf.constant(senses[:, None, :], dtype=tf.float32)
         attacks = tf.fill([len(slots), 1], 1.0 if attacks_on else 0.0)
-        logits, mean, log_std, value = _heads(p, x, attacks)
+        logits, mean, log_std, value = _heads(p, x, attacks, tf.constant(self._size[list(slots)], tf.float32))
         gumbel = -tf.math.log(-tf.math.log(self._gen.uniform(tf.shape(logits), 1e-12, 1.0)))
         choice = tf.argmax(logits + gumbel, axis=-1, output_type=tf.int32)
         move = mean + tf.exp(log_std) * self._gen.normal(tf.shape(mean))
@@ -306,7 +386,8 @@ class Learner:
                 mask[k, t] = 1.0
         p = {name: tf.gather(var, tf.constant(slots, dtype=tf.int32)) for name, var in self._params.items()}
         both = tf.constant(np.concatenate([obs, next_obs], axis=1), tf.float32)
-        value = _heads(p, both, tf.ones(both.shape[:2]))[3].numpy()
+        size = tf.constant(self._size[slots], tf.float32)
+        value = _heads(p, both, tf.ones(both.shape[:2]), size)[3].numpy()
         target = reward + GAMMA * value[:, length:] * (1.0 - done)
         adv = target - value[:, :length]
         for k in range(len(slots)):
@@ -316,8 +397,8 @@ class Learner:
         adv *= mask
         arrays = {"obs": obs, "choice": choice, "move": move, "logp": logp, "attacks": attacks, "adv": adv,
                   "target": target, "mask": mask, "weight": weight}
-        return {key: tf.constant(value, dtype=tf.int32 if key == "choice" else tf.float32)
-                for key, value in arrays.items()}
+        batch = {key: tf.constant(value, dtype=tf.int32 if key == "choice" else tf.float32) for key, value in arrays.items()}
+        return {**batch, "size": size}
 
     def update(self) -> int:
         """One PPO update for every slot with a full rollout (64 steps plus the one that bootstraps them)."""
@@ -337,16 +418,18 @@ class Learner:
         tensors = {key: tf.constant(np.stack(values), dtype=tf.int32 if key == "choice" else tf.float32)
                    for key, values in batch.items()}
         lessons = self._lesson_batch(full)
+        size = tf.constant(self._size[full], tf.float32)
         for _ in range(EPOCHS):
-            self._ppo_step(full, tensors, lessons)
+            self._ppo_step(full, tensors, lessons, size)
         return len(full)
 
-    def _ppo_step(self, slots: List[int], b: Dict[str, tf.Tensor], lessons: Optional[Dict[str, tf.Tensor]]) -> None:
+    def _ppo_step(self, slots: List[int], b: Dict[str, tf.Tensor], lessons: Optional[Dict[str, tf.Tensor]],
+                  size: tf.Tensor) -> None:
         idx = tf.constant(slots, dtype=tf.int32)
         p = {name: tf.gather(var, idx) for name, var in self._params.items()}
         with tf.GradientTape() as tape:
             tape.watch(list(p.values()))
-            logits, mean, log_std, value = _heads(p, b["obs"], b["attacks"])
+            logits, mean, log_std, value = _heads(p, b["obs"], b["attacks"], size)
             ratio = tf.exp(_log_prob(logits, mean, log_std, b["choice"], b["move"]) - b["logp"])
             clipped = tf.clip_by_value(ratio, 1.0 - CLIP, 1.0 + CLIP)
             policy_loss = -tf.reduce_mean(tf.minimum(ratio * b["adv"], clipped * b["adv"]), axis=1)

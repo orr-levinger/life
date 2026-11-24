@@ -45,6 +45,7 @@ RULES = (
     Rule("baby_share", "costs", "Having a baby: the share of its energy given to the baby", 0.4, 0.05, 0.9),
     Rule("sprint_power", "costs", "Sprinting: faster than cruising costs the move × (speed ÷ cruising) to this power", 2.0,
          1.0, 4.0),
+    Rule("neuron_cost", "costs", "Each neuron, each step", 0.0005, 0.0, 0.01),
     Rule("vision_cost", "costs", "Vision, per square unit seen, each step", 0.05 / (math.pi * 3.0 ** 2), 0.0, 0.01),
     Rule("hearing_cost", "costs", "Hearing, per square unit heard, each step", 0.05 / (math.pi * 3.0 ** 2), 0.0, 0.01),
     Rule("world_width", "values", "The world's width", 50.0, 20.0, 200.0),
@@ -66,6 +67,8 @@ RULES = (
     Rule("corpse_steps", "values", "A corpse lasts this many steps", 5.0, 1.0, 100.0),
     Rule("brain_change_share", "values", "Share of a baby's brain weights that change", 0.1, 0.0, 1.0),
     Rule("brain_change_size", "values", "How much a changed weight moves", 0.2, 0.0, 2.0),
+    Rule("brain_layer_share", "values", "When the brain is a baby's changed gene: the share that adds or removes a layer "
+         "(the rest add or remove a neuron)", 0.2, 0.0, 1.0),
     Rule("auto_target", "values", "Auto aims at this many alive", 64.0, 10.0, 80.0),
     Rule("auto_hunters_at", "values", "Auto switches hunters on at this difficulty", 24.0, 0.0, 200.0),
     Rule("auto_every", "values", "Auto looks every this many steps", 500.0, 100.0, 5000.0),
@@ -77,6 +80,15 @@ RULES = (
   + _gene("love", "Love of babies", 0.1, 100.0, (0.0, 1000.0), 0.05, start=10.0) \
   + _gene("learns", "Learning from others", 0.01, 1.0, (0.0, 1.0), 0.05, start=0.5) \
   + _gene("learning_speed", "Learning speed", 1e-5, 1e-2, (1e-6, 0.1), 0.05, start=3e-4)
+
+RULES += (
+    Rule("gene.neurons.low", "genes", "Neurons in a layer: lowest", 1.0, 1.0, 64.0),
+    Rule("gene.neurons.high", "genes", "Neurons in a layer: highest", 64.0, 1.0, 64.0),
+    Rule("gene.neurons.start", "genes", "Neurons in a layer: a newcomer gets", 32.0, 1.0, 64.0),
+    Rule("gene.layers.low", "genes", "Layers: lowest", 1.0, 1.0, 3.0),
+    Rule("gene.layers.high", "genes", "Layers: highest", 3.0, 1.0, 3.0),
+    Rule("gene.layers.start", "genes", "Layers: a newcomer gets", 1.0, 1.0, 3.0),
+)
 
 _BY_NAME = {rule.name: rule for rule in RULES}
 ROOM_SLOTS = int(_BY_NAME["room"].high)  # a learner keeps a slot for each creature there may ever be room for

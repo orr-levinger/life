@@ -116,13 +116,31 @@ As the approved Task 5 of `2026-11-23-living-world.md` (its interfaces and tests
 - [ ] **Step 4:** `$PY -m unittest discover tests` → `OK`.
 - [ ] **Step 5: Commit** as `feat: the brain's size evolves`.
 
+### Task R4b: Three brain genes; every number a rule, grouped (added 2026-11-24; the owner: "do it")
+
+Spec: section 2c. **Files:** Modify `src/rules.py` (a group for each rule; the layers, neurons and weights genes; the
+learning and Auto numbers), `src/world.py` (the draw picks layers, neurons or weights), `src/learner.py` (its numbers
+from the rules), `src/dial.py` (its steering numbers from the rules), `src/viewer.py` and `src/viewer.html` (the groups),
+tests.
+
+- [ ] **Step 1: Write the failing tests:** `test_layers_neurons_and_weights_are_separate_genes` (a baby whose changed gene
+  is layers differs only in its layers; neurons, only by one neuron; weights, only in about 2 % of its weights; any
+  other, an exact copy of its parent's brain), `test_every_rule_has_a_group`, `test_learning_reads_its_rules` (the
+  rollout length from the rules), `test_auto_reads_its_rules` (its target and steering strengths from the rules),
+  `test_page_shows_the_groups`.
+- [ ] **Step 2:** run them → they fail.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4:** `$PY -m unittest discover tests` → `OK`.
+- [ ] **Step 5: Commit** as `feat: three brain genes; every number a rule, grouped`.
+
 ### Task R5: One world at a time
 
 **Files:** Modify `src/viewer.py` (`MAX_RUNNING = 1`), `src/viewer.html` (Live: the one world; charts of that world;
 lines only for the owner's changes; the cone's edge in Jump in), `tests/test_viewer.py`.
 
 - [ ] **Step 1: Write the failing tests:** `test_a_second_world_is_refused`, `test_only_the_owners_changes_draw_lines`,
-  `test_page_draws_the_cone_edge`.
+  `test_page_draws_the_cone_edge`, `test_charts_are_smoothed_over_a_chosen_span` (the selector's spans, smoothing and
+  points per steps, 10k by default).
 - [ ] **Step 2:** run them → they fail.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4:** `$PY -m unittest discover tests` → `OK`.

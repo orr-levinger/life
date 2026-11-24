@@ -29,10 +29,10 @@ from .settings import TODAY_SENSES
 from .world import World
 
 SAVE_EVERY = 2000  # steps between two saves of a world
-SAVE_FORMAT = 7  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 8  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
-# hearing priced apart, the sprint's power (2026-11-24)
+# hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64 (2026-11-24)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -128,6 +128,9 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
     if about.get("format") == 6:
         about = _from_format_6(about)
         _drop_input(arrays, HEARD_SIZE)
+    if about.get("format") == 7:
+        about = _from_format_7(about)
+        _room_to_grow(arrays)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -203,6 +206,35 @@ def _from_format_6(about: Dict[str, Any]) -> Dict[str, Any]:
     return {**about, "format": 7, "rules": rules, "creatures": [narrowed(c) for c in about["creatures"]]}
 
 
+def _from_format_7(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 7 save had no brain genes: their rules start at their starting values."""
+    new = ("neuron_cost", "brain_layer_share", "gene.neurons.low", "gene.neurons.high", "gene.neurons.start",
+           "gene.layers.low", "gene.layers.high", "gene.layers.start")
+    return {**about, "format": 8, "rules": {**about["rules"], **{name: rule(name).start for name in new}}}
+
+
+def _room_to_grow(arrays: Dict[str, np.ndarray]) -> None:
+    """A format 7 learner's brain was 1 layer of 32 with no room: it keeps those 32, with room for 64 beside them and
+    for 2 more layers (all 0, unused), and its size genes say [1, 32, 0, 0]."""
+    if f"{LEARNER}size" in arrays or f"{LEARNER}params.w1" not in arrays:
+        return
+    slots = arrays[f"{LEARNER}params.w1"].shape[0]
+    for kind in ("params", "m", "v", "inborn"):
+        def pad(name: str, axis: int) -> None:
+            key = f"{LEARNER}{kind}.{name}"
+            widths = [(0, 0)] * arrays[key].ndim
+            widths[axis] = (0, 64 - arrays[key].shape[axis])
+            arrays[key] = np.pad(arrays[key], widths)
+        pad("w1", -1)
+        pad("b1", -1)
+        pad("wc", -2)
+        pad("wm", -2)
+        for name, shape in (("w2", (64, 64)), ("b2", (64,)), ("s2", (1,)), ("w3", (64, 64)), ("b3", (64,)), ("s3", (1,))):
+            arrays[f"{LEARNER}{kind}.{name}"] = np.zeros((slots,) + shape)
+    arrays[f"{LEARNER}size"] = np.tile([1.0, 32.0, 0.0, 0.0], (slots, 1))
+    arrays[f"{LEARNER}inborn_size"] = np.tile([1.0, 32.0, 0.0, 0.0], (slots, 1))
+
+
 def _drop_input(arrays: Dict[str, np.ndarray], index: int) -> None:
     """A format 6 save's brains heard a size (input `index`): its weights leave every brain; the rest are kept."""
     for name in list(arrays):
@@ -267,4 +299,5 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])
         world.add_creature(creature)
     world.foods = [_food(f) for f in about["foods"]]
+    world.count_neurons()
     return world, Dial.from_state(about["dial"]), about["extra"]

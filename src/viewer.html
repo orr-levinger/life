@@ -191,6 +191,9 @@ const PANELS = [
     note: "In each creature's genes: how much dying counts against it in its learning (a bite is worth 1). Started at 10." },
   { key: "love_of_babies", title: "Love of babies (average)",
     note: "In its genes: how much having a baby counts for it in its learning. Started at 10." },
+  { key: "neurons", title: "Neurons in a brain (average)",
+    note: "In each creature's genes: how many neurons its brain uses. Each costs energy every step; a baby whose changed gene is its brain gains or loses one (sometimes a layer). Started at 32." },
+  { key: "layers", title: "Layers in a brain (average)", note: "In the genes too: 1 to 3. A new layer starts silent." },
   { key: "learns_from_others", title: "Learning from others (average)",
     note: "In its genes: how much a step it sees another live teaches it, against a step of its own (1 = as much). Started at 0.5." },
 ];
@@ -489,7 +492,7 @@ const TILES = [
   ["step", "Step"], ["alive", "Alive"], ["energy", "Average energy"], ["smart", "Intelligence × random"],
   ["hardest", "Difficulty"], ["steer", "Steers to food"], ["born", "Born"], ["died", "Died"], ["generation", "Generation"],
   ["flee", "Flees bigger"], ["chase", "Chases smaller"], ["vision", "Sees"], ["hearing", "Hears"],
-  ["fear", "Fear of death"], ["love", "Love of babies"], ["learns", "Learns from others"],
+  ["fear", "Fear of death"], ["love", "Love of babies"], ["learns", "Learns from others"], ["neurons", "Neurons"],
 ];
 
 function makeTiles(state) {
@@ -542,7 +545,8 @@ function liveNumbers(state) {
     vision_width: meanOf(recentRows, "vision_width"), vision_reach: meanOf(recentRows, "vision_reach"),
     hearing: meanOf(recentRows, "hearing"),
     fear: meanOf(recentRows, "fear_of_death"), love: meanOf(recentRows, "love_of_babies"),
-    learns: meanOf(recentRows, "learns_from_others"),
+    learns: meanOf(recentRows, "learns_from_others"), neurons: meanOf(recentRows, "neurons"),
+    layers: meanOf(recentRows, "layers"),
   };
 }
 
@@ -600,6 +604,9 @@ function updateTiles(state) {
       `${gene(n.love, 1)} bites. In its genes, starting at 10; evolution moves it.`);
   set("learns", gene(n.learns, 2), "1 = as much as its own", `How much the average creature learns from a step it sees ` +
       `another live, against a step of its own: ${gene(n.learns, 2)}. In its genes, starting at 0.5; evolution moves it.`);
+  set("neurons", n.neurons === null ? "-" : Math.round(n.neurons), n.layers === null ? "" : `in ${n.layers.toFixed(1)} layers`,
+      `The average brain uses ${n.neurons === null ? "-" : Math.round(n.neurons)} neurons. Its size is in the genes; each ` +
+      `neuron costs energy every step.`);
   const points = state.samples.filter((x) => x.energy !== null);
   const svg = state.tiles.querySelector("svg");
   if (points.length > 1) {
@@ -856,6 +863,7 @@ document.getElementById("watch-canvas").addEventListener("mousemove", (event) =>
     ` · just ${did}` +
     (c.vision_width === undefined ? "" : ` · sees ${Math.round(c.vision_width)}° up to ${c.vision_reach.toFixed(1)} away · ` +
      `hears up to ${c.hearing.toFixed(1)} all around`) +
+    (c.layers ? ` · brain: ${c.neurons} neurons in ${c.layers} layer${c.layers > 1 ? "s" : ""}` : "") +
     (c.fear_of_death === undefined ? "" : ` · fears death ${c.fear_of_death.toFixed(1)} · loves babies ` +
      `${c.love_of_babies.toFixed(1)} · learns from others ${c.learns_from_others.toFixed(2)}`);
   tip.style.display = "block";

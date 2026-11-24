@@ -43,6 +43,60 @@ def live(learner: Learner, slot: int, steps: int) -> None:
         learner.record(slot, 1.0, False)
 
 
+def outputs(weights: NetWeights, senses: np.ndarray):
+    """What a network says for each of `senses`: its choice odds and its move."""
+    import src.learner as L
+    import tensorflow as tf
+    learner = Learner(1, 0)
+    learner.allocate(weights, LEARNING_RATE)
+    p = {name: tf.gather(var, [0]) for name, var in learner._params.items()}
+    logits, mean, _, _ = L._heads(p, tf.constant(senses[None], tf.float32), tf.ones((1, len(senses))),
+                                  tf.constant([weights.size], tf.float32))
+    return logits.numpy(), mean.numpy()
+
+
+class TestBrainSize(unittest.TestCase):
+    def senses(self):
+        return np.random.default_rng(1).uniform(-1, 1, (100, 20))
+
+    def test_new_neuron_is_silent_at_birth(self):
+        parent = NetWeights.random(np.random.default_rng(2))
+        self.assertEqual(list(parent.size), [1, 32, 0, 0])  # the first animals: 1 layer of 32
+        baby = parent.with_neuron(0, on=True)
+        self.assertEqual(list(baby.size), [1, 33, 0, 0])
+        for a, b in zip(outputs(parent, self.senses()), outputs(baby, self.senses())):
+            self.assertTrue(np.allclose(a, b, atol=1e-6))  # acts exactly like its parent at birth
+
+    def test_new_layer_is_silent_at_birth(self):
+        parent = NetWeights.random(np.random.default_rng(3))
+        baby = parent.with_layer(on=True)
+        self.assertEqual(list(baby.size), [2, 32, 32, 0])
+        for a, b in zip(outputs(parent, self.senses()), outputs(baby, self.senses())):
+            self.assertTrue(np.allclose(a, b, atol=1e-6))
+
+    def test_removed_neuron_changes_behavior(self):
+        parent = NetWeights.random(np.random.default_rng(4))
+        parent = NetWeights(**{**parent.__dict__, "wm": np.random.default_rng(5).normal(0, 1, parent.wm.shape)})
+        baby = parent.with_neuron(0, on=False)
+        self.assertEqual(list(baby.size), [1, 31, 0, 0])
+        self.assertFalse(np.allclose(outputs(parent, self.senses())[1], outputs(baby, self.senses())[1]))
+
+    def test_size_genes_stay_in_bounds(self):
+        import random
+        rng, brain = random.Random(6), NetWeights.random(np.random.default_rng(6))
+        for _ in range(1000):
+            brain = brain.grown(rng, layer_share=0.3, neurons=(1, 64), layers=(1, 3))
+            layers, *neurons = (int(v) for v in brain.size)
+            self.assertTrue(1 <= layers <= 3)
+            self.assertTrue(all(1 <= n <= 64 for n in neurons[:layers]))
+            self.assertTrue(all(n == 0 for n in neurons[layers:]))
+
+    def test_a_learner_says_how_many_neurons_it_has(self):
+        learner = Learner(1, 0)
+        slot = learner.allocate(NetWeights.random(np.random.default_rng(7)).with_layer(on=True), LEARNING_RATE)
+        self.assertEqual(learner.active_neurons(slot), 64)  # 32 + 32
+
+
 class TestLearner(unittest.TestCase):
     def test_act_shapes_and_ranges(self):
         learner = learner_with(4)
@@ -117,11 +171,11 @@ class TestLearner(unittest.TestCase):
         obs = tf.constant(np.full((1, 1, 20), 0.4), tf.float32)
         attacks = tf.ones((1, 1))
         choice, move = tf.zeros((1, 1), tf.int32), tf.constant([[[0.3, -0.2]]], tf.float32)
-        logits, mean, log_std, value = L._heads(p, obs, attacks)
+        logits, mean, log_std, value = L._heads(p, obs, attacks, tf.constant([[1.0, 32.0, 0.0, 0.0]]))
         own = L._log_prob(logits, mean, log_std, choice, move)
         lb = {"obs": obs, "attacks": attacks, "choice": choice, "move": move, "logp": own - behaviour_shift,
               "adv": tf.constant([[1.5]]), "target": tf.constant([[2.0]]), "mask": tf.ones((1, 1)),
-              "weight": tf.constant([[0.5]])}  # the watcher learns half as much from others
+              "weight": tf.constant([[0.5]]), "size": tf.constant([[1.0, 32.0, 0.0, 0.0]])}  # it learns half as much from others
         expected = 0.5 * (-1.5 + L.VALUE_WEIGHT * (float(value[0, 0]) - 2.0) ** 2) / L.ROLLOUT
         return p, lb, expected
 

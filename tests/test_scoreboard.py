@@ -108,7 +108,7 @@ class TestScoreboard(unittest.TestCase):
             "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers",
             "deaths_hunger", "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost",
             "step_cost", "lifespan", "hunters", "manual", "chase", "attacks", "vision_width", "vision_reach", "hearing",
-            "fear_of_death", "love_of_babies", "learns_from_others",
+            "fear_of_death", "love_of_babies", "learns_from_others", "neurons", "layers",
         ))
         w, me = food_world()
         me.generation = 4
@@ -177,7 +177,7 @@ class TestScoreboard(unittest.TestCase):
         import csv
         import tempfile
         from pathlib import Path
-        from src.scoreboard import BEFORE_VALUES, migrate_scoreboard
+        from src.scoreboard import BEFORE_VALUES, migrate_scoreboard  # noqa: F401
         w = make_world()
         a, b = add(w, 10, 10), add(w, 20, 10)
         a.fear_of_death, a.love_of_babies, a.learns_from_others = 4.0, 8.0, 0.2
@@ -196,6 +196,13 @@ class TestScoreboard(unittest.TestCase):
                 rows = list(csv.DictReader(f))
         self.assertEqual(tuple(rows[0]), ROW_KEYS)
         self.assertEqual((rows[0]["fear_of_death"], rows[0]["hearing"]), ("", "1"))
+
+    def test_scoreboard_reports_brain_size(self):
+        w = make_world()
+        a, b = add(w, 10, 10), add(w, 20, 10)
+        a.neurons, a.layers, b.neurons, b.layers = 32, 1, 64, 2
+        row = Scoreboard().row(w, None, False)
+        self.assertEqual((row["neurons"], row["layers"]), (48.0, 1.5))
 
     def test_old_scoreboards_get_the_new_columns(self):
         import csv

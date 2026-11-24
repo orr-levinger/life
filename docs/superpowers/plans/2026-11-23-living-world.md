@@ -636,11 +636,11 @@ Spec: "How a creature looks in Jump in".
 Spec: "Quarter speed". **Files:** Modify: `src/settings.py` (`SPEED = 0.25`), `src/creature.py` (`velocity = SPEED / size`),
 `tests/test_world_rules.py`.
 
-- [ ] **Step 1: Change the test:** `test_move_cost_and_speed_cap` expects a size-1 creature to move at most 0.25 a step;
+- [x] **Step 1: Change the test:** `test_move_cost_and_speed_cap` expects a size-1 creature to move at most 0.25 a step;
   `test_speed_is_a_quarter_of_one_over_size`.
-- [ ] **Step 2: Run it to see it fail.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the suite** · Expected: `OK`.
+- [x] **Step 2: Run it to see it fail.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run the suite** · Expected: `OK`.
 - [ ] **Step 5: Update code** on the owner's world; in Jump in small creatures move in short steps. In the ledger.
 - [ ] **Step 6: Commit** as `feat: quarter speed`.
 

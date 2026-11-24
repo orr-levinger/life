@@ -36,9 +36,14 @@ class TestCosts(unittest.TestCase):
         w = make_world()
         c = add(w, 10, 10, size=1.0)
         c.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(c.x, 10.6)
-        self.assertAlmostEqual(c.y, 10.8)
-        self.assertAlmostEqual(c.energy, 50.0 - 1.0 * NO_FOOD.move_cost - NO_FOOD.step_cost)
+        self.assertAlmostEqual(c.x, 10.15)  # at most a quarter of a unit a step for size 1
+        self.assertAlmostEqual(c.y, 10.2)
+        self.assertAlmostEqual(c.energy, 50.0 - 0.25 * NO_FOOD.move_cost - NO_FOOD.step_cost)
+
+    def test_speed_is_a_quarter_of_one_over_size(self):
+        w = make_world()
+        self.assertEqual([add(w, 5 + 10 * i, 10, size=size).velocity for i, size in enumerate((0.5, 1.0, 2.0))],
+                         [0.5, 0.25, 0.125])
 
     def test_move_clamped_in_corner(self):
         w = make_world()
@@ -70,7 +75,7 @@ class TestEating(unittest.TestCase):
         self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 2 * NO_FOOD.step_cost)
         mover = add(w, 20, 5, size=1.0)
         mover.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * NO_FOOD.step_cost + 1.0 * NO_FOOD.move_cost)
+        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * NO_FOOD.step_cost + 0.25 * NO_FOOD.move_cost)  # a quarter unit at most
 
     def test_each_creature_counts_its_own_energy(self):
         w = make_world()

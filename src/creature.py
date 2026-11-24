@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-from .settings import EAT_MISS_COST, HUNTER_SHARE
+from .settings import EAT_MISS_COST, HUNTER_SHARE, SPEED
 
 if TYPE_CHECKING:
     from .brain import Brain
@@ -49,7 +49,7 @@ class Creature:
 
         self.max_energy = size * 100.0
         self.energy = min(energy, self.max_energy)
-        self.velocity = 1.0 / size
+        self.velocity = SPEED / size  # small ones are faster, but never cross more than half a unit a step
         self.radius = size * self.RADIUS_FACTOR
         self.attack_damage = size * 5.0
         self.attack_cost = size * 1.0

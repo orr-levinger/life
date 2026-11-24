@@ -303,6 +303,25 @@ smallest 0.5 a step, the biggest 0.125). A step is a smaller slice of time; movi
 is unaffected; crossing the world takes four times as many steps. Lifespans and every other number in steps stay as
 they are.
 
+### Sprinting (the owner, 2026-11-24)
+
+The owner: "bigger are slower than smaller right now right? bigger will never catch a smaller that runs away. We need
+to better mimic nature. Speed can be increased for short bursts of time at the cost of more energy, both for running
+away and chasing. A creature can decide how fast to run to flee or chase, up to some max speed based on size, and energy
+should reduce relative to the speed chosen."
+
+- **Cruising speed** stays 0.25 ÷ size a step (small 0.5, big 0.125); moving at or below it costs what it costs today
+  (the cost of moving × distance).
+- **Top (sprint) speed** grows with size, as in nature, where big hunters out-sprint small prey: 0.4 × √size a step, and
+  never below cruising speed. Size 0.5: 0.5 (it is already fast); size 1: 0.4; size 2: 0.57.
+- **A creature chooses its speed** each step, anywhere from standing still to its top speed: its brain's move is now
+  scaled to its top speed instead of its cruising speed.
+- **Faster than cruising costs more, steeply:** the cost of moving × distance × (speed ÷ cruising speed)². So a big
+  creature sprinting at 0.57 pays about 21 times the cruising cost per unit: about 6 energy a step at today's costs, of
+  its 200; a short burst, not a way of life. At or below cruising speed nothing changes.
+- Random wanderers (the exam's yardstick) keep moving at cruising speed or less.
+- The numbers (0.4, √size, the square) are Claude's, not measured; Task 6 measures them.
+
 ### The intelligence exam
 
 The owner: "At the end, whoever survives is smart in nature." · "Intelligence should be rewards / waste or something

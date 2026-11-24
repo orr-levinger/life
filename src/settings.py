@@ -5,6 +5,7 @@ dying and takes a nudge back when too many die. The exam always happens in TEST_
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 
@@ -33,6 +34,16 @@ LOW_ENERGY = 0.3  # past its lifespan, a creature with less than this share of i
 MAX_CREATURES = 80  # a safety limit that only pauses births, to keep the simulation fast
 SOUP_MIN = 10  # random newcomers appear while fewer than this many live
 START_ENERGY = (50.0, 100.0)  # a newcomer's energy
+VALUE_START = (10.0, 10.0, 0.5)  # fear of death, love of babies, learning from others: genes, at first (the owner, 2026-11-24)
+FEAR_LIMITS = (0.1, 100.0)  # taken from a learner's reward on the step it dies
+LOVE_LIMITS = (0.1, 100.0)  # added to a learner's reward on the step after it has a baby
+LEARN_LIMITS = (0.01, 1.0)  # a lesson from another's step, against a step of its own
+VISION_WIDTH_LIMITS = (30.0, 360.0)  # a vision cone's width in degrees: a gene (the owner, 2026-11-24)
+VISION_REACH_LIMITS = (1.0, 8.0)  # how far it sees: a gene
+HEARING_LIMITS = (0.0, 4.0)  # how far it hears, all around: a gene
+TODAY_SENSES = (360.0, 3.0, 1.5)  # width, reach, hearing of a creature from before senses were genes
+SENSE_COST = 0.05 / (math.pi * 3.0 ** 2)  # energy a step per square unit sensed: today's 3-unit circle costs 0.05
+GENE_MUTATION = 0.2  # a baby's sense and value genes are its parent's × (1 ± up to this)
 HUNTER_SHARE = 0.8  # share of the energy an attacker takes that it keeps
 EAT_MISS_COST = 0.2  # energy lost choosing to eat with no food within reach
 SPEED = 0.25  # cruising speed: this ÷ its size a step (the owner, 2026-11-24: "Yes, quarter speed")

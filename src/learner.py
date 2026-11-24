@@ -16,7 +16,7 @@ import tensorflow as tf
 from .brain import jitter
 from .settings import MUTATION_RATE, MUTATION_SCALE
 
-N_IN = 12
+N_IN = 21
 N_HIDDEN = 32
 N_CHOICES = 3  # 0 move, 1 eat, 2 attack
 ATTACK = 2
@@ -113,6 +113,23 @@ def _log_prob(logits, mean, log_std, choice, move):
     return choice_logp + tf.cast(tf.equal(choice, 0), tf.float32) * move_logp
 
 
+def lesson_weight(ratio, learns):
+    """How much a lesson counts: the watcher's learning from others, times how likely it would have done the same
+    against the actor (its odds ÷ the actor's), never more than 1."""
+    return tf.cast(learns, tf.float32) * tf.minimum(1.0, tf.cast(ratio, tf.float32))
+
+
+def lesson_loss(p: Dict[str, tf.Tensor], lb: Dict[str, tf.Tensor]) -> tf.Tensor:
+    """Each slot's loss from its lessons [K]: per lesson, its weight times (minus the advantage, plus the value error);
+    summed over a slot's lessons and divided by a rollout's steps, so a lesson counts against an own step's mean."""
+    logits, mean, log_std, value = _heads(p, lb["obs"], lb["attacks"])
+    logp = _log_prob(logits, mean, log_std, lb["choice"], lb["move"])
+    weight = tf.stop_gradient(lesson_weight(tf.exp(logp - lb["logp"]), lb["weight"])) * lb["mask"]
+    policy = -tf.exp(logp - tf.stop_gradient(logp)) * lb["adv"]  # its value is -adv; its gradient -adv × d logp
+    error = VALUE_WEIGHT * tf.square(value - lb["target"])
+    return tf.reduce_sum(weight * (policy + error), axis=1) / ROLLOUT
+
+
 def _entropy(logits, log_std):
     probs = tf.nn.softmax(logits)
     choice_entropy = -tf.reduce_sum(probs * tf.nn.log_softmax(logits), axis=-1)
@@ -133,6 +150,9 @@ class Learner:
         self._buffers: List[List[dict]] = [[] for _ in range(slots)]
         self._pending: Dict[int, dict] = {}
         self._free: List[int] = list(range(slots))
+        self._lessons: List[List[dict]] = [[] for _ in range(slots)]  # steps of others each slot saw: {step, next_obs}
+        self._last: Dict[int, dict] = {}  # each slot's last recorded step, which a watcher may take as a lesson
+        self._awaiting: Dict[int, List[dict]] = {}  # lessons of a slot's last step, waiting for what it senses next
 
     def allocate(self, weights: NetWeights, lr: float) -> int:
         """A newborn's network in the lowest free slot: these are its inborn weights, and its optimizer state and
@@ -149,6 +169,9 @@ class Learner:
         self._inborn[slot] = weights
         self._buffers[slot] = []
         self._pending.pop(slot, None)
+        self._lessons[slot] = []
+        self._last.pop(slot, None)
+        self._awaiting.pop(slot, None)
         return slot
 
     def release(self, slot: int) -> None:
@@ -185,6 +208,8 @@ class Learner:
         self._gen.reset(state["generator"])
         self._buffers = [[] for _ in range(self.slots)]
         self._pending = {}
+        self._lessons = [[] for _ in range(self.slots)]
+        self._last, self._awaiting = {}, {}
 
     def has_room(self) -> bool:
         return bool(self._free)
@@ -241,6 +266,58 @@ class Learner:
         step["reward"] = reward
         step["done"] = 1.0 if done else 0.0
         self._buffers[slot].append(step)
+        for lesson in self._awaiting.pop(slot, []):
+            lesson["next_obs"] = step["obs"]
+        self._last[slot] = step
+
+    def watch(self, watcher: int, actor: int, reward: float, weight: float) -> None:
+        """The actor's step just recorded is a lesson for the watcher, with the reward the watcher's genes give it and
+        the weight of its learning from others; used in the watcher's next learning round (once the actor's next senses
+        are known, unless the step ended its life)."""
+        step = self._last[actor]
+        lesson = {"step": step, "next_obs": None, "reward": reward, "weight": weight}
+        if not step["done"]:
+            self._awaiting.setdefault(actor, []).append(lesson)
+        self._lessons[watcher].append(lesson)
+
+    def _lesson_batch(self, slots: List[int]) -> Optional[Dict[str, tf.Tensor]]:
+        """The ready lessons of each slot (its step ended a life, or its next senses are known), judged one step
+        ahead by the watcher's own value, advantages normalized per slot; padded to one length. The rest wait."""
+        ready = []
+        for slot in slots:
+            done = [l for l in self._lessons[slot] if l["step"]["done"] or l["next_obs"] is not None]
+            self._lessons[slot] = [l for l in self._lessons[slot] if not (l["step"]["done"] or l["next_obs"] is not None)]
+            ready.append(done)
+        length = max(len(r) for r in ready)
+        if length == 0:
+            return None
+        shape = (len(slots), length)
+        obs, next_obs = np.zeros(shape + (N_IN,)), np.zeros(shape + (N_IN,))
+        choice, move = np.zeros(shape, np.int32), np.zeros(shape + (2,))
+        logp, attacks, reward, done, mask, weight = (np.zeros(shape) for _ in range(6))
+        for k, lessons in enumerate(ready):
+            for t, lesson in enumerate(lessons):
+                step = lesson["step"]
+                obs[k, t], choice[k, t], move[k, t] = step["obs"], step["choice"], step["move"]
+                logp[k, t], attacks[k, t], done[k, t] = step["logp"], step["attacks"], step["done"]
+                reward[k, t], weight[k, t] = lesson["reward"], lesson["weight"]
+                if lesson["next_obs"] is not None:
+                    next_obs[k, t] = lesson["next_obs"]
+                mask[k, t] = 1.0
+        p = {name: tf.gather(var, tf.constant(slots, dtype=tf.int32)) for name, var in self._params.items()}
+        both = tf.constant(np.concatenate([obs, next_obs], axis=1), tf.float32)
+        value = _heads(p, both, tf.ones(both.shape[:2]))[3].numpy()
+        target = reward + GAMMA * value[:, length:] * (1.0 - done)
+        adv = target - value[:, :length]
+        for k in range(len(slots)):
+            known = mask[k] > 0
+            if known.any():
+                adv[k, known] = (adv[k, known] - adv[k, known].mean()) / (adv[k, known].std() + 1e-8)
+        adv *= mask
+        arrays = {"obs": obs, "choice": choice, "move": move, "logp": logp, "attacks": attacks, "adv": adv,
+                  "target": target, "mask": mask, "weight": weight}
+        return {key: tf.constant(value, dtype=tf.int32 if key == "choice" else tf.float32)
+                for key, value in arrays.items()}
 
     def update(self) -> int:
         """One PPO update for every slot with a full rollout (64 steps plus the one that bootstraps them)."""
@@ -259,11 +336,12 @@ class Learner:
             self._buffers[slot] = self._buffers[slot][ROLLOUT:]
         tensors = {key: tf.constant(np.stack(values), dtype=tf.int32 if key == "choice" else tf.float32)
                    for key, values in batch.items()}
+        lessons = self._lesson_batch(full)
         for _ in range(EPOCHS):
-            self._ppo_step(full, tensors)
+            self._ppo_step(full, tensors, lessons)
         return len(full)
 
-    def _ppo_step(self, slots: List[int], b: Dict[str, tf.Tensor]) -> None:
+    def _ppo_step(self, slots: List[int], b: Dict[str, tf.Tensor], lessons: Optional[Dict[str, tf.Tensor]]) -> None:
         idx = tf.constant(slots, dtype=tf.int32)
         p = {name: tf.gather(var, idx) for name, var in self._params.items()}
         with tf.GradientTape() as tape:
@@ -275,6 +353,8 @@ class Learner:
             value_loss = tf.reduce_mean(tf.square(value - b["ret"]), axis=1)
             entropy = tf.reduce_mean(_entropy(logits, log_std), axis=1)
             loss = tf.reduce_sum(policy_loss + VALUE_WEIGHT * value_loss - ENTROPY_WEIGHT * entropy)
+            if lessons is not None:
+                loss += tf.reduce_sum(lesson_loss(p, lessons))
         grads = tape.gradient(loss, list(p.values()))
         self._adam(slots, idx, p, dict(zip(p.keys(), grads)))
 

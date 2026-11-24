@@ -322,6 +322,167 @@ should reduce relative to the speed chosen."
 - Random wanderers (the exam's yardstick) keep moving at cruising speed or less.
 - The numbers (0.4, √size, the square) are Claude's, not measured; Task 6 measures them.
 
+### Learning from what others live (the owner, 2026-11-24)
+
+The owner: "fleeing and chasing seems to not be learned at all" · "how does death cost help, the creature is dead? Let's do
+it so everyone who sees the battle gains from it. If a creature sees another small creature die, it somehow learns from
+it. In general let's add the ability to learn from others, for every penalty and reward" · watchers half as strongly as
+from their own life: "Yes, rewrite it".
+
+**What was measured (save 152,000 of the owner's world, 1,000 steps run in memory, outside `runs/`):** with a creature
+1.5 times bigger in sight, 19 % of steps moved away and 15 % toward (49 % ate, 17 % attacked); with one two-thirds its
+size or smaller, 17 % moved toward and 19 % away. Both are what random moves give: nothing is learned.
+
+**Why:** a learner's reward each step is only its change in energy (`World._teach`), and it learns only from its own
+life. Dying costs nothing, and could not teach the one who died anyway: its brain is gone, and its last unfinished
+stretch of steps (fewer than a rollout's 64) is thrown away. A baby is neutral. A hit takes 5-10 energy. So fleeing,
+which costs moving energy now, never pays.
+
+**The change:**
+- **Dying costs a full belly:** a learner that dies (of hunger, an attack or age) gets, on its last step, its change in
+  energy minus its maximum energy (100 x size).
+- **A baby pays a full belly:** a learner that has a baby gets its maximum energy added to its next step's reward. The
+  energy it gives the baby stays no penalty, as today.
+- **Every learner learns from what it sees others live:** each step of a learner (what it sensed, what it did, what it got,
+  death and baby included) is also a lesson for every other learner within its sense range (3 units) at that step, family
+  included. A watcher learns from it half as strongly as from a step of its own life (`WATCH_WEIGHT = 0.5`). So a creature
+  that sees a small one killed beside a big one learns that staying there is bad, without dying itself.
+- How a watcher learns from another's step: it judges the step with its own brain (its own guess of how good the place
+  was and is), and weighs it by how likely it would have done the same itself, never more than its own step would count.
+  Its lessons are kept until its own next learning round (every 64 of its steps) and used in that round.
+- Only the learning changes. The world's rules, energy, the scoreboard and the exam are as they are. Saves keep no
+  unfinished lessons, as today they keep no unfinished experience.
+- The numbers (a full belly both ways, half as strongly) are Claude's, not measured; Task 6 measures them.
+- **Cost, measured** (`scratchpad/diag/density.py` on save 156,000): a creature has 1.5 others in sight on average (6 at
+  most), so each learning round has about 2.5 times today's lessons; the world's speed is measured in the check below.
+
+**How it is checked:** the same save, run 20,000 steps twice in memory (outside `runs/`, same seed): today's learning and
+the new one. For each: with a bigger creature in sight, the share of moves away from it; with a smaller one, the share of
+moves toward it, over the last 5,000 steps (50 % is random); and seconds per 1,000 steps. Both runs' numbers are shown to
+the owner as they are, a fail as a fail. If chasing stays random, the next idea (not in this change) is a bigger payoff
+for a kill.
+
+### Rewards in the genes (the owner, 2026-11-24)
+
+The owner: "learning from others should also be a gene · the how much I learn from others" · "rewards themselves should
+be genetic... whoever's rewards set him for death just dies... the perfect reward and penalty should be mutable... we give
+them basic sensible amounts but in time mutation can sway them".
+
+**What was measured.** Task 4u's check (save 156,000, 20,000 steps in memory, the difficulty held, no Auto, one run
+each): today's learning kept 80 alive; "Learning from what others live" with a full belly for a death and a baby crashed
+to 10. Each part alone, the same way: the baby pay crashed to 12 by step 4,000; the lessons crashed to 10 by step 9,000;
+the death cost changed nothing at all (the very same numbers as today's learning: a creature's last unfinished steps are
+never learned from, so a death teaches only its watchers). Then the fair check: the real runner, with Auto, from the same
+save to step 164,000, three seeds each: today's learning ended with 78, 80 and 73 alive, the lessons with 61, 59 and 74.
+**No crash in either:** the earlier crashes came from the unfair method (a world held at difficulty 76 tips over once its
+experienced families die, and one run says nothing). A reward of 100 against steps of about ±1 is still a risk, so the
+genes start at 10.
+
+**The owner, on what is a gene and what is not:** "the creatures have all the input... isn't it redundant? All these
+feelings are the parameters they get in and how they are interpreted by the neurons" · fear "if it's hard-coded, then I
+don't like it" · "a pain sensor should help... I should know I'm being attacked" · "the body doesn't feel pain, the brain
+decides how much a pain means". So: anything that moves energy is already in the reward (the change in energy), and the
+neurons decide what each input means; only what energy cannot say is a gene (a death, a baby, learning from others);
+nothing that triggers a feeling is chosen by hand (no fear of danger); pain is an input, not a gene.
+
+**The change (it replaces the fixed numbers of "Learning from what others live"):** each creature carries three values in
+its genes, inherited like its size and senses:
+- **How bad dying feels** (`fear_of_death`): taken from its reward on the step it dies. Starts at **10** (ten bites).
+- **How good a baby feels** (`love_of_babies`): added to its reward on the step after it has a baby. Starts at **10**.
+- **How much it learns from others** (`learns_from_others`): the weight of a lesson against a step of its own life.
+  Starts at **0.5**.
+- **Starting amounts:** the first creatures and every newcomer get exactly these; a baby gets its parent's × (1 ± up to
+  0.2), kept within 0.1 to 100 for the first two and 0.01 to 1 for the third. Mutation sways them; selection keeps what
+  helps a family live and have babies.
+- **A watcher values a lesson by its own genes:** the lesson is the actor's change in energy, minus the watcher's own fear
+  of death if the actor died, plus the watcher's own love of babies if the actor had one; weighted by the watcher's own
+  learning from others (and, as before, by how likely the watcher would have done the same, at most fully).
+- **The owner's world:** its creatures start with the starting amounts and feel no pain at first; saves become format 5
+  (format 4 converted: the three amounts, no pain, the brains' 4 new inputs at zero).
+- **A pain sensor (4 new inputs, 21 in all):** for one step after a creature is hit it senses that it was hit, how hard (the
+  share of its maximum energy taken) and the direction of the one who hit it (cos, sin); otherwise all four are 0. What it
+  means is the neurons' (no pain gene: the energy lost is already in the reward). The owner's world's brains get the 4
+  inputs with zero weights, so nothing they do changes until they learn or mutate.
+- **Charts and tiles:** the average of each of the three, so their evolution can be watched; pointing at a creature lists
+  its own.
+- **History keeps every world:** a scoreboard written before a column existed is read with that column empty (today such
+  worlds vanish from History whenever columns are added).
+- The starting amounts and limits are Claude's (sized so a death or a baby is worth ten bites, not a hundred); Task 6
+  measures them.
+
+**How it is checked:** the fair way: the real runner, with Auto, from a copy of the owner's save 156,000 (never the
+owner's own run folder) to step 164,000, three seeds with today's learning and three with this one. A run ending below 40
+alive is a fail. For each: alive every 1,000 steps, fleeing and chasing over the last 4,000 steps, and the three averages
+at the end, shown to the owner as they come out, and live while they run: a second control room on port 8766 shows the
+six runs' charts updating (the owner's rule: a long run is shown as live graphs).
+
+### Live: a table of running worlds, each on its own screen (the owner, 2026-11-24)
+
+The owner: "the UI is terrible! each run should get its own screen, create a table of live runs.. not all runs should
+share a screen" · on the proposal: "Yes, write it".
+
+**Today:** Live shows every running world's controls one under another, and one set of charts with all of them drawn
+together.
+
+**The change (the page only):**
+- **Live opens on a table of the running worlds,** one row each: its name (seed and kind), step, alive, average energy,
+  difficulty, latest intelligence × random, steps a second, Auto or Manual, running or paused. The rows update every
+  second (each world's live numbers, as the tiles use today). "Nothing is running" when the table is empty. The Start bar
+  stays above it.
+- **Clicking a row opens that world's own screen:** exactly what a world has today (its knobs, live tiles, Update code,
+  Pause, Stop, Jump in) and charts of that world alone. A "← All live worlds" button goes back to the table.
+- **Each screen has its own address** (`#live/<world>`), so a refresh, the browser's Back and a shared link land on the
+  same screen; a world that ends sends its screen back to the table.
+- **Charts are always of one world:** the one on screen; the table shows no charts, and no chart ever draws two worlds
+  (the owner: "charts are always to the single world we are now testing").
+- **Charts mark only the owner's own changes:** a vertical line where the owner moved a knob or the hunters switch by
+  hand; Auto's nudges (one every 500 steps since it steers by rates: about 300 lines a world, a solid wall when several
+  worlds share a chart) are no longer lines, only words in the hover text at their step. The owner, on the wall of
+  lines: "why charts look like this?!" · "Yes, add it".
+- History, the world screen's contents and every control are as they are.
+
+**How it is checked:** a page test for the table, its rows and the addresses, and that Auto's changes draw no line; then, in the app's browser with the six
+check worlds running, the table updating, a click opening one world's own screen with only its charts, Back and a
+refresh, phone width, no console errors, a screenshot to the owner.
+
+### Senses in the genes: a vision cone and hearing (the owner, 2026-11-24)
+
+The owner: "add visualization of the vision in the live view... it should be subtle not to overwhelm the screen... some
+transparent angle part of a circle" · "also for hearing add circle visualization" · vision as a forward cone and hearing
+as a full circle: "Yes, spec it" · "better vision or better hearing must come with costs" · the cost is energy each
+step by the area sensed: "Yes, by area".
+
+**Today:** a creature sees 3 units all around (360°) and hears nothing; its brain gets the nearest food and the nearest
+stranger in that circle.
+
+**The change:**
+- **Vision is a cone** pointing where the creature faces (the direction of its last move; resting keeps it). Each creature
+  has two vision genes: the cone's **width** (30° to 360°) and its **reach** (1 to 8 units). It sees food and creatures
+  only inside its cone.
+- **Hearing is a circle** around it, all directions, of one gene: its **radius** (0 to 4 units). It hears creatures, not
+  food: the nearest stranger it hears but does not see gives the brain where it is, how far, and how big against itself
+  (5 new inputs, after today's 12: 17 in all).
+- **Senses cost energy each step, by the area they cover:** `SENSE_COST` × (cone area + hearing area), where a cone's area
+  is width ÷ 360° × π × reach² and hearing's π × radius². `SENSE_COST` is set so today's senses (a full circle of 3 units,
+  area 28.3) would cost 0.05 a step: 0.00177 a square unit. Seeing wide or far, or hearing far, burns more.
+- **Inherited like size:** a baby gets each sense gene of its parent × (1 ± up to 0.2), kept in its limits. Newcomers get
+  random ones in the limits.
+- **Learning from others** (the section above) counts a watcher who sees or hears the actor.
+- **The owner's world keeps going:** on Update code its creatures start with today's vision (360°, 3 units) and a hearing
+  radius of 1.5; their brains get the 5 new inputs with zero weights, so nothing they do changes until they learn or
+  mutate. Saves become format 4 (format 3 saves are converted the same way).
+- **Jump in shows them, subtly:** each creature's cone as a faint wedge (about 6 % opacity of its body colour) and its
+  hearing as a faint dotted circle; pointing at a creature draws its own a little stronger and lists its senses. The
+  legend gets a cone and a hearing circle.
+- **The scoreboard** gets the average cone width, reach and hearing radius, each a chart in History and the live tiles,
+  so their evolution can be watched.
+- The limits, the 0.05 and the starting hearing radius are Claude's, not measured; Task 6 measures them.
+
+**How it is checked:** tests for the cone (food behind it unseen), hearing (heard behind, size given, food not heard), the
+cost by area, inheritance in the limits, the format 3 → 4 save conversion, and the 17-input brains acting as before with
+zero new weights. Then Update code on the owner's world, and Jump in looked at in the app's browser: cones and hearing
+circles faint, the hovered one stronger, no console errors.
+
 ### The intelligence exam
 
 The owner: "At the end, whoever survives is smart in nature." · "Intelligence should be rewards / waste or something

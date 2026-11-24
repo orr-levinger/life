@@ -1,4 +1,5 @@
 """Shared setup for the world, policy and visualization tests."""
+import math
 import random
 from dataclasses import replace
 from typing import Optional, Sequence
@@ -7,11 +8,13 @@ import numpy as np
 
 from src.brain import Brain
 from src.creature import Creature
-from src.settings import START, Settings
+from src.settings import SENSE_COST, START, TODAY_SENSES, Settings
 from src.world import World
 
 NO_FOOD = replace(START, max_food=0, food_per_step=0)  # the easy start with nothing to eat
 NO_FOOD_ATTACKS = replace(NO_FOOD, attacks=True)
+WIDTH, REACH, HEARING = TODAY_SENSES
+LIVING = NO_FOOD.step_cost + SENSE_COST * (WIDTH / 360.0 * math.pi * REACH ** 2 + math.pi * HEARING ** 2)  # a step alive, today's senses
 
 
 def make_world(settings: Settings = NO_FOOD, seed: int = 0, evolving: bool = True, learner=None,
@@ -23,7 +26,7 @@ def make_world(settings: Settings = NO_FOOD, seed: int = 0, evolving: bool = Tru
 def fixed_brain(outputs: Sequence[float]) -> Brain:
     """A brain whose 4 outputs (move x, move y, eat, attack) are always `outputs` (±1 becomes ±0.999999)."""
     b2 = np.arctanh(np.clip(np.asarray(outputs, dtype=float), -0.999999, 0.999999))
-    return Brain(np.zeros((12, 16)), np.zeros(16), np.zeros((16, 4)), b2)
+    return Brain(np.zeros((Brain.N_IN, 16)), np.zeros(16), np.zeros((16, 4)), b2)
 
 
 def add(world: World, x: float, y: float, size: float = 1.0, energy: float = 50.0, policy: str = "random",

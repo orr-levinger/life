@@ -56,6 +56,23 @@ class TestViewer(unittest.TestCase):
         self.assertEqual((found[1]["rows"][7]["intelligence"], found[1]["rows"][7]["wanderers"]), (0.5, 1))
         self.assertEqual(first["energy"], 0.6)
 
+    def test_history_shows_older_scoreboards(self):
+        import csv
+        from src.scoreboard import BEFORE_HUNTING
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "20261123-080000-4-learning"
+            folder.mkdir()
+            (folder / "run.json").write_text(json.dumps({"seed": 4, "kind": "learning", "steps": 1000,
+                                                         "started": "2026-11-23T08:00:00"}))
+            with open(folder / "scoreboard.csv", "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=list(BEFORE_HUNTING))
+                writer.writeheader()
+                writer.writerow({k: "250" if k == "step" else "1" for k in BEFORE_HUNTING})
+            found = runs(Path(tmp))
+        self.assertEqual([r["seed"] for r in found], [4])  # shown, not dropped
+        row = found[0]["rows"][0]
+        self.assertEqual((row["step"], row["population"], row["chase"], row["hearing"]), (250, 1, None, None))
+
     def test_a_run_is_running_only_while_it_keeps_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
             three_runs(Path(tmp))
@@ -388,6 +405,20 @@ class TestControlRoom(unittest.TestCase):
         for words in ('id="watch-legend"', "eyes:, very smart", "past its, lifespan", "food"):  # the drawn legend's labels
             self.assertIn(words, page)
         self.assertNotIn("tan diamond: food", page)  # the owner: the words-only key "is not helping"
+
+    def test_page_draws_cones_and_hearing(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("function drawSenses", "c.vision_width", "c.hearing", "cone:, what it sees", "dotted:, what it hears",
+                      '"vision_width"', '"hearing"'):
+            self.assertIn(words, page)
+
+    def test_page_shows_the_values(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('"fear_of_death"', '"love_of_babies"', '"learns_from_others"', "fears death", "loves babies",
+                      "learns from others"):
+            self.assertIn(words, page)
 
     def test_page_has_the_drawn_legend_and_hunting_tiles(self):
         with urllib.request.urlopen(self.server.base + "/") as response:

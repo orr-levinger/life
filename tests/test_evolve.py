@@ -271,7 +271,9 @@ class TestEvolve(unittest.TestCase):
         self.assertGreater(len(view["foods"]), 0)
         creature = view["creatures"][0]
         self.assertEqual(set(creature), {"id", "x", "y", "radius", "energy", "heading", "did", "generation", "age",
-                                         "lifespan", "earned", "spent", "size"})
+                                         "lifespan", "earned", "spent", "size", "facing", "vision_width",
+                                         "vision_reach", "hearing", "fear_of_death", "love_of_babies",
+                                         "learns_from_others"})
         self.assertTrue(0.0 <= creature["energy"] <= 1.0)
         self.assertTrue(0.0 <= creature["x"] <= 50 and 0.0 <= creature["y"] <= 30)
         self.assertEqual(set(view["foods"][0]), {"x", "y", "radius"})

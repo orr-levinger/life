@@ -19,9 +19,13 @@ ROW_KEYS = (
     "step", "level", "population", "energy", "births", "newcomers", "generation", "bites_per_creature_step",
     "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers", "deaths_hunger",
     "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost", "step_cost", "lifespan",
-    "hunters", "manual", "chase", "attacks",
+    "hunters", "manual", "chase", "attacks", "vision_width", "vision_reach", "hearing", "fear_of_death",
+    "love_of_babies", "learns_from_others",
 )
-BEFORE_HUNTING = ROW_KEYS[:-2]  # the columns of scoreboards written before 2026-11-24
+BEFORE_VALUES = ROW_KEYS[:-3]  # the columns of scoreboards written before values were genes (2026-11-24)
+BEFORE_SENSES = BEFORE_VALUES[:-3]  # the columns of scoreboards written before senses were genes (2026-11-24)
+BEFORE_HUNTING = BEFORE_SENSES[:-2]  # the columns of scoreboards written before the chase and attacks columns
+OLDER_LAYOUTS = (BEFORE_VALUES, BEFORE_SENSES, BEFORE_HUNTING)  # read with the columns they lack empty
 DEATH_CAUSES = ("hunger", "attack", "age")
 Value = Union[int, float, None]
 
@@ -33,20 +37,20 @@ def read_rows(path: Path) -> List[Dict[str, str]]:
 
 
 def migrate_scoreboard(path: Path) -> bool:
-    """Gives a scoreboard written before the chase and attacks columns those columns, empty. Returns whether it
-    changed it. A scoreboard of any other columns is refused."""
+    """Gives a scoreboard written before the chase and attacks, the senses or the values columns the columns it
+    lacks, empty. Returns whether it changed it. A scoreboard of any other columns is refused."""
     with open(path, newline="") as f:
         header = tuple(next(csv.reader(f), ()))
     if header == ROW_KEYS:
         return False
-    if header != BEFORE_HUNTING:
+    if header not in OLDER_LAYOUTS:
         raise ValueError(f"{path} has columns this code does not know how to bring up to date")
     rows = read_rows(path)
     temporary = path.with_name(path.name + ".tmp")
     with open(temporary, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=ROW_KEYS)
         writer.writeheader()
-        writer.writerows({**row, "chase": "", "attacks": ""} for row in rows)
+        writer.writerows({**{key: "" for key in ROW_KEYS}, **row} for row in rows)
     temporary.replace(path)
     return True
 
@@ -157,6 +161,12 @@ class Scoreboard:
             "manual": int(manual),
             "chase": _mean(self._chased),
             "attacks": self._attacks,
+            "vision_width": _mean([c.vision_width for c in world.creatures]),
+            "vision_reach": _mean([c.vision_reach for c in world.creatures]),
+            "hearing": _mean([c.hearing for c in world.creatures]),
+            "fear_of_death": _mean([c.fear_of_death for c in world.creatures]),
+            "love_of_babies": _mean([c.love_of_babies for c in world.creatures]),
+            "learns_from_others": _mean([c.learns_from_others for c in world.creatures]),
         }
         self._clear_samples()
         self._seen = now

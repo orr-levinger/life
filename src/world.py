@@ -14,9 +14,10 @@ from .brain import Brain
 from .creature import Creature
 from .food import Food
 from .policies import Action, decide_all
-from .senses import Senses, display_intent, sense_all
-from .settings import (BABY_SHARE, BIRTH_AT, LOW_ENERGY, LR_MUTATION, MAX_CREATURES, MUTATION_RATE, MUTATION_SCALE,
-                       SIZE_MUTATION, SOUP_MIN, START_ENERGY, Settings)
+from .senses import Senses, display_intent, perceived, sense_all
+from .settings import (BABY_SHARE, BIRTH_AT, FEAR_LIMITS, GENE_MUTATION, HEARING_LIMITS, LEARN_LIMITS, LOVE_LIMITS,
+                       LOW_ENERGY, LR_MUTATION, MAX_CREATURES, MUTATION_RATE, MUTATION_SCALE, SIZE_MUTATION, SOUP_MIN,
+                       START_ENERGY, VALUE_START, VISION_REACH_LIMITS, VISION_WIDTH_LIMITS, Settings)
 
 if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to it
     from .learner import Learner
@@ -51,6 +52,7 @@ class World:
         self.evolving = evolving
         self.learner = learner
         self.inherit = inherit
+        self._had_baby = set()  # id() of each learner that had a baby last step: its love of babies joins this step's reward
         self.creatures: List[Creature] = []
         self.foods: List[Food] = []
         self.step_count = 0
@@ -91,6 +93,10 @@ class World:
         slot = self.learner.newcomer(self.np_rng) if self.species == "learner" else None
         newcomer = Creature(self.next_id(), x, y, size, self.rng.uniform(*START_ENERGY), self.species, brain, slot=slot)
         newcomer.lifespan = round(self.rng.uniform(*self.settings.lifespan))
+        newcomer.vision_width = self.rng.uniform(*VISION_WIDTH_LIMITS)
+        newcomer.vision_reach = self.rng.uniform(*VISION_REACH_LIMITS)
+        newcomer.hearing = self.rng.uniform(*HEARING_LIMITS)
+        newcomer.fear_of_death, newcomer.love_of_babies, newcomer.learns_from_others = VALUE_START
         self.creatures.append(newcomer)
         self.newcomers += 1
         return newcomer
@@ -130,6 +136,8 @@ class World:
 
         acting = list(self.creatures)
         senses = sense_all(self, acting)
+        for creature in acting:
+            creature.hurt = None  # pain is felt for one step: sensed just now, gone unless hit again
         actions = decide_all(self, acting, senses)
         for creature, sensed, action in zip(acting, senses, actions):
             creature.intent = display_intent(creature, action, sensed)
@@ -167,12 +175,39 @@ class World:
         self._decay_food()
 
     def _teach(self, acting: List[Creature], energy_before: List[float]) -> None:
-        """Each learner creature's reward for this step is its change in energy; dying ends its experience."""
+        """Each learner creature's reward for this step is its change in energy, valued by its own genes: plus its love
+        of babies for a baby it had the step before, minus its fear of death if it died (which ends its experience).
+        Each learner's step is also a lesson for every other living learner that sees or hears it."""
         alive = set(map(id, self.creatures))
+        events = {}
         for creature, before in zip(acting, energy_before):
             if creature.policy == "learner":
-                self.learner.record(creature.slot, creature.energy - before, id(creature) not in alive)
+                died, baby = id(creature) not in alive, id(creature) in self._had_baby
+                events[id(creature)] = (creature.energy - before, died, baby)
+                self.learner.record(creature.slot, self._valued(creature, *events[id(creature)]), died)
+        self._had_baby.clear()
+        self._show(acting, events)
         self.learner.update()
+
+    @staticmethod
+    def _valued(valuer: Creature, change: float, died: bool, baby: bool) -> float:
+        """A step's reward as `valuer`'s genes value it: the change in energy, minus its fear of death if the one who
+        lived it died, plus its love of babies if that one had a baby."""
+        return change - valuer.fear_of_death * died + valuer.love_of_babies * baby
+
+    def _show(self, acting: List[Creature], events: dict) -> None:
+        """Every living learner that sees or hears a learner that acted takes its step as a lesson, valued by the
+        watcher's own genes and weighed by its own learning from others."""
+        actors = [c for c in acting if c.policy == "learner"]
+        watchers = [c for c in self.creatures if c.policy == "learner"]
+        if not actors or not watchers:
+            return
+        seen = perceived(watchers, actors)
+        for i, j in zip(*np.nonzero(seen)):
+            watcher, actor = watchers[j], actors[i]
+            if watcher is not actor:
+                reward = self._valued(watcher, *events[id(actor)])
+                self.learner.watch(watcher.slot, actor.slot, reward=reward, weight=watcher.learns_from_others)
 
     def _births(self) -> None:
         """A creature with enough energy has a baby; the safety limit only pauses births."""
@@ -201,8 +236,20 @@ class World:
         baby = Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
                         parent_id=parent.id, generation=parent.generation + 1, slot=slot)
         baby.lifespan = round(self.rng.uniform(*self.settings.lifespan))
+        baby.vision_width = self._inherited(parent.vision_width, VISION_WIDTH_LIMITS)
+        baby.vision_reach = self._inherited(parent.vision_reach, VISION_REACH_LIMITS)
+        baby.hearing = self._inherited(parent.hearing, HEARING_LIMITS)
+        baby.fear_of_death = self._inherited(parent.fear_of_death, FEAR_LIMITS)
+        baby.love_of_babies = self._inherited(parent.love_of_babies, LOVE_LIMITS)
+        baby.learns_from_others = self._inherited(parent.learns_from_others, LEARN_LIMITS)
         self.creatures.append(baby)
         self.births += 1
+        if parent.policy == "learner":
+            self._had_baby.add(id(parent))
+
+    def _inherited(self, gene: float, limits: tuple) -> float:
+        """A parent's sense or value gene for its baby: × (1 ± up to GENE_MUTATION), kept in its limits."""
+        return min(max(gene * (1.0 + self.rng.uniform(-GENE_MUTATION, GENE_MUTATION)), limits[0]), limits[1])
 
     def _decay_food(self) -> None:
         kept = []

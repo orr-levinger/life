@@ -8,7 +8,7 @@ from src.brain import Brain
 from src.exam import exam_worlds, run_exam
 from src.learner import NetWeights
 from src.settings import TEST_WORLD
-from tests.helpers import fixed_brain
+from tests.helpers import LIVING, NO_FOOD, fixed_brain
 
 EAT = [0, 0, 1, -1]
 
@@ -39,7 +39,8 @@ class TestExam(unittest.TestCase):
         self.assertEqual(run_exam(brains(4), sizes, seed=8, steps=100), run_exam(brains(4), sizes, seed=8, steps=100))
 
     def test_intelligence_is_energy_earned_over_spent(self):
-        """With nothing to eat, a brain that always eats earns nothing and spends the miss and the step each step."""
+        """With nothing to eat, a brain that always eats earns nothing and spends the miss, the step and its senses
+        each step."""
         with mock.patch("src.exam.TEST_WORLD", replace(TEST_WORLD, max_food=0, food_per_step=0)):
             result = run_exam([fixed_brain(EAT)] * 2, [1.0, 1.0], seed=1, steps=50)
             with_brains, _ = exam_worlds([fixed_brain(EAT)] * 2, [1.0, 1.0], seed=1)
@@ -47,7 +48,7 @@ class TestExam(unittest.TestCase):
         for _ in range(10):
             with_brains.step()
         self.assertEqual(with_brains.energy_earned, 0.0)
-        self.assertAlmostEqual(with_brains.energy_spent, 2 * 10 * (0.2 + TEST_WORLD.step_cost))
+        self.assertAlmostEqual(with_brains.energy_spent, 2 * 10 * (0.2 + TEST_WORLD.step_cost + LIVING - NO_FOOD.step_cost))
 
     def test_wanderers_are_measured_beside_the_brains(self):
         result = run_exam(brains(6), [1.0] * 6, seed=3, steps=200)

@@ -26,7 +26,7 @@ from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run
 from .dial import KNOBS, value
 from .evolve import SPECIES
 from .saves import save_header, save_path, saves_of
-from .scoreboard import ROW_KEYS, read_rows
+from .scoreboard import OLDER_LAYOUTS, ROW_KEYS, read_rows
 from .settings import START, Settings
 
 PAGE = Path(__file__).with_name("viewer.html")
@@ -57,8 +57,8 @@ def runs(folder: Path) -> List[Dict]:
         if not record.exists():
             continue
         rows = read_rows(scoreboard) if scoreboard.exists() else []
-        if rows and tuple(rows[0]) != ROW_KEYS:
-            continue  # a scoreboard of an older design
+        if rows and tuple(rows[0]) not in (ROW_KEYS,) + OLDER_LAYOUTS:
+            continue  # a scoreboard of another design altogether
         written = (scoreboard if scoreboard.exists() else record).stat().st_mtime
         if timing.exists():
             status = "finished"
@@ -72,7 +72,8 @@ def runs(folder: Path) -> List[Dict]:
             "mode": control.mode if control is not None else "auto",
             "paused": control.paused if control is not None else False,
             "saves": len(saves_of(run)),
-            "rows": [{key: _number(row[key]) for key in ROW_KEYS} for row in rows],
+            "rows": [{key: _number(row[key]) if key in row else None for key in ROW_KEYS}  # a newer column: empty
+                     for row in rows],
             "seconds": float(timing.read_text()) if timing.exists() else None,
         })
     return sorted(found, key=lambda run: run["started"], reverse=True)

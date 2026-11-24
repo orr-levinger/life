@@ -107,7 +107,8 @@ class TestScoreboard(unittest.TestCase):
             "step", "level", "population", "energy", "births", "newcomers", "generation", "bites_per_creature_step",
             "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers",
             "deaths_hunger", "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost",
-            "step_cost", "lifespan", "hunters", "manual", "chase", "attacks",
+            "step_cost", "lifespan", "hunters", "manual", "chase", "attacks", "vision_width", "vision_reach", "hearing",
+            "fear_of_death", "love_of_babies", "learns_from_others",
         ))
         w, me = food_world()
         me.generation = 4
@@ -147,12 +148,62 @@ class TestScoreboard(unittest.TestCase):
         self.assertEqual(first["attacks"], 2)
         self.assertEqual(board.row(w, None, False)["attacks"], 0)
 
+    def test_scoreboard_has_the_senses(self):
+        import csv
+        import tempfile
+        from pathlib import Path
+        from src.scoreboard import migrate_scoreboard
+        w = make_world()
+        a, b = add(w, 10, 10), add(w, 20, 10)
+        a.vision_width, a.vision_reach, a.hearing = 100.0, 2.0, 1.0
+        b.vision_width, b.vision_reach, b.hearing = 300.0, 4.0, 2.0
+        row = Scoreboard().row(w, None, False)
+        self.assertEqual((row["vision_width"], row["vision_reach"], row["hearing"]), (200.0, 3.0, 1.5))
+        from src.scoreboard import BEFORE_SENSES
+        old_keys = list(BEFORE_SENSES)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "scoreboard.csv"
+            with open(path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=old_keys)
+                writer.writeheader()
+                writer.writerow({k: "1" for k in old_keys})
+            self.assertTrue(migrate_scoreboard(path))
+            with open(path, newline="") as f:
+                rows = list(csv.DictReader(f))
+        self.assertEqual(tuple(rows[0]), ROW_KEYS)
+        self.assertEqual((rows[0]["hearing"], rows[0]["chase"]), ("", "1"))
+
+    def test_scoreboard_has_the_values(self):
+        import csv
+        import tempfile
+        from pathlib import Path
+        from src.scoreboard import BEFORE_VALUES, migrate_scoreboard
+        w = make_world()
+        a, b = add(w, 10, 10), add(w, 20, 10)
+        a.fear_of_death, a.love_of_babies, a.learns_from_others = 4.0, 8.0, 0.2
+        b.fear_of_death, b.love_of_babies, b.learns_from_others = 6.0, 12.0, 0.4
+        row = Scoreboard().row(w, None, False)
+        self.assertEqual((row["fear_of_death"], row["love_of_babies"]), (5.0, 10.0))
+        self.assertAlmostEqual(row["learns_from_others"], 0.3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "scoreboard.csv"
+            with open(path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=list(BEFORE_VALUES))
+                writer.writeheader()
+                writer.writerow({k: "1" for k in BEFORE_VALUES})
+            self.assertTrue(migrate_scoreboard(path))
+            with open(path, newline="") as f:
+                rows = list(csv.DictReader(f))
+        self.assertEqual(tuple(rows[0]), ROW_KEYS)
+        self.assertEqual((rows[0]["fear_of_death"], rows[0]["hearing"]), ("", "1"))
+
     def test_old_scoreboards_get_the_new_columns(self):
         import csv
         import tempfile
         from pathlib import Path
         from src.scoreboard import migrate_scoreboard
-        old_keys = [k for k in ROW_KEYS if k not in ("chase", "attacks")]
+        from src.scoreboard import BEFORE_HUNTING
+        old_keys = list(BEFORE_HUNTING)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "scoreboard.csv"
             with open(path, "w", newline="") as f:

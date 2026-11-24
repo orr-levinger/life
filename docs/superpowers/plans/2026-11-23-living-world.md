@@ -675,6 +675,119 @@ above cruising speed), `src/policies.py` (brains' moves scaled to `top_speed`), 
 - [x] **Step 5: Update code** on the owner's world; the fleeing and chasing tiles and charts afterwards. In the ledger.
 - [x] **Step 6: Commit** as `feat: sprinting`.
 
+### Task 4u: Learning from what others live (added 2026-11-24; the owner: "Yes, rewrite it")
+
+Spec: "Learning from what others live". **Files:** Modify: `src/settings.py` (`DEATH_COST = 1.0`, `BABY_PAY = 1.0`: shares
+of the maximum energy; `WATCH_WEIGHT = 0.5`), `src/world.py` (`_teach`: the death cost, the baby pay, and each learner's
+step handed to the learners in its sense range), `src/learner.py` (`watch(watcher_slot, actor_slot, ...)`: a lesson kept
+per watcher; the update trains on a watcher's lessons with its own rollout, weighted, each weighed by its own chance of the
+action capped at 1, judged one step ahead by its own value), `tests/test_world_rules.py`, `tests/test_learner.py`. Create:
+`scripts/reward_check.py` (the 20,000-step comparison; reads a save, writes nothing under `runs/`).
+
+- [x] **Step 1: Write the failing tests** for the death cost and the baby pay: `test_a_dying_learner_pays_its_full_belly`,
+  `test_a_learner_killed_by_an_attack_pays_its_full_belly`, `test_a_learner_with_a_baby_is_paid_next_step`, and
+  `test_a_living_learner_is_paid_its_energy_change` (a value kept: passes today).
+- [x] **Step 2: Run them to see them fail** · the three new ones failed on the reward by exactly 150, 100 and 100; the kept
+  one passed.
+- [x] **Step 3: Implement** the death cost and the baby pay (`settings.py`, `world.py`). The suite: 257 tests, `OK`.
+- [ ] **Step 4: Write the failing tests** for watching: `test_learners_in_sight_get_the_lesson` (a learner's step reaches
+  each learner within 3 units, not one farther, not itself), `test_a_lesson_carries_the_death_cost` (a watcher's lesson of
+  a death holds the reward with the full belly taken), `test_lessons_train_at_half_weight` (with only lessons and no full
+  rollout a round changes nothing; with one, a round's loss counts each lesson at 0.5 of an own step),
+  `test_a_lesson_counts_no_more_than_an_own_step` (its weight capped at 1 x 0.5 however likely the watcher's action),
+  `test_unfinished_lessons_are_not_saved`.
+- [ ] **Step 5: Run them to see them fail** · `$PY -m unittest tests.test_world_rules tests.test_learner` -> the five fail
+  (no `watch`).
+- [ ] **Step 6: Implement** `learner.py` and `world.py` as above.
+- [ ] **Step 7: Run the suite** · `$PY -m unittest discover tests` -> `OK`, with the count.
+- [x] **Step 8 — FAILED:** today's learning kept 80 alive (55 % / 53 %); the new crashed to 10 alive (49 % / 49 %). Steps 9–10
+  are replaced by Task 4w (the owner: "Yes, fix it first"; the fix: rewards in the genes). The comparison was:
+  `$PY scripts/reward_check.py runs/20261123-212209-1-learning --steps 20000` once with
+  today's learning (`--learning own`) and once with the new (`--learning shared`), both in the background. It prints, for
+  each, the share of moves away from a bigger creature and toward a smaller one over the last 5,000 steps, and seconds per
+  1,000 steps. Shown to the owner as printed. `ls runs` before and after -> the same folders.
+- [ ] **Step 9: Update code** on the owner's world; the Flees bigger and Chases smaller tiles over the next 10,000 steps,
+  in the ledger.
+- [ ] **Step 10: Commit** as `feat: learning from what others live`.
+
+### Task 4v: Senses in the genes: a vision cone and hearing (added 2026-11-24; the owner: "Yes, by area")
+
+Spec: "Senses in the genes: a vision cone and hearing". **Files:** Modify: `src/settings.py` (`SENSE_COST`, the limits,
+`SENSE_MUTATION = 0.2`), `src/creature.py` (`facing`, `vision_width`, `vision_reach`, `hearing`; the cost each step),
+`src/senses.py` (the cone, hearing, 17 inputs), `src/brain.py` and `src/learner.py` (`N_IN = 17`), `src/world.py` (genes at
+birth and for newcomers; who watches), `src/saves.py` (format 4, 3 → 4), `src/evolve.py` (`world_view`: facing and senses),
+`src/scoreboard.py` (three columns, migration of old files), `src/viewer.html` (wedges, circles, legend, tiles, charts),
+the tests of each.
+
+- [x] **Step 1: Write the failing tests:** `test_food_behind_the_cone_is_unseen`, `test_a_creature_behind_is_heard`
+  (direction, distance, size), `test_food_is_not_heard`, `test_senses_cost_by_area` (today's senses cost 0.05),
+  `test_babies_inherit_senses_in_the_limits`, `test_a_format_3_save_gets_todays_senses` (360°, 3, hearing 1.5, zero new
+  weights), `test_seventeen_input_brains_act_as_before_with_zero_new_weights`, `test_watchers_who_hear_get_the_lesson`,
+  `test_scoreboard_has_the_senses`, `test_page_draws_cones_and_hearing`.
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` → those ten fail, the rest pass.
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` → `OK`, with the count.
+- [x] **Step 5 (done as Task 4w Step 6): Update code** on the owner's world; Jump in in the app's browser: faint cones and dotted hearing circles,
+  the hovered creature's stronger with its senses listed, the legend's two new entries; `read_console_messages` → no
+  errors; a screenshot to the owner. In the ledger.
+- [x] **Step 6 (in Task 4w's commit): Commit** as `feat: senses in the genes`.
+
+### Task 4w: Rewards in the genes, and a pain sensor (added 2026-11-24; revised the same day: "Yes, yes, build it")
+
+Spec: "Rewards in the genes". Built on Tasks 4u and 4v (both in the working tree, uncommitted). **Files:** Modify:
+`src/settings.py` (`VALUE_START = (10.0, 10.0, 0.5)`, the limits, `DEATH_COST`, `BABY_PAY` and `WATCH_WEIGHT` removed),
+`src/creature.py` (`fear_of_death`, `love_of_babies`, `learns_from_others`), `src/world.py` (own rewards by its own genes;
+genes at birth; newcomers at the starting amounts; each lesson carries the actor's energy change, death and baby),
+`src/learner.py` (each slot's three values; a lesson's reward and weight from the watcher's), `src/saves.py` (format 5,
+4 → 5), `src/evolve.py` (`world_view`), `src/scoreboard.py` (three columns, migration), `src/viewer.html` (charts, tiles,
+the pointed-at creature's values), `src/senses.py` and `src/creature.py` (the pain sensor: `hurt`, inputs 18-21),
+`src/brain.py` and `src/learner.py` (`N_IN = 21`), `src/viewer.py` (older scoreboards read with blank new columns),
+`scripts/reward_check.py` (the fair check: copies the save into its own folder and runs the real runner with Auto), and
+the tests of each.
+
+- [x] **Step 1: Write the failing tests:** `test_a_dying_learner_pays_its_own_fear_of_death`,
+  `test_a_learner_is_paid_its_own_love_of_babies`, `test_newcomers_start_with_the_starting_values`,
+  `test_babies_inherit_values_in_the_limits`, `test_a_watcher_values_a_lesson_by_its_own_genes` (a death seen: the actor's
+  energy change minus the watcher's fear; a baby seen: plus the watcher's love), `test_a_lesson_weighs_the_watchers_learning_from_others`,
+  `test_a_format_4_save_gets_the_starting_values`, `test_scoreboard_has_the_values`, `test_page_shows_the_values`,
+  `test_a_creature_hit_feels_it` (hit, how hard, from where), `test_pain_lasts_one_step`,
+  `test_a_format_4_brain_gets_four_silent_pain_inputs`, `test_history_shows_older_scoreboards`. Task 4u's
+  four death/baby tests and its lesson tests change to the genes (no fixed 100 × size, no fixed 0.5).
+- [x] **Step 2: Run them to see them fail** · `$PY -m unittest discover tests` → the new ones fail, the rest pass.
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · `$PY -m unittest discover tests` → `OK`, with the count.
+- [x] **Step 5 — STOPPED by the owner ("stop it let me just run it myself") about half way, none below 40 alive (today's learning 55, 75, 43; new 58, 54, 47): The fair check:** `$PY scripts/reward_check.py runs/20261123-212209-1-learning --save 156000 --until 164000
+  --learning own|shared --seed 11|12|13 --out <scratch>/checks/<learning>-<seed>`, the six in the background, and a second
+  control room (`$PY -m src.viewer --runs <scratch>/checks --port 8766`) opened in the app's browser so the charts update
+  live. Each prints alive every 1,000 steps, fleeing and chasing over the last 4,000 steps, and the three averages. Shown
+  to the owner as printed. Any run ending below 40 alive is a fail: stop and report. `ls runs` and the owner's
+  scoreboard's checksum, before and after → unchanged.
+- [x] **Step 6 — the owner restarted the world on this code at step 158,000: Update code** on the owner's world (this carries Tasks 4u, 4v and 4w together, after both checks); Jump
+  in in the app's browser: cones, hearing circles, the pointed-at creature's senses and values; `read_console_messages` →
+  no errors; a screenshot to the owner. In the ledger. (This is Task 4v's Step 5 too.)
+- [x] **Step 7: Commit** as `feat: learning from others, senses and rewards in the genes` (Tasks 4u, 4v and 4w share
+  `world.py`, `learner.py`, `saves.py` and their tests, so one commit holds the three).
+
+### Task 4x: Live: a table of running worlds, each on its own screen (added 2026-11-24; the owner: "Yes, write it")
+
+Spec: "Live: a table of running worlds, each on its own screen". Starts after Task 4w's commit (it changes the same page).
+**Files:** Modify: `src/viewer.html` (the table, a world's own screen, the addresses, one world's charts, change lines
+for the owner's own changes only),
+`tests/test_viewer.py`.
+
+- [ ] **Step 1: Write the failing tests:** `test_live_opens_on_a_table_of_running_worlds` (the page has the table, its
+  columns and "Nothing is running"), `test_a_world_has_its_own_screen_and_address` (the page has "← All live worlds" and
+  reads `#live/<world>`), `test_only_the_owners_changes_draw_lines` (the change lines come from changes made by hand).
+- [ ] **Step 2: Run them to see them fail** · `$PY -m unittest tests.test_viewer` → the three fail.
+- [ ] **Step 3: Implement** `src/viewer.html`.
+- [ ] **Step 4: Run the suite** · `$PY -m unittest discover tests` → `OK`, with the count.
+- [ ] **Step 5: Look at it** in the app's browser (the check worlds or the owner's world running): the table's numbers
+  change each second; a click opens that world alone with only its charts; "← All live worlds", Back and a refresh land
+  right; a world that ends returns to the table; charts show no wall of Auto lines (a line only where a knob was
+  moved by hand), Auto's changes still in the hover text; phone width (375 px) has no sideways scroll; `read_console_messages` →
+  no errors; screenshots to the owner.
+- [ ] **Step 6: Commit** as `feat: a table of live worlds, each on its own screen`.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.
@@ -743,6 +856,15 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
 5a. **The control room works:** Task 4h Step 5 was done in the app's browser and each part seen (a knob moved by hand
    reaches the running world and shows on the charts; Auto moves a knob by itself; Stop ends the world and it is in
    History), with no error in the browser's console; `tests/test_control.py` and `tests/test_viewer.py` pass.
+5b. **Learning from what others live:** the nine Task 4u tests pass; Task 4u Step 5's numbers for both rewards were shown to
+   the owner as printed; `ls runs` showed no new folder from it.
+5c. **Senses in the genes:** the ten Task 4v tests pass; Task 4v Step 5's screenshot shown to the owner, with no console
+   error.
+5d. **Rewards in the genes, and a pain sensor:** the Task 4w tests pass; Step 5's six runs shown to the owner, none below
+   40 alive; Step 6's screenshot
+   shown with no console error; one commit holds Tasks 4u, 4v and 4w.
+5e. **Live is a table of worlds:** the three Task 4x tests pass; Step 5's screenshots shown to the owner, with no console
+   error.
 6. **Brain size evolves:** `test_new_neuron_is_silent_at_birth` and `test_new_layer_is_silent_at_birth` pass, and Task 5
    Step 5 showed intelligence and the level reached not below Task 4d's.
 7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,

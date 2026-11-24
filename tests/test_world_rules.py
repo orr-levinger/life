@@ -5,10 +5,12 @@ from unittest import mock
 
 import numpy as np
 
+from src.creature import Creature
 from src.food import Food
+from src.policies import decide_all
 from src.learner import LEARNING_RATE, Learner, NetWeights
 from src.settings import BABY_SHARE, EAT_MISS_COST, MAX_CREATURES, START
-from tests.helpers import NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
+from tests.helpers import LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
 from tests.test_learner import live, same
 
 STAY = [0, 0, -1, -1]
@@ -30,7 +32,7 @@ class TestCosts(unittest.TestCase):
         w = make_world()
         c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))
         w.step()
-        self.assertAlmostEqual(c.energy, 50.0 - NO_FOOD.step_cost)
+        self.assertAlmostEqual(c.energy, 50.0 - LIVING)
 
     def test_move_cost_and_speed_cap(self):
         w = make_world()
@@ -39,7 +41,7 @@ class TestCosts(unittest.TestCase):
         self.assertAlmostEqual(c.x, 10.24)  # at most its top speed, 0.4 a step for size 1
         self.assertAlmostEqual(c.y, 10.32)
         sprint = 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 2  # faster than cruising costs the square of the speed
-        self.assertAlmostEqual(c.energy, 50.0 - sprint - NO_FOOD.step_cost)
+        self.assertAlmostEqual(c.energy, 50.0 - sprint - LIVING)
 
     def test_top_speed_grows_with_size(self):
         w = make_world()
@@ -50,14 +52,14 @@ class TestCosts(unittest.TestCase):
         w = make_world()
         c = add(w, 10, 10, size=1.0)
         c.apply_action(("MOVE", (0.2, 0.0)), w)
-        self.assertAlmostEqual(c.energy, 50.0 - 0.2 * NO_FOOD.move_cost - NO_FOOD.step_cost)
+        self.assertAlmostEqual(c.energy, 50.0 - 0.2 * NO_FOOD.move_cost - LIVING)
 
     def test_sprinting_costs_the_square_of_the_speed(self):
         w = make_world()
         c = add(w, 10, 10, size=2.0, energy=150.0)
         c.apply_action(("MOVE", (c.top_speed, 0.0)), w)
         cost = c.top_speed * NO_FOOD.move_cost * (c.top_speed / c.velocity) ** 2
-        self.assertAlmostEqual(c.energy, 150.0 - cost - NO_FOOD.step_cost)
+        self.assertAlmostEqual(c.energy, 150.0 - cost - LIVING)
         self.assertGreater(cost / (c.top_speed * NO_FOOD.move_cost), 20)  # about 21 times the cruising cost
 
     def test_a_big_sprinter_catches_a_small_cruiser(self):
@@ -81,6 +83,40 @@ class TestCosts(unittest.TestCase):
         self.assertAlmostEqual(c.y, c.radius)
 
 
+class TestSenseGenes(unittest.TestCase):
+    def test_senses_cost_by_area(self):
+        from src.settings import SENSE_COST
+        w = make_world()
+        today = add(w, 10, 10)
+        today.vision_width, today.vision_reach, today.hearing = 360.0, 3.0, 0.0
+        before = today.energy
+        today.apply_action(("MOVE", (0.0, 0.0)), w)
+        self.assertAlmostEqual(before - today.energy, NO_FOOD.step_cost + 0.05, places=4)  # today's senses: 0.05
+        sharp = add(w, 20, 10)
+        sharp.vision_width, sharp.vision_reach, sharp.hearing = 90.0, 6.0, 2.0
+        before = sharp.energy
+        sharp.apply_action(("MOVE", (0.0, 0.0)), w)
+        area = 90.0 / 360.0 * math.pi * 36.0 + math.pi * 4.0
+        self.assertAlmostEqual(before - sharp.energy, NO_FOOD.step_cost + SENSE_COST * area)
+
+    def test_babies_inherit_senses_in_the_limits(self):
+        from src.settings import HEARING_LIMITS, VISION_REACH_LIMITS, VISION_WIDTH_LIMITS
+        w = make_world(seed=4)
+        crowd(w)
+        parent = add(w, 10, 10, energy=80.0)
+        parent.vision_width, parent.vision_reach, parent.hearing = 300.0, 7.9, 2.0
+        w.step()
+        baby = next(c for c in w.creatures if c.parent_id == parent.id)
+        self.assertTrue(300.0 * 0.8 <= baby.vision_width <= min(300.0 * 1.2, 360.0))
+        self.assertTrue(7.9 * 0.8 <= baby.vision_reach <= 8.0)  # never past its limit
+        self.assertTrue(2.0 * 0.8 <= baby.hearing <= 2.0 * 1.2)
+        for _ in range(30):
+            c = w.add_newcomer()
+            self.assertTrue(VISION_WIDTH_LIMITS[0] <= c.vision_width <= VISION_WIDTH_LIMITS[1])
+            self.assertTrue(VISION_REACH_LIMITS[0] <= c.vision_reach <= VISION_REACH_LIMITS[1])
+            self.assertTrue(HEARING_LIMITS[0] <= c.hearing <= HEARING_LIMITS[1])
+
+
 class TestEating(unittest.TestCase):
     def test_eat_action_takes_a_bite(self):
         w = make_world()
@@ -88,7 +124,7 @@ class TestEating(unittest.TestCase):
         f = food(10, 10)
         w.foods.append(f)
         w.step()
-        self.assertAlmostEqual(c.energy, 51.0 - NO_FOOD.step_cost)
+        self.assertAlmostEqual(c.energy, 51.0 - LIVING)
         self.assertAlmostEqual(f.energy, 9.0)
         self.assertAlmostEqual(c.food_eaten, 1.0)
         self.assertEqual((w.total_bites, c.last_action), (1, "EAT"))
@@ -100,10 +136,10 @@ class TestEating(unittest.TestCase):
         w.foods.append(food(10, 10))
         w.step()
         self.assertAlmostEqual(w.energy_earned, 1.0)
-        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 2 * NO_FOOD.step_cost)
+        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 2 * LIVING)
         mover = add(w, 20, 5, size=1.0)
         mover.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * NO_FOOD.step_cost + 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 2)  # a full sprint
+        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * LIVING + 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 2)  # a full sprint
 
     def test_each_creature_counts_its_own_energy(self):
         w = make_world()
@@ -116,7 +152,7 @@ class TestEating(unittest.TestCase):
         mover.apply_action(("MOVE", (3.0, 4.0)), w)
         self.assertAlmostEqual(eater.earned, 3.0)
         self.assertAlmostEqual(misser.earned, 0.0)
-        self.assertAlmostEqual(misser.spent, 3 * (EAT_MISS_COST + NO_FOOD.step_cost))
+        self.assertAlmostEqual(misser.spent, 3 * (EAT_MISS_COST + LIVING))
         self.assertAlmostEqual(sum(c.earned for c in w.creatures), w.energy_earned)
         self.assertAlmostEqual(sum(c.spent for c in w.creatures), w.energy_spent)
 
@@ -132,7 +168,7 @@ class TestEating(unittest.TestCase):
         w = make_world()
         c = add(w, 10, 10, policy="brain", brain=fixed_brain(EAT))
         w.step()
-        self.assertAlmostEqual(c.energy, 50.0 - EAT_MISS_COST - NO_FOOD.step_cost)
+        self.assertAlmostEqual(c.energy, 50.0 - EAT_MISS_COST - LIVING)
         self.assertEqual(c.last_action, "EAT_MISS")
 
     def test_second_eater_misses_last_bite(self):
@@ -162,9 +198,9 @@ class TestHunting(unittest.TestCase):
         prey = add(w, 11, 10, size=1.0, energy=50.0)
         hunter.apply_action(("ATTACK", prey), w)
         self.assertAlmostEqual(prey.energy, 40.0)
-        self.assertAlmostEqual(hunter.energy, 100.0 + 0.8 * 10.0 - 2.0 - NO_FOOD_ATTACKS.step_cost)
+        self.assertAlmostEqual(hunter.energy, 100.0 + 0.8 * 10.0 - 2.0 - LIVING)
         self.assertAlmostEqual(w.energy_earned, 0.8 * 10.0)
-        self.assertAlmostEqual(w.energy_spent, 2.0 + NO_FOOD_ATTACKS.step_cost)
+        self.assertAlmostEqual(w.energy_spent, 2.0 + LIVING)
 
     def test_kill_leaves_corpse_and_counts_attack_death(self):
         w = make_world(NO_FOOD_ATTACKS)
@@ -176,6 +212,35 @@ class TestHunting(unittest.TestCase):
         self.assertIn(prey, w.dead_this_step)
         corpse = w.foods[-1]
         self.assertEqual((corpse.x, corpse.y, corpse.energy, corpse.remaining_duration), (11, 10, 8.0, 5))
+
+    def test_a_creature_hit_feels_it(self):
+        from src.senses import sense
+        w = make_world(NO_FOOD_ATTACKS)
+        hunter = add(w, 11, 10, size=2.0, energy=100.0)
+        prey = add(w, 10, 10, size=1.0, energy=50.0)
+        self.assertTrue(all(sense(prey, w).vector[17:21] == 0.0))  # nothing felt yet
+        hunter.apply_action(("ATTACK", prey), w)
+        v = sense(prey, w).vector
+        self.assertEqual(v.shape, (21,))
+        self.assertEqual(v[17], 1.0)  # hit
+        self.assertAlmostEqual(v[18], 0.1)  # 10 of its 100 taken
+        self.assertAlmostEqual(v[19], 1.0)  # from the east, where the hunter is
+        self.assertAlmostEqual(v[20], 0.0)
+
+    def test_pain_lasts_one_step(self):
+        w = make_world(NO_FOOD_ATTACKS)
+        crowd(w)
+        hunter = add(w, 11, 10, size=2.0, energy=100.0)
+        prey = add(w, 10, 10, size=1.0, energy=50.0)
+        hunter.apply_action(("ATTACK", prey), w)
+        felt = []
+        def nobody_attacks(world, acting, senses):
+            return [("MOVE", (0.0, 0.0)) for _ in acting]
+
+        with mock.patch("src.world.decide_all", nobody_attacks):
+            w.step(lambda c, senses, action: felt.append(senses.vector[17]) if c is prey else None)
+            w.step(lambda c, senses, action: felt.append(senses.vector[17]) if c is prey else None)
+        self.assertEqual(felt, [1.0, 0.0])  # felt in the next step, gone the step after
 
     def test_dead_target_is_a_miss(self):
         w = make_world(NO_FOOD_ATTACKS)
@@ -216,7 +281,7 @@ class TestLifeAndDeath(unittest.TestCase):
     def test_well_fed_elder_lives_on(self):
         w = make_world()
         crowd(w)
-        c = add(w, 10, 10, energy=31.0, policy="brain", brain=fixed_brain(STAY))  # above 30 % of its maximum
+        c = add(w, 10, 10, energy=32.0, policy="brain", brain=fixed_brain(STAY))  # above 30 % of its maximum
         c.lifespan, c.age = 100, 99
         for _ in range(10):
             w.step()
@@ -282,7 +347,7 @@ class TestLifeAndDeath(unittest.TestCase):
         w.step()
         self.assertEqual(len(w.creatures), 12)
         baby = w.creatures[-1]
-        before_birth = 80.0 - NO_FOOD.step_cost
+        before_birth = 80.0 - LIVING
         self.assertAlmostEqual(baby.energy, BABY_SHARE * before_birth)
         self.assertAlmostEqual(parent.energy, (1 - BABY_SHARE) * before_birth)
         self.assertEqual((baby.parent_id, baby.generation, baby.policy), (parent.id, 1, "brain"))
@@ -391,6 +456,154 @@ class TestLearnersInWorld(unittest.TestCase):
         self.assertTrue(record.call_args.args[2])  # its last step is marked as the end of its life
         self.assertNotIn(dying, w.creatures)
         self.assertEqual(learner.allocate(NetWeights.random(w.np_rng), LEARNING_RATE), dying.slot)
+
+    def rewards(self, w, learner, steps=1):
+        """Each step's rewards, by slot."""
+        out = []
+        for _ in range(steps):
+            with mock.patch.object(learner, "record", wraps=learner.record) as record:
+                w.step()
+            out.append({call.args[0]: call.args[1:] for call in record.call_args_list})
+        return out
+
+    def test_a_dying_learner_pays_its_own_fear_of_death(self):
+        w, learner = self.world()
+        crowd(w)
+        starving = self.born(w, learner, 10, 10, energy=0.01)
+        starving.fear_of_death = 7.0
+        [step] = self.rewards(w, learner)
+        reward, done = step[starving.slot]
+        self.assertTrue(done)
+        self.assertAlmostEqual(reward, starving.energy - 0.01 - 7.0)  # hunger: its energy change, minus its own fear
+
+    def test_a_learner_killed_by_an_attack_pays_its_own_fear_of_death(self):
+        learner = Learner(MAX_CREATURES, 0)
+        w = make_world(NO_FOOD_ATTACKS, learner=learner, species="learner")
+        crowd(w)
+        prey = self.born(w, learner, 10, 10, energy=5.0)
+        prey.fear_of_death = 3.0
+        hunter = add(w, 11, 10, size=2.0, energy=100.0)
+        real = decide_all
+
+        def hunter_attacks(world, acting, senses):
+            actions = real(world, acting, senses)
+            return [("ATTACK", prey) if c is hunter else a for c, a in zip(acting, actions)]
+
+        with mock.patch("src.world.decide_all", hunter_attacks):
+            [step] = self.rewards(w, learner)
+        self.assertEqual(w.deaths["attack"], 1)
+        reward, done = step[prey.slot]
+        self.assertTrue(done)
+        self.assertAlmostEqual(reward, prey.energy - 5.0 - 3.0)
+
+    def test_a_learner_is_paid_its_own_love_of_babies(self):
+        w, learner = self.world()
+        crowd(w)
+        parent = self.born(w, learner, 10, 10, energy=80.0)
+        parent.love_of_babies = 12.0
+        with mock.patch.object(learner, "record", wraps=learner.record) as record:
+            w.step()
+        self.assertEqual(w.births, 1)
+        after_gift = parent.energy
+        before_gift = after_gift / (1.0 - BABY_SHARE)
+        first = {call.args[0]: call.args[1] for call in record.call_args_list}[parent.slot]
+        self.assertAlmostEqual(first, before_gift - 80.0)  # the step it has the baby: its energy change, the gift no penalty
+        [step] = self.rewards(w, learner)
+        reward, done = step[parent.slot]
+        self.assertFalse(done)
+        self.assertAlmostEqual(reward, parent.energy - after_gift + 12.0)  # the next step: plus its own love of babies
+
+    def test_a_living_learner_is_paid_its_energy_change(self):
+        w, learner = self.world()
+        crowd(w)
+        parent = self.born(w, learner, 10, 10, energy=80.0)
+        self.rewards(w, learner, steps=2)  # a baby, then its pay
+        before = parent.energy
+        [step] = self.rewards(w, learner)
+        self.assertAlmostEqual(step[parent.slot][0], parent.energy - before)  # paid once, never again
+
+    def test_learners_in_sight_get_the_lesson(self):
+        w, learner = self.world()
+        crowd(w)
+        actor = self.born(w, learner, 10, 10)
+        near = self.born(w, learner, 12, 10)  # 2 units: in sight (3)
+        far = self.born(w, learner, 20, 10)  # 8 units from the nearest
+        [step] = self.rewards(w, learner)
+        self.assertEqual(len(learner._lessons[near.slot]), 1)  # the actor's step
+        self.assertAlmostEqual(learner._lessons[near.slot][0]["reward"], step[actor.slot][0])
+        self.assertEqual(len(learner._lessons[actor.slot]), 1)  # the near one's step, never its own
+        self.assertAlmostEqual(learner._lessons[actor.slot][0]["reward"], step[near.slot][0])
+        self.assertEqual(learner._lessons[far.slot], [])
+
+    def test_a_watcher_values_a_lesson_by_its_own_genes(self):
+        w, learner = self.world()
+        crowd(w)
+        dying = self.born(w, learner, 10, 10, energy=0.01)
+        dying.fear_of_death = 50.0  # its own fear: not the watcher's
+        watcher = self.born(w, learner, 11, 10)
+        watcher.fear_of_death = 4.0
+        [step] = self.rewards(w, learner)
+        reward, done = step[dying.slot]
+        [lesson] = learner._lessons[watcher.slot]
+        self.assertAlmostEqual(lesson["reward"], reward + 50.0 - 4.0)  # its energy change, minus the watcher's fear
+        self.assertEqual(lesson["step"]["done"], 1.0)
+
+        w, learner = self.world()
+        crowd(w)
+        parent = self.born(w, learner, 10, 10, energy=80.0)
+        parent.love_of_babies = 30.0
+        watcher = self.born(w, learner, 11, 10, energy=40.0)
+        watcher.love_of_babies = 2.0
+        steps = self.rewards(w, learner, steps=2)  # a baby, then the step that pays for it
+        lesson = next(l for l in learner._lessons[watcher.slot] if l["step"] is learner._last[parent.slot])
+        self.assertAlmostEqual(lesson["reward"], steps[1][parent.slot][0] - 30.0 + 2.0)  # plus the watcher's love
+
+    def test_a_lesson_weighs_the_watchers_learning_from_others(self):
+        w, learner = self.world()
+        crowd(w)
+        actor = self.born(w, learner, 10, 10)
+        watcher = self.born(w, learner, 12, 10)
+        actor.learns_from_others, watcher.learns_from_others = 0.9, 0.3
+        self.rewards(w, learner)
+        self.assertAlmostEqual(learner._lessons[watcher.slot][0]["weight"], 0.3)
+        self.assertAlmostEqual(learner._lessons[actor.slot][0]["weight"], 0.9)
+
+    def test_newcomers_start_with_the_starting_values(self):
+        from src.settings import VALUE_START
+        w, learner = self.world()
+        for _ in range(5):
+            c = w.add_newcomer()
+            self.assertEqual((c.fear_of_death, c.love_of_babies, c.learns_from_others), VALUE_START)
+        self.assertEqual(VALUE_START, (10.0, 10.0, 0.5))
+
+    def test_babies_inherit_values_in_the_limits(self):
+        from src.settings import FEAR_LIMITS, LEARN_LIMITS, LOVE_LIMITS
+        w, learner = self.world()
+        crowd(w)
+        parent = self.born(w, learner, 10, 10, energy=80.0)
+        parent.fear_of_death, parent.love_of_babies, parent.learns_from_others = 95.0, 5.0, 0.95
+        w.step()
+        baby = next(c for c in w.creatures if c.parent_id == parent.id)
+        self.assertTrue(95.0 * 0.8 <= baby.fear_of_death <= FEAR_LIMITS[1])
+        self.assertTrue(5.0 * 0.8 <= baby.love_of_babies <= 5.0 * 1.2)
+        self.assertTrue(0.95 * 0.8 <= baby.learns_from_others <= LEARN_LIMITS[1])
+        self.assertEqual((FEAR_LIMITS, LOVE_LIMITS, LEARN_LIMITS), ((0.1, 100.0), (0.1, 100.0), (0.01, 1.0)))
+
+    def test_watchers_who_hear_get_the_lesson(self):
+        w, learner = self.world()
+        crowd(w)
+        actor = self.born(w, learner, 10, 10)
+        hearer = self.born(w, learner, 12, 10)
+        deaf = self.born(w, learner, 10, 13)
+        for c in (actor, hearer, deaf):
+            c.vision_width, c.vision_reach = 30.0, 3.0
+        hearer.facing, hearer.hearing = (1.0, 0.0), 3.0  # the actor behind it: unseen, heard
+        deaf.facing, deaf.hearing = (0.0, 1.0), 0.0  # the actor behind it: unseen, unheard
+        actor.facing, actor.hearing = (0.0, -1.0), 0.0
+        with mock.patch.object(Creature, "_move", lambda self, vector, world: None):  # nobody turns
+            self.rewards(w, learner)
+        self.assertEqual(len(learner._lessons[hearer.slot]), 1)
+        self.assertEqual(learner._lessons[deaf.slot], [])
 
     def parent_that_has_learned(self, inherit):
         w, learner = self.world(inherit)

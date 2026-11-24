@@ -170,6 +170,18 @@ const PANELS = [
   { key: "flee", title: "Fleeing and chasing", hunters: true, beside: { key: "chase", label: "chasing" },
     note: "While hunters are on. Solid: when a creature 1.5 times bigger is in sight, the share of moves away from it. Dashed: when one at most two-thirds its size is in sight, the share of moves toward it." },
   { key: "attacks_rate", title: "Attacks tried per 1,000 steps", hunters: true },
+  { key: "vision_width", title: "Vision cone width (degrees, average)",
+    note: "Each creature's cone is in its genes: wider sees more around it, and costs more energy every step." },
+  { key: "vision_reach", title: "How far creatures see (average)",
+    note: "In its genes too: seeing farther costs energy every step, by the area seen." },
+  { key: "hearing", title: "How far creatures hear, all around (average)",
+    note: "Hearing reaches behind it too, but tells only where another creature is and how big; it costs by the area heard." },
+  { key: "fear_of_death", title: "Fear of death (average)",
+    note: "In each creature's genes: how much dying counts against it in its learning (a bite is worth 1). Started at 10." },
+  { key: "love_of_babies", title: "Love of babies (average)",
+    note: "In its genes: how much having a baby counts for it in its learning. Started at 10." },
+  { key: "learns_from_others", title: "Learning from others (average)",
+    note: "In its genes: how much a step it sees another live teaches it, against a step of its own (1 = as much). Started at 0.5." },
 ];
 const W = 520, H = 250, M = { l: 44, r: 108, t: 10, b: 30 };
 const PENDING_FOR = 20000;  // ms a value moved by hand is shown before the world's own row must confirm it
@@ -465,7 +477,8 @@ const NOW_EVERY_MS = 1000, SAMPLES_KEPT = 300;  // one look a second; the energy
 const TILES = [
   ["step", "Step"], ["alive", "Alive"], ["energy", "Average energy"], ["smart", "Intelligence × random"],
   ["hardest", "Difficulty"], ["steer", "Steers to food"], ["born", "Born"], ["died", "Died"], ["generation", "Generation"],
-  ["flee", "Flees bigger"], ["chase", "Chases smaller"],
+  ["flee", "Flees bigger"], ["chase", "Chases smaller"], ["vision", "Sees"], ["hearing", "Hears"],
+  ["fear", "Fear of death"], ["love", "Love of babies"], ["learns", "Learns from others"],
 ];
 
 function makeTiles(state) {
@@ -515,6 +528,10 @@ function liveNumbers(state) {
     died: spanned ? now.deaths - back.deaths : last ? sum("deaths_hunger") + sum("deaths_attack") + sum("deaths_age") : null,
     food: now ? now.food : null,
     flee: meanOf(recentRows, "flee"), chase: meanOf(recentRows, "chase"),
+    vision_width: meanOf(recentRows, "vision_width"), vision_reach: meanOf(recentRows, "vision_reach"),
+    hearing: meanOf(recentRows, "hearing"),
+    fear: meanOf(recentRows, "fear_of_death"), love: meanOf(recentRows, "love_of_babies"),
+    learns: meanOf(recentRows, "learns_from_others"),
   };
 }
 
@@ -557,6 +574,21 @@ function updateTiles(state) {
       `When a creature at most two-thirds its size is in sight, the share of moves toward it, over the last 1,000 steps: ` +
       `${share(n.chase)}. Chasing is how a hunter eats. "-" while no smaller creature was in sight.`,
       n.chase === null ? "" : n.chase >= 0.5 ? "good" : "");
+  set("vision", n.vision_width === null ? "-" : `${Math.round(n.vision_width)}°`,
+      n.vision_reach === null ? "" : `up to ${n.vision_reach.toFixed(1)} away`,
+      n.vision_width === null ? "No numbers yet." : `The average creature's vision cone is ${Math.round(n.vision_width)}° wide and ` +
+      `reaches ${n.vision_reach.toFixed(1)} units (the world is 50 wide). Both are in its genes; wider or farther costs ` +
+      `energy every step, by the area seen.`);
+  set("hearing", n.hearing === null ? "-" : n.hearing.toFixed(1), "units, all around",
+      n.hearing === null ? "No numbers yet." : `The average creature hears others up to ${n.hearing.toFixed(1)} units away in ` +
+      `every direction, even behind it. In its genes; farther costs energy every step, by the area heard.`);
+  const gene = (v, digits) => v === null ? "-" : v.toFixed(digits);
+  set("fear", gene(n.fear, 1), "a bite = 1", `How much dying counts against the average creature in its learning: ` +
+      `${gene(n.fear, 1)} bites. In its genes, starting at 10; evolution moves it.`);
+  set("love", gene(n.love, 1), "a bite = 1", `How much a baby counts for the average creature in its learning: ` +
+      `${gene(n.love, 1)} bites. In its genes, starting at 10; evolution moves it.`);
+  set("learns", gene(n.learns, 2), "1 = as much as its own", `How much the average creature learns from a step it sees ` +
+      `another live, against a step of its own: ${gene(n.learns, 2)}. In its genes, starting at 0.5; evolution moves it.`);
   const points = state.samples.filter((x) => x.energy !== null);
   const svg = state.tiles.querySelector("svg");
   if (points.length > 1) {
@@ -622,6 +654,10 @@ const LEGEND = [
   ["ate", { energy: 0.7, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "EAT", heading: [0, 0] }, 1.2],
   ["ate at, nothing", { energy: 0.5, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "EAT_MISS", heading: [0, 0] }, 1.2],
   ["attacked", { energy: 0.7, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "ATTACK", heading: [1, 0] }, 1.2],
+  ["cone:, what it sees", { energy: 0.7, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "MOVE", heading: [1, 0],
+                            facing: [1, 0], vision_width: 110, vision_reach: 1.5, hearing: 0 }, 0.8],
+  ["dotted:, what it hears", { energy: 0.7, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "MOVE", heading: [1, 0],
+                               facing: [1, 0], vision_width: 110, vision_reach: 0, hearing: 1.5 }, 0.8],
 ];
 
 function drawLegend() {
@@ -634,6 +670,7 @@ function drawLegend() {
   g.textAlign = "center";
   LEGEND.forEach(([words, c, size], i) => {
     const x = cell * (i + 0.5), y = 44 * devicePixelRatio;
+    if (c.vision_width !== undefined) drawSenses(g, x, y, c, Math.min(cell * 0.22, 22 * devicePixelRatio), true, color);
     drawCreature(g, x, y, size * unit, c, 1.0, Math.max(1.2, devicePixelRatio * 1.2), color);
     g.fillStyle = color("--muted");
     words.split(", ").forEach((part, k) => g.fillText(part, x, y + (44 + 13 * k) * devicePixelRatio));
@@ -739,6 +776,28 @@ function drawCreature(g, x, y, r, c, wanderers, line, color) {
   return smart;
 }
 
+// What a creature senses: its vision cone, a faint wedge of its body colour where it faces, and its hearing, a faint
+// dotted circle all around. `strong` for the creature pointed at (and the legend).
+function drawSenses(g, x, y, c, unit, strong, color) {
+  if (c.vision_width === undefined) return;  // a picture from a world still on code from before senses were genes
+  const [fx, fy] = c.facing, mid = Math.atan2(fy, fx), half = c.vision_width / 360 * Math.PI;
+  g.save();
+  g.globalAlpha = strong ? 0.16 : 0.06;
+  g.fillStyle = hungerColour(c.energy);
+  g.beginPath();
+  if (c.vision_width >= 360) g.arc(x, y, c.vision_reach * unit, 0, 2 * Math.PI);
+  else { g.moveTo(x, y); g.arc(x, y, c.vision_reach * unit, mid - half, mid + half); g.closePath(); }
+  g.fill();
+  if (c.hearing > 0) {
+    g.globalAlpha = strong ? 0.6 : 0.22;
+    g.strokeStyle = color("--muted");
+    g.lineWidth = devicePixelRatio;
+    g.setLineDash([2 * devicePixelRatio, 4 * devicePixelRatio]);
+    g.beginPath(); g.arc(x, y, c.hearing * unit, 0, 2 * Math.PI); g.stroke();
+  }
+  g.restore();
+}
+
 function paint() {
   if (!watching) return;
   requestAnimationFrame(paint);
@@ -753,15 +812,18 @@ function paint() {
   if (canvas.width !== width) { canvas.width = width; canvas.height = height; }
   const unit = width / 50, g = canvas.getContext("2d"), line = Math.max(1.2, unit * 0.06);
   g.clearRect(0, 0, width, height);
+  const placed = picture.creatures.map((c) => {
+    const from = before.get(c.id) || c;  // a newborn appears where it is
+    return { c, x: (from.x + (c.x - from.x) * t) * unit, y: (from.y + (c.y - from.y) * t) * unit };
+  });
+  for (const { c, x, y } of placed) drawSenses(g, x, y, c, unit, c.id === watching.hover, color);  // under everything
   g.fillStyle = FOOD_COLOUR;  // food: small tan diamonds
   for (const food of picture.foods) {
     const x = food.x * unit, y = food.y * unit, d = Math.max(food.radius * unit, 2.5);
     g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill();
   }
   watching.drawn = [];
-  for (const c of picture.creatures) {
-    const from = before.get(c.id) || c;  // a newborn appears where it is
-    const x = (from.x + (c.x - from.x) * t) * unit, y = (from.y + (c.y - from.y) * t) * unit;
+  for (const { c, x, y } of placed) {
     const r = Math.max(c.radius * unit, 4);  // size: its genes, never changes
     const smart = drawCreature(g, x, y, r, c, wanderers, line, color);
     watching.drawn.push({ c, x: x / devicePixelRatio, y: y / devicePixelRatio, r: r / devicePixelRatio, smart });
@@ -773,18 +835,26 @@ document.getElementById("watch-canvas").addEventListener("mousemove", (event) =>
   if (!watching || !watching.drawn) return;
   const box = event.currentTarget.getBoundingClientRect(), mx = event.clientX - box.left, my = event.clientY - box.top;
   const hit = watching.drawn.find((d) => Math.hypot(d.x - mx, d.y - my) <= Math.max(d.r, 6));
+  watching.hover = hit ? hit.c.id : null;
   if (!hit) { tip.style.display = "none"; return; }
   const c = hit.c, did = { EAT: "ate", EAT_MISS: "ate at nothing", ATTACK: "attacked", ATTACK_MISS: "attacked and missed",
     MOVE: "moved", HIT_BY_ATTACK: "was attacked" }[c.did] || "rested";
   tip.textContent = `Size ${c.size.toFixed(2)} (its genes) · energy ${Math.round(c.energy * 100)} % of full · ` +
     `age ${c.age.toLocaleString()} of its ${c.lifespan.toLocaleString()} steps · generation ${c.generation} · ` +
     (hit.smart === null ? "too young to judge its intelligence" : `intelligence ${hit.smart.toFixed(2)}× random (${c.earned.toFixed(0)} energy earned for ${c.spent.toFixed(0)} spent)`) +
-    ` · just ${did}`;
+    ` · just ${did}` +
+    (c.vision_width === undefined ? "" : ` · sees ${Math.round(c.vision_width)}° up to ${c.vision_reach.toFixed(1)} away · ` +
+     `hears up to ${c.hearing.toFixed(1)} all around`) +
+    (c.fear_of_death === undefined ? "" : ` · fears death ${c.fear_of_death.toFixed(1)} · loves babies ` +
+     `${c.love_of_babies.toFixed(1)} · learns from others ${c.learns_from_others.toFixed(2)}`);
   tip.style.display = "block";
   tip.style.left = `${Math.min(event.clientX + 12, innerWidth - tip.offsetWidth - 8)}px`;
   tip.style.top = `${event.clientY + 14}px`;
 });
-document.getElementById("watch-canvas").addEventListener("mouseleave", () => { document.getElementById("tip").style.display = "none"; });
+document.getElementById("watch-canvas").addEventListener("mouseleave", () => {
+  document.getElementById("tip").style.display = "none";
+  if (watching) watching.hover = null;
+});
 
 document.getElementById("watch-out").addEventListener("click", () => jumpOut());
 document.getElementById("watch-speed").addEventListener("input", (event) => {

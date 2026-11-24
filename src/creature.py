@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-from .settings import EAT_MISS_COST, HUNTER_SHARE, SPEED, SPRINT
+from .settings import EAT_MISS_COST, HUNTER_SHARE, SENSE_COST, SPEED, SPRINT, TODAY_SENSES, VALUE_START
 
 if TYPE_CHECKING:
     from .brain import Brain
@@ -19,7 +19,7 @@ def is_family(a: Creature, b: Creature) -> bool:
 
 class Creature:
     RADIUS_FACTOR = 0.2
-    SENSE_RANGE = 3.0
+    SENSE_RANGE = 3.0  # the rules policy's own fixed sense range; every other creature senses by its genes
     ATTACK_RANGE_FACTOR = 3.0
     EAT_RANGE_FACTOR = 3.0
     POLICIES = ("brain", "learner", "random", "rules")
@@ -30,7 +30,10 @@ class Creature:
 
     def __init__(self, id: int, x: float, y: float, size: float, energy: float, policy: str,
                  brain: Optional[Brain] = None, parent_id: int = 0, generation: int = 0,
-                 slot: Optional[int] = None) -> None:
+                 slot: Optional[int] = None, vision_width: float = TODAY_SENSES[0],
+                 vision_reach: float = TODAY_SENSES[1], hearing: float = TODAY_SENSES[2],
+                 fear_of_death: float = VALUE_START[0], love_of_babies: float = VALUE_START[1],
+                 learns_from_others: float = VALUE_START[2]) -> None:
         if policy not in self.POLICIES:
             raise ValueError(f"policy must be one of {self.POLICIES}, got {policy!r}")
         if policy == "brain" and brain is None:
@@ -54,6 +57,14 @@ class Creature:
         self.radius = size * self.RADIUS_FACTOR
         self.attack_damage = size * 5.0
         self.attack_cost = size * 1.0
+        self.vision_width = vision_width  # degrees of its vision cone: a gene
+        self.vision_reach = vision_reach  # how far it sees: a gene
+        self.hearing = hearing  # how far it hears, all around: a gene
+        self.facing: Tuple[float, float] = (1.0, 0.0)  # where its cone points: the direction of its last move
+        self.fear_of_death = fear_of_death  # how bad dying feels to its learning: a gene
+        self.love_of_babies = love_of_babies  # how good a baby feels to its learning: a gene
+        self.learns_from_others = learns_from_others  # how much a lesson from another counts: a gene
+        self.hurt: Optional[Tuple[float, float, float]] = None  # one step after a hit: share taken, direction to the hitter
 
         self.age = 0
         self.lifespan: Optional[int] = None  # steps it lives; the world sets it when the creature is born
@@ -68,6 +79,10 @@ class Creature:
         """The one eat-range rule: close enough to take a bite."""
         reach = (self.radius + food.radius) * self.EAT_RANGE_FACTOR
         return math.hypot(food.x - self.x, food.y - self.y) <= reach
+
+    def sense_area(self) -> float:
+        """The ground its senses cover: its cone's area plus its hearing circle's."""
+        return self.vision_width / 360.0 * math.pi * self.vision_reach ** 2 + math.pi * self.hearing ** 2
 
     def _spend(self, amount: float, world: World) -> None:
         self.spent += amount
@@ -87,8 +102,9 @@ class Creature:
             self._attack(param, world)
         else:
             raise ValueError(f"unknown action {kind!r}")
-        self.energy = min(self.energy - world.settings.step_cost, self.max_energy)
-        self._spend(world.settings.step_cost, world)
+        living = world.settings.step_cost + SENSE_COST * self.sense_area()  # being alive, and its senses, by their area
+        self.energy = min(self.energy - living, self.max_energy)
+        self._spend(living, world)
 
     def _eat(self, food: Optional[Food], world: World) -> None:
         """The creature chose to eat: one bite of `food` if it is still there and within reach, otherwise a miss."""
@@ -113,6 +129,8 @@ class Creature:
         if distance > self.top_speed:
             dx, dy = dx * self.top_speed / distance, dy * self.top_speed / distance
             distance = self.top_speed
+        if distance > 0:
+            self.facing = (dx / distance, dy / distance)
         self.x = min(max(self.x + dx, self.radius), world.width - self.radius)
         self.y = min(max(self.y + dy, self.radius), world.height - self.radius)
         cost = distance * world.settings.move_cost * max(1.0, distance / self.velocity) ** 2  # sprinting costs the square
@@ -133,6 +151,9 @@ class Creature:
             return
         taken = min(target.energy, self.attack_damage)
         target.energy -= taken
+        dx, dy = self.x - target.x, self.y - target.y
+        distance = math.hypot(dx, dy)
+        target.hurt = (taken / target.max_energy, dx / distance if distance else 0.0, dy / distance if distance else 0.0)
         self.energy += HUNTER_SHARE * taken
         self._earn(HUNTER_SHARE * taken, world)
         self.last_action = "ATTACK"

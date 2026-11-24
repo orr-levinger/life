@@ -25,10 +25,10 @@ class TestSenses(unittest.TestCase):
     def test_nothing_seen(self):
         me = creature(10, 10)
         s = sense(me, world([me]))
-        self.assertEqual(s.vector.shape, (12,))
+        self.assertEqual(s.vector.shape, (21,))
         self.assertAlmostEqual(s.vector[0], 0.5)
         self.assertAlmostEqual(s.vector[1], 0.0)
-        np.testing.assert_array_equal(s.vector[2:], np.zeros(10))
+        np.testing.assert_array_equal(s.vector[2:], np.zeros(19))
         self.assertIsNone(s.food)
         self.assertIsNone(s.other)
         self.assertIsNone(s.on_food)
@@ -83,6 +83,39 @@ class TestSenses(unittest.TestCase):
         s = sense(me, world([me, hunter]))
         self.assertEqual(display_intent(me, ("MOVE", (-1.0, 0.0)), s), "RUN_AWAY")
         self.assertEqual(display_intent(me, ("ATTACK", hunter), s), "ATTACK")
+
+    def eye(self, x, y, width, reach, hearing, size=1.25):
+        me = Creature(1, x, y, size, size * 50.0, "random", vision_width=width, vision_reach=reach, hearing=hearing)
+        me.facing = (1.0, 0.0)
+        return me
+
+    def test_food_behind_the_cone_is_unseen(self):
+        me = self.eye(10, 10, width=90.0, reach=3.0, hearing=0.0)
+        self.assertEqual(sense(me, world([me], [food(8, 10)])).vector[3], 0.0)  # behind: unseen
+        ahead = sense(me, world([me], [food(12, 10)])).vector
+        self.assertEqual(ahead[3], 1.0)
+        self.assertAlmostEqual(ahead[4], 2.0 / 3.0)  # distance ÷ its own reach
+        self.assertEqual(sense(me, world([me], [food(11, 12)])).vector[3], 0.0)  # 63° off its heading: outside a 90° cone
+
+    def test_a_creature_behind_is_heard(self):
+        me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)
+        other = creature(9, 10, size=2.5, id_=2)
+        v = sense(me, world([me, other])).vector
+        self.assertEqual(v.shape, (21,))
+        self.assertEqual(v[7], 0.0)  # not seen
+        self.assertEqual(v[12], 1.0)  # heard
+        self.assertAlmostEqual(v[13], 0.5)  # distance ÷ its hearing radius
+        self.assertAlmostEqual(v[14], -1.0)  # behind it: west
+        self.assertAlmostEqual(v[15], 0.0, places=6)
+        self.assertAlmostEqual(v[16], 1.0)  # twice its size
+        far = creature(7.5, 10, id_=3)
+        self.assertEqual(sense(me, world([me, far])).vector[12], 0.0)  # 2.5 away: past its hearing
+
+    def test_food_is_not_heard(self):
+        me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)
+        v = sense(me, world([me], [food(9, 10)])).vector
+        self.assertEqual(v[3], 0.0)
+        self.assertTrue(np.all(v[12:17] == 0.0))
 
     def test_is_family(self):
         parent = creature(0, 0, id_=1)

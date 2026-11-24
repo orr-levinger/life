@@ -161,12 +161,116 @@ class TestSaves(unittest.TestCase):
             about = json.loads(str(arrays["about"]))
             about["format"] = 2
             for creature in about["creatures"]:  # what a format 2 save held
-                del creature["earned"], creature["spent"]
+                for key in ("earned", "spent", "vision_width", "vision_reach", "hearing", "facing", "fear_of_death",
+                            "love_of_babies", "learns_from_others", "hurt"):
+                    del creature[key]
             arrays["about"] = np.array(json.dumps(about))
+            arrays["brain.w1"] = arrays["brain.w1"][:, :12, :]  # 12 inputs then
             np.savez(path, **arrays)
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertEqual({(c.earned, c.spent) for c in loaded.creatures}, {(0.0, 0.0)})
         self.assertEqual([c.id for c in loaded.creatures], [c.id for c in world.creatures])
+
+    def test_a_format_3_save_gets_todays_senses(self):
+        for species in ("brain", "learner"):
+            learner = Learner(MAX_CREATURES, 0) if species == "learner" else None
+            world = make_world(seed=3, learner=learner, species=species)
+            populate(world, 5)
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "step.npz"
+                save_world(path, world, Dial(), {})
+                with zipfile.ZipFile(path) as z:
+                    arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+                about = json.loads(str(arrays["about"]))
+                about["format"] = 3
+                for creature in about["creatures"]:  # what a format 3 save held
+                    for key in ("vision_width", "vision_reach", "hearing", "facing", "fear_of_death", "love_of_babies",
+                                "learns_from_others", "hurt"):
+                        del creature[key]
+                arrays["about"] = np.array(json.dumps(about))
+                for name in list(arrays):  # 12 inputs then
+                    if name in ("brain.w1",) or name.split(".")[-1] in ("w1", "wh") and name.startswith("learner."):
+                        arrays[name] = arrays[name][..., :12, :]
+                old = {name: arrays[name] for name in arrays if name != "about"}
+                np.savez(path, **arrays)
+                loaded, _, _ = load_world(path, learner_seed=0)
+            self.assertEqual({(c.vision_width, c.vision_reach, c.hearing) for c in loaded.creatures}, {(360.0, 3.0, 1.5)})
+            if species == "learner":
+                for part in ("w1", "wh"):
+                    weights = loaded.learner.state()[f"params.{part}"]
+                    self.assertEqual(weights.shape[-2], 21)
+                    self.assertTrue(np.allclose(weights[..., 12:, :], 0.0))
+                    self.assertTrue(np.allclose(weights[..., :12, :], old[f"learner.params.{part}"]))
+
+    def test_a_format_4_save_gets_the_starting_values(self):
+        world = make_world(seed=6)
+        populate(world, 4)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 4
+            for creature in about["creatures"]:  # what a format 4 save held
+                for key in ("fear_of_death", "love_of_babies", "learns_from_others", "hurt"):
+                    del creature[key]
+            arrays["about"] = np.array(json.dumps(about))
+            arrays["brain.w1"] = arrays["brain.w1"][:, :17, :]  # 17 inputs then
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({(c.fear_of_death, c.love_of_babies, c.learns_from_others) for c in loaded.creatures},
+                         {(10.0, 10.0, 0.5)})
+
+    def test_a_format_4_brain_gets_four_silent_pain_inputs(self):
+        world = make_world(seed=7)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 4
+            for creature in about["creatures"]:  # what a format 4 save held
+                for key in ("fear_of_death", "love_of_babies", "learns_from_others", "hurt"):
+                    del creature[key]
+            arrays["about"] = np.array(json.dumps(about))
+            arrays["brain.w1"] = arrays["brain.w1"][:, :17, :]  # 17 inputs then
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        for i, creature in enumerate(loaded.creatures):
+            self.assertEqual(creature.brain.w1.shape, (21, 16))
+            self.assertTrue(np.allclose(creature.brain.w1[17:], 0.0))
+            self.assertTrue(np.allclose(creature.brain.w1[:17], arrays["brain.w1"][i]))
+            self.assertIsNone(creature.hurt)
+
+    def test_wider_brains_act_as_before_with_zero_new_weights(self):
+        world = make_world(seed=5)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 3
+            for creature in about["creatures"]:
+                for key in ("vision_width", "vision_reach", "hearing", "facing", "fear_of_death", "love_of_babies",
+                                "learns_from_others", "hurt"):
+                    del creature[key]
+            arrays["about"] = np.array(json.dumps(about))
+            arrays["brain.w1"] = arrays["brain.w1"][:, :12, :]
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        rng = np.random.default_rng(0)
+        for i, creature in enumerate(loaded.creatures):
+            x12 = rng.uniform(-1, 1, 12)
+            w1, b1, w2, b2 = (arrays[f"brain.{part}"][i] for part in ("w1", "b1", "w2", "b2"))
+            before = np.tanh(np.tanh(x12 @ w1 + b1) @ w2 + b2)
+            now = creature.brain.forward(np.concatenate([x12, rng.uniform(-1, 1, 9)]))  # heard or felt: no effect yet
+            self.assertTrue(np.allclose(before, now))
+
 
 if __name__ == "__main__":
     unittest.main()

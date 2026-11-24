@@ -111,6 +111,9 @@
   #watch .top span { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
   #watch .top label { margin-left: auto; font-size: 12px; display: flex; align-items: center; gap: 6px; }
   #watch canvas { width: 100%; display: block; border-radius: 6px; background: var(--page); }
+  #watch .zoom { display: inline-flex; align-items: center; gap: 4px; } #watch .zoom .act { padding: 2px 10px; }
+  #watch .zoom output { min-width: 3.2em; text-align: center; font-variant-numeric: tabular-nums; }
+  #watch-canvas { touch-action: none; cursor: crosshair; }
   #watch-legend { width: 100%; display: block; margin-top: 8px; }
   .resume { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; margin-top: 8px; }
   .resume select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
@@ -151,6 +154,8 @@
   <div class="top">
     <b id="watch-title"></b><span id="watch-where">waiting for the first picture…</span>
     <label>steps a second <input id="watch-speed" type="range" min="1" max="30" step="1" value="10"><output id="watch-speed-shown">10</output></label>
+    <span class="zoom"><button id="zoom-out" class="act" type="button" aria-label="Zoom out">−</button><output id="zoom-shown">1×</output><button id="zoom-in" class="act" type="button" aria-label="Zoom in">+</button></span>
+    <span id="follow-note" hidden>following <b id="follow-who"></b> <button id="follow-stop" class="act" type="button">Stop following</button></span>
     <button id="watch-out" class="act" type="button">Jump out</button>
   </div>
   <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
@@ -879,6 +884,19 @@ function drawSenses(g, x, y, c, unit, strong, color) {
   g.restore();
 }
 
+// The camera: how far it is zoomed, which point of the world is in the middle, and the creature it follows (if any).
+const ZOOMS = { least: 1, most: 12, follow: 4, step: 1.25 };
+const camera = { zoom: 1, x: null, y: null, follow: null };
+function zoomBy(factor) {
+  camera.zoom = Math.max(ZOOMS.least, Math.min(ZOOMS.most, camera.zoom * factor));
+  document.getElementById("zoom-shown").textContent = `${camera.zoom < 10 ? camera.zoom.toFixed(1) : Math.round(camera.zoom)}×`;
+}
+function follow(id, name) {
+  camera.follow = id;
+  document.getElementById("follow-note").hidden = id === null;
+  if (id !== null) { document.getElementById("follow-who").textContent = name; if (camera.zoom < ZOOMS.follow) zoomBy(ZOOMS.follow / camera.zoom); }
+}
+
 function paint() {
   if (!watching) return;
   requestAnimationFrame(paint);
@@ -889,14 +907,27 @@ function paint() {
   const run = data.find((r) => r.name === watching.name), wanderers = run ? scores(run).wanderers : null;
   const canvas = document.getElementById("watch-canvas"), ink = getComputedStyle(document.documentElement);
   const color = (name) => ink.getPropertyValue(name).trim();
-  const width = canvas.clientWidth * devicePixelRatio, height = width * 30 / 50;
-  if (canvas.width !== width) { canvas.width = width; canvas.height = height; }
-  const unit = width / 50, g = canvas.getContext("2d"), line = Math.max(1.2, unit * 0.06);
-  g.clearRect(0, 0, width, height);
+  const worldW = picture.width || 50, worldH = picture.height || 30;
+  const width = canvas.clientWidth * devicePixelRatio, height = width * worldH / worldW;
+  if (canvas.width !== width || canvas.height !== Math.round(height)) { canvas.width = width; canvas.height = height; }
+  const unit = width / worldW, g = canvas.getContext("2d"), line = Math.max(1.2, unit * 0.06);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, canvas.width, canvas.height);
   const placed = picture.creatures.map((c) => {
     const from = before.get(c.id) || c;  // a newborn appears where it is
     return { c, x: (from.x + (c.x - from.x) * t) * unit, y: (from.y + (c.y - from.y) * t) * unit };
   });
+  const followed = camera.follow === null ? null : placed.find((p) => p.c.id === camera.follow);
+  if (camera.follow !== null && !followed) follow(null);  // it died: the camera stays where it was
+  if (followed) { camera.x = followed.x / unit; camera.y = followed.y / unit; }
+  if (camera.x === null) { camera.x = worldW / 2; camera.y = worldH / 2; }
+  const halfW = worldW / 2 / camera.zoom, halfH = worldH / 2 / camera.zoom;  // keep the view inside the world
+  if (!followed) { camera.x = Math.max(halfW, Math.min(worldW - halfW, camera.x)); camera.y = Math.max(halfH, Math.min(worldH - halfH, camera.y)); }
+  const toScreen = (x, y) => [(x - camera.x * unit) * camera.zoom + canvas.width / 2, (y - camera.y * unit) * camera.zoom + canvas.height / 2];
+  watching.toWorld = (sx, sy) => [((sx * devicePixelRatio - canvas.width / 2) / camera.zoom + camera.x * unit) / unit,
+                                  ((sy * devicePixelRatio - canvas.height / 2) / camera.zoom + camera.y * unit) / unit];
+  g.setTransform(camera.zoom, 0, 0, camera.zoom, canvas.width / 2 - camera.x * unit * camera.zoom,
+                 canvas.height / 2 - camera.y * unit * camera.zoom);
   for (const { c, x, y } of placed) drawSenses(g, x, y, c, unit, c.id === watching.hover, color);  // under everything
   g.fillStyle = FOOD_COLOUR;  // food: small tan diamonds
   for (const food of picture.foods) {
@@ -907,9 +938,64 @@ function paint() {
   for (const { c, x, y } of placed) {
     const r = Math.max(c.radius * unit, 4);  // size: its genes, never changes
     const smart = drawCreature(g, x, y, r, c, wanderers, line, color);
-    watching.drawn.push({ c, x: x / devicePixelRatio, y: y / devicePixelRatio, r: r / devicePixelRatio, smart });
+    const [sx, sy] = toScreen(x, y);
+    watching.drawn.push({ c, x: sx / devicePixelRatio, y: sy / devicePixelRatio, r: r * camera.zoom / devicePixelRatio, smart });
   }
+  if (followed) {  // the one it follows: a ring
+    g.strokeStyle = color("--ink"); g.lineWidth = line;
+    g.beginPath(); g.arc(followed.x, followed.y, Math.max(followed.c.radius * unit, 4) * 1.9, 0, 2 * Math.PI); g.stroke();
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
 }
+
+const watchCanvas = document.getElementById("watch-canvas");
+watchCanvas.addEventListener("wheel", (event) => {  // zoom toward the pointer (or the followed creature)
+  if (!watching || !watching.toWorld) return;
+  event.preventDefault();
+  const box = watchCanvas.getBoundingClientRect(), [wx, wy] = watching.toWorld(event.clientX - box.left, event.clientY - box.top);
+  const before = camera.zoom;
+  zoomBy(event.deltaY < 0 ? ZOOMS.step : 1 / ZOOMS.step);
+  if (camera.follow === null && camera.x !== null) {  // the point under the pointer stays under it
+    camera.x = wx - (wx - camera.x) * before / camera.zoom;
+    camera.y = wy - (wy - camera.y) * before / camera.zoom;
+  }
+}, { passive: false });
+const pointers = new Map();
+let dragged = false, pinchFrom = null;
+watchCanvas.addEventListener("pointerdown", (event) => {
+  pointers.set(event.pointerId, [event.clientX, event.clientY]);
+  dragged = false;
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchFrom = { gap: Math.hypot(a[0] - b[0], a[1] - b[1]), zoom: camera.zoom }; }
+});
+watchCanvas.addEventListener("pointermove", (event) => {
+  if (!pointers.has(event.pointerId) || !watching || !watching.toWorld) return;
+  const [px, py] = pointers.get(event.pointerId);
+  pointers.set(event.pointerId, [event.clientX, event.clientY]);
+  if (pointers.size === 2 && pinchFrom) {  // a pinch zooms
+    const [a, b] = [...pointers.values()];
+    zoomBy(pinchFrom.zoom * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinchFrom.gap / camera.zoom);
+    dragged = true;
+    return;
+  }
+  if (camera.follow === null && Math.hypot(event.clientX - px, event.clientY - py) > 0) {  // a drag moves the view
+    const [ax, ay] = watching.toWorld(px, py), [bx, by] = watching.toWorld(event.clientX, event.clientY);
+    camera.x -= bx - ax; camera.y -= by - ay;
+    dragged = dragged || Math.abs(event.movementX) + Math.abs(event.movementY) > 2;
+  }
+});
+const lift = (event) => { pointers.delete(event.pointerId); if (pointers.size < 2) pinchFrom = null; };
+watchCanvas.addEventListener("pointerup", lift);
+watchCanvas.addEventListener("pointercancel", lift);
+watchCanvas.addEventListener("click", (event) => {  // a creature: follow it; empty ground: stop following
+  if (dragged || !watching || !watching.drawn) return;
+  const box = watchCanvas.getBoundingClientRect(), mx = event.clientX - box.left, my = event.clientY - box.top;
+  const hit = watching.drawn.find((d) => Math.hypot(d.x - mx, d.y - my) <= Math.max(d.r * 1.6, 18));  // a generous target: they move
+  follow(hit ? hit.c.id : null, hit ? `creature ${hit.c.id} (generation ${hit.c.generation})` : "");
+});
+document.getElementById("zoom-in").addEventListener("click", () => zoomBy(ZOOMS.step));
+document.getElementById("zoom-out").addEventListener("click", () => zoomBy(1 / ZOOMS.step));
+document.getElementById("follow-stop").addEventListener("click", () => follow(null));
+document.addEventListener("keydown", (event) => { if (event.key === "Escape" && camera.follow !== null) follow(null); });
 
 document.getElementById("watch-canvas").addEventListener("mousemove", (event) => {  // point at a creature: its numbers
   const tip = document.getElementById("tip");

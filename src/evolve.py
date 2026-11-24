@@ -107,7 +107,7 @@ def _exam_brains(world: World, sample: Sequence[Creature]) -> List[Any]:
 def world_view(world: World) -> Dict[str, Any]:
     """Where everything is, for the page's picture of a watched world."""
     return {
-        "step": world.step_count,
+        "step": world.step_count, "width": world.width, "height": world.height,
         "creatures": [{"id": c.id, "x": round(c.x, 3), "y": round(c.y, 3), "radius": round(c.radius, 3), "size": round(c.size, 3),
                        "energy": round(max(c.energy, 0.0) / c.max_energy, 3),
                        "heading": [round(v, 3) for v in c.intended_vector], "did": c.last_action,

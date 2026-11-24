@@ -146,12 +146,13 @@
   </div>
   <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
   <div class="key">
-    <span><i style="background:var(--food)"></i>food</span>
-    <span>circle: a creature, as big as it is (its size never changes); its colour is its hunger, red: hungry, yellow: half full, green: full enough for a baby; the line shows where it is heading</span>
-    <span><i style="border:2px solid var(--eat)"></i>ate</span>
-    <span><i style="border:2px solid var(--miss)"></i>ate at nothing</span>
-    <span><i style="border:2px solid var(--warn)"></i>attacked</span>
-    <span><i style="border:2px solid var(--muted)"></i>moved</span>
+    <span>tan diamond: food</span>
+    <span>circle: a creature, as big as its genes made it (its size never changes)</span>
+    <span>colour: hunger, red: hungry, yellow: half full, green: full enough for a baby</span>
+    <span>arc: age, how much of its own lifespan it has lived; dotted ring: past it</span>
+    <span>eyes: intelligence, small and grey below random wanderers, bigger and white the smarter</span>
+    <span>flash ring: <i style="border:2px solid var(--eat)"></i>ate <i style="border:2px solid var(--miss)"></i>ate at nothing <i style="border:2px solid var(--warn)"></i>attacked</span>
+    <span>point at a creature to see its numbers</span>
   </div>
 </section>
 <div id="runs"></div>
@@ -653,6 +654,13 @@ function hungerColour(energy) {
   return `rgb(${HUNGER[HUNGER.length - 1][1].join(",")})`;
 }
 
+const FOOD_COLOUR = "#b4977a", MIN_SPENT = 5;  // a creature's intelligence is shown once it has spent this much
+const FLASH = { EAT: "--eat", EAT_MISS: "--miss", ATTACK: "--warn", ATTACK_MISS: "--warn" };
+
+function creatureSmarts(c, wanderers) {  // its own energy earned ÷ spent, against the random wanderers' in the last exam
+  return c.spent >= MIN_SPENT && wanderers ? (c.earned / c.spent) / wanderers : null;
+}
+
 function paint() {
   if (!watching) return;
   requestAnimationFrame(paint);
@@ -660,31 +668,72 @@ function paint() {
   if (!picture) return;
   const t = watching.prev ? Math.min(1, (performance.now() - watching.curAt) / watching.span) : 1;
   const before = new Map((watching.prev ? watching.prev.creatures : []).map((c) => [c.id, c]));
+  const run = data.find((r) => r.name === watching.name), wanderers = run ? scores(run).wanderers : null;
   const canvas = document.getElementById("watch-canvas"), ink = getComputedStyle(document.documentElement);
   const color = (name) => ink.getPropertyValue(name).trim();
   const width = canvas.clientWidth * devicePixelRatio, height = width * 30 / 50;
   if (canvas.width !== width) { canvas.width = width; canvas.height = height; }
-  const unit = width / 50, g = canvas.getContext("2d");
+  const unit = width / 50, g = canvas.getContext("2d"), line = Math.max(1.2, unit * 0.06);
   g.clearRect(0, 0, width, height);
-  g.fillStyle = color("--food");
-  for (const food of picture.foods) { g.beginPath(); g.arc(food.x * unit, food.y * unit, Math.max(food.radius * unit, 1.5), 0, 2 * Math.PI); g.fill(); }
-  const outline = { EAT: "--eat", EAT_MISS: "--miss", ATTACK: "--warn", ATTACK_MISS: "--warn" };
+  g.fillStyle = FOOD_COLOUR;  // food: small tan diamonds
+  for (const food of picture.foods) {
+    const x = food.x * unit, y = food.y * unit, d = Math.max(food.radius * unit, 2.5);
+    g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill();
+  }
+  watching.drawn = [];
   for (const c of picture.creatures) {
     const from = before.get(c.id) || c;  // a newborn appears where it is
     const x = (from.x + (c.x - from.x) * t) * unit, y = (from.y + (c.y - from.y) * t) * unit;
-    const r = Math.max(c.radius * unit, 3);  // its size: its genes, never smaller when hungry
-    g.fillStyle = hungerColour(c.energy);
+    const r = Math.max(c.radius * unit, 4);  // size: its genes, never changes
+    g.fillStyle = hungerColour(c.energy);  // hunger: the body's colour
     g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
-    g.strokeStyle = color(outline[c.did] || "--muted");
-    g.lineWidth = Math.max(1.5, unit * 0.08);
+    g.lineWidth = line;  // what it just did: a flash ring
+    g.strokeStyle = FLASH[c.did] ? color(FLASH[c.did]) : "rgba(0,0,0,0.35)";
     g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke();
-    const [dx, dy] = c.heading, length = Math.hypot(dx, dy);
+    const lived = c.lifespan ? c.age / c.lifespan : 0;  // age: an arc of its own lifespan
+    g.strokeStyle = color("--muted");
+    g.beginPath(); g.arc(x, y, r + line * 2, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, lived)); g.stroke();
+    if (lived >= 1) {  // past its lifespan: a dotted outer ring
+      g.setLineDash([line, line * 2]);
+      g.beginPath(); g.arc(x, y, r + line * 4, 0, 2 * Math.PI); g.stroke();
+      g.setLineDash([]);
+    }
+    const [hx, hy] = c.heading, length = Math.hypot(hx, hy);
+    const fx = length ? hx / length : 1, fy = length ? hy / length : 0;  // where it looks
+    const smart = creatureSmarts(c, wanderers);
+    const eye = r * 0.22 * Math.max(0.6, Math.min(1.8, smart ?? 0.6));  // intelligence: the eyes
+    for (const side of [-1, 1]) {
+      const ex = x + fx * r * 0.35 - fy * r * 0.38 * side, ey = y + fy * r * 0.35 + fx * r * 0.38 * side;
+      g.fillStyle = smart !== null && smart >= 1 ? "#ffffff" : "#a8a8a8";
+      g.beginPath(); g.arc(ex, ey, eye, 0, 2 * Math.PI); g.fill();
+      g.fillStyle = "#111";
+      g.beginPath(); g.arc(ex + fx * eye * 0.4, ey + fy * eye * 0.4, eye * 0.55, 0, 2 * Math.PI); g.fill();
+    }
     if (length > 0) {
       g.strokeStyle = color("--ink");
-      g.beginPath(); g.moveTo(x, y); g.lineTo(x + (dx / length) * r * 1.8, y + (dy / length) * r * 1.8); g.stroke();
+      g.beginPath(); g.moveTo(x + fx * r, y + fy * r); g.lineTo(x + fx * r * 1.8, y + fy * r * 1.8); g.stroke();
     }
+    watching.drawn.push({ c, x: x / devicePixelRatio, y: y / devicePixelRatio, r: r / devicePixelRatio, smart });
   }
 }
+
+document.getElementById("watch-canvas").addEventListener("mousemove", (event) => {  // point at a creature: its numbers
+  const tip = document.getElementById("tip");
+  if (!watching || !watching.drawn) return;
+  const box = event.currentTarget.getBoundingClientRect(), mx = event.clientX - box.left, my = event.clientY - box.top;
+  const hit = watching.drawn.find((d) => Math.hypot(d.x - mx, d.y - my) <= Math.max(d.r, 6));
+  if (!hit) { tip.style.display = "none"; return; }
+  const c = hit.c, did = { EAT: "ate", EAT_MISS: "ate at nothing", ATTACK: "attacked", ATTACK_MISS: "attacked and missed",
+    MOVE: "moved", HIT_BY_ATTACK: "was attacked" }[c.did] || "rested";
+  tip.textContent = `Size ${c.size.toFixed(2)} (its genes) · energy ${Math.round(c.energy * 100)} % of full · ` +
+    `age ${c.age.toLocaleString()} of its ${c.lifespan.toLocaleString()} steps · generation ${c.generation} · ` +
+    (hit.smart === null ? "too young to judge its intelligence" : `intelligence ${hit.smart.toFixed(2)}× random (${c.earned.toFixed(0)} energy earned for ${c.spent.toFixed(0)} spent)`) +
+    ` · just ${did}`;
+  tip.style.display = "block";
+  tip.style.left = `${Math.min(event.clientX + 12, innerWidth - tip.offsetWidth - 8)}px`;
+  tip.style.top = `${event.clientY + 14}px`;
+});
+document.getElementById("watch-canvas").addEventListener("mouseleave", () => { document.getElementById("tip").style.display = "none"; });
 
 document.getElementById("watch-out").addEventListener("click", () => jumpOut());
 document.getElementById("watch-speed").addEventListener("input", (event) => {

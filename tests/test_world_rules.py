@@ -72,6 +72,21 @@ class TestEating(unittest.TestCase):
         mover.apply_action(("MOVE", (3.0, 4.0)), w)
         self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * NO_FOOD.step_cost + 1.0 * NO_FOOD.move_cost)
 
+    def test_each_creature_counts_its_own_energy(self):
+        w = make_world()
+        eater = add(w, 10, 10, policy="brain", brain=fixed_brain(EAT))
+        misser = add(w, 30, 20, policy="brain", brain=fixed_brain(EAT))
+        w.foods.append(food(10, 10))
+        for _ in range(3):
+            w.step()
+        mover = add(w, 20, 5, size=1.0)
+        mover.apply_action(("MOVE", (3.0, 4.0)), w)
+        self.assertAlmostEqual(eater.earned, 3.0)
+        self.assertAlmostEqual(misser.earned, 0.0)
+        self.assertAlmostEqual(misser.spent, 3 * (EAT_MISS_COST + NO_FOOD.step_cost))
+        self.assertAlmostEqual(sum(c.earned for c in w.creatures), w.energy_earned)
+        self.assertAlmostEqual(sum(c.spent for c in w.creatures), w.energy_spent)
+
     def test_no_bite_without_choosing_to_eat(self):
         w = make_world()
         c = add(w, 10, 10, policy="brain", brain=fixed_brain(STAY))

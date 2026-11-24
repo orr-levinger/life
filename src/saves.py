@@ -27,7 +27,7 @@ from .settings import MAX_CREATURES
 from .world import World
 
 SAVE_EVERY = 2000  # steps between two saves of a world
-SAVE_FORMAT = 2  # 2: Auto's state also keeps the owner's hunters switch (2026-11-24)
+SAVE_FORMAT = 3  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent (2026-11-24)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -75,7 +75,8 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
         "creatures": [{"id": c.id, "slot": c.slot, "x": c.x, "y": c.y, "size": c.size, "policy": c.policy,
                        "parent_id": c.parent_id, "generation": c.generation, "energy": c.energy, "age": c.age,
                        "lifespan": c.lifespan, "food_eaten": c.food_eaten, "last_action": c.last_action,
-                       "intent": c.intent, "heading": list(c.intended_vector), "brain": brain}
+                       "intent": c.intent, "heading": list(c.intended_vector), "brain": brain,
+                       "earned": c.earned, "spent": c.spent}
                       for c, brain in zip(world.creatures, brain_of)],
         "foods": [{"x": f.x, "y": f.y, "energy": f.energy, "remaining_duration": f.remaining_duration,
                    "radius": f.radius} for f in world.foods],  # a food keeps the radius it was made with as it is eaten
@@ -102,6 +103,8 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         raise SaveError(f"{path} cannot be read: {problem}") from problem
     if about.get("format") == 1:
         about = _from_format_1(about)
+    if about.get("format") == 2:
+        about = _from_format_2(about)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -117,6 +120,11 @@ def _food(saved: Dict[str, Any]) -> Food:
 def _from_format_1(about: Dict[str, Any]) -> Dict[str, Any]:
     """A format 1 save had no owner's hunters switch: the owner had not set one."""
     return {**about, "format": 2, "dial": {**about["dial"], "hunters": None}}
+
+
+def _from_format_2(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 2 save had no creature's own energy counts: they start at zero from here."""
+    return {**about, "format": 3, "creatures": [{**c, "earned": 0.0, "spent": 0.0} for c in about["creatures"]]}
 
 
 def save_header(path: Path) -> Dict[str, Any]:
@@ -155,6 +163,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.energy, creature.age, creature.lifespan = saved["energy"], saved["age"], saved["lifespan"]
         creature.food_eaten, creature.last_action, creature.intent = saved["food_eaten"], saved["last_action"], saved["intent"]
         creature.intended_vector = tuple(saved["heading"])
+        creature.earned, creature.spent = saved["earned"], saved["spent"]
         world.add_creature(creature)
     world.foods = [_food(f) for f in about["foods"]]
     return world, Dial.from_state(about["dial"]), about["extra"]

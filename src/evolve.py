@@ -109,10 +109,11 @@ def world_view(world: World) -> Dict[str, Any]:
     """Where everything is, for the page's picture of a watched world."""
     return {
         "step": world.step_count,
-        "creatures": [{"id": c.id, "x": round(c.x, 3), "y": round(c.y, 3), "radius": round(c.radius, 3),
+        "creatures": [{"id": c.id, "x": round(c.x, 3), "y": round(c.y, 3), "radius": round(c.radius, 3), "size": round(c.size, 3),
                        "energy": round(max(c.energy, 0.0) / c.max_energy, 3),
                        "heading": [round(v, 3) for v in c.intended_vector], "did": c.last_action,
-                       "generation": c.generation} for c in world.creatures],
+                       "generation": c.generation, "age": c.age, "lifespan": c.lifespan,
+                       "earned": round(c.earned, 2), "spent": round(c.spent, 2)} for c in world.creatures],
         "foods": [{"x": round(f.x, 3), "y": round(f.y, 3), "radius": round(f.radius, 3)} for f in world.foods],
     }
 

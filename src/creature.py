@@ -57,6 +57,8 @@ class Creature:
         self.age = 0
         self.lifespan: Optional[int] = None  # steps it lives; the world sets it when the creature is born
         self.food_eaten = 0.0
+        self.earned = 0.0  # energy it got by eating and hunting, over its life: with `spent`, its own intelligence
+        self.spent = 0.0  # energy it used on moving, living, eating at nothing and attacking
         self.last_action = "NONE"
         self.intent = "REST"  # display only
         self.intended_vector: Tuple[float, float] = (0.0, 0.0)  # display only
@@ -65,6 +67,14 @@ class Creature:
         """The one eat-range rule: close enough to take a bite."""
         reach = (self.radius + food.radius) * self.EAT_RANGE_FACTOR
         return math.hypot(food.x - self.x, food.y - self.y) <= reach
+
+    def _spend(self, amount: float, world: World) -> None:
+        self.spent += amount
+        world.energy_spent += amount
+
+    def _earn(self, amount: float, world: World) -> None:
+        self.earned += amount
+        world.energy_earned += amount
 
     def apply_action(self, action: Tuple[str, Any], world: World) -> None:
         kind, param = action
@@ -77,13 +87,13 @@ class Creature:
         else:
             raise ValueError(f"unknown action {kind!r}")
         self.energy = min(self.energy - world.settings.step_cost, self.max_energy)
-        world.energy_spent += world.settings.step_cost
+        self._spend(world.settings.step_cost, world)
 
     def _eat(self, food: Optional[Food], world: World) -> None:
         """The creature chose to eat: one bite of `food` if it is still there and within reach, otherwise a miss."""
         if food is None or food not in world.foods or food.energy <= 0 or not self.can_reach(food):
             self.energy -= EAT_MISS_COST
-            world.energy_spent += EAT_MISS_COST
+            self._spend(EAT_MISS_COST, world)
             self.last_action = "EAT_MISS"
             return
         amount = min(1.0, food.energy)
@@ -91,7 +101,7 @@ class Creature:
         self.energy += amount
         self.food_eaten += amount
         world.total_bites += 1
-        world.energy_earned += amount
+        self._earn(amount, world)
         if food.energy <= 0:
             world.foods.remove(food)
         self.last_action = "EAT"
@@ -105,7 +115,7 @@ class Creature:
         self.x = min(max(self.x + dx, self.radius), world.width - self.radius)
         self.y = min(max(self.y + dy, self.radius), world.height - self.radius)
         self.energy -= distance * world.settings.move_cost
-        world.energy_spent += distance * world.settings.move_cost
+        self._spend(distance * world.settings.move_cost, world)
         self.last_action = "MOVE"
 
     def _attack(self, target: Creature, world: World) -> None:
@@ -113,7 +123,7 @@ class Creature:
             self.last_action = "ATTACK_OFF"
             return
         self.energy -= self.attack_cost
-        world.energy_spent += self.attack_cost
+        self._spend(self.attack_cost, world)
         attack_range = (self.radius + target.radius) * self.ATTACK_RANGE_FACTOR
         if (target not in world.creatures or target.energy <= 0 or is_family(self, target)
                 or math.hypot(target.x - self.x, target.y - self.y) > attack_range):
@@ -122,7 +132,7 @@ class Creature:
         taken = min(target.energy, self.attack_damage)
         target.energy -= taken
         self.energy += HUNTER_SHARE * taken
-        world.energy_earned += HUNTER_SHARE * taken
+        self._earn(HUNTER_SHARE * taken, world)
         self.last_action = "ATTACK"
         target.last_action = "HIT_BY_ATTACK"
         if target.energy <= 0:

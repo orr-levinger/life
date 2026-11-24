@@ -621,15 +621,15 @@ Spec: "How a creature looks in Jump in".
 `src/evolve.py` (`world_view`: `age`, `lifespan`, `earned`, `spent`), `src/viewer.html` (the look, the legend, hover),
 `tests/test_world_rules.py`, `tests/test_saves.py`, `tests/test_evolve.py`, `tests/test_viewer.py`.
 
-- [ ] **Step 1: Write the failing tests:** `test_each_creature_counts_its_own_energy` (the creatures' counts add up to
+- [x] **Step 1: Write the failing tests:** `test_each_creature_counts_its_own_energy` (the creatures' counts add up to
   the world's), `test_a_format_2_save_is_converted` (counts start at zero), the save round trip keeping the counts,
   `test_watched_world_writes_its_view` with `age`, `lifespan`, `earned`, `spent`, `test_page_explains_the_creature_look`.
-- [ ] **Step 2: Run them to see them fail.**
-- [ ] **Step 3: Implement** the files above.
-- [ ] **Step 4: Run the suite** · Expected: `OK`.
-- [ ] **Step 5: Update code** on the owner's world, then look in Jump in: sizes, colours, age arcs, eyes and flashes
+- [x] **Step 2: Run them to see them fail.**
+- [x] **Step 3: Implement** the files above.
+- [x] **Step 4: Run the suite** · Expected: `OK`.
+- [x] **Step 5: Update code** on the owner's world, then look in Jump in: sizes, colours, age arcs, eyes and flashes
   show; food is a tan diamond; pointing at a creature shows its numbers. No console errors. In the ledger.
-- [ ] **Step 6: Commit** as `feat: how a creature looks in Jump in`.
+- [x] **Step 6: Commit** as `feat: how a creature looks in Jump in`.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 

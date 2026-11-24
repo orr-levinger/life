@@ -33,7 +33,7 @@ def picture(world):
     """Everything about a world that a save must keep."""
     return {
         "creatures": [(c.id, c.slot, c.x, c.y, c.size, c.policy, c.parent_id, c.generation, c.energy, c.age,
-                       c.lifespan, c.food_eaten, c.last_action, tuple(c.intended_vector),
+                       c.lifespan, c.food_eaten, c.last_action, tuple(c.intended_vector), c.earned, c.spent,
                        None if c.brain is None else tuple(a.tobytes() for a in (c.brain.w1, c.brain.b1, c.brain.w2, c.brain.b2)))
                       for c in world.creatures],
         "foods": [(f.x, f.y, f.energy, f.remaining_duration, f.radius) for f in world.foods],
@@ -147,6 +147,26 @@ class TestSaves(unittest.TestCase):
             np.savez(path, **arrays)
             _, dial, _ = load_world(path, learner_seed=0)
         self.assertEqual(dial.state()["hunters"], None)
+
+    def test_a_format_2_save_is_converted(self):
+        world = make_world(seed=3)
+        populate(world, 5)
+        for _ in range(20):
+            world.step()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 2
+            for creature in about["creatures"]:  # what a format 2 save held
+                del creature["earned"], creature["spent"]
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({(c.earned, c.spent) for c in loaded.creatures}, {(0.0, 0.0)})
+        self.assertEqual([c.id for c in loaded.creatures], [c.id for c in world.creatures])
 
 if __name__ == "__main__":
     unittest.main()

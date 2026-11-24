@@ -570,6 +570,37 @@ newcomers) -> int` (the nudges made). `MANY`, `WELL_FED`, `FEW`, `HUNGRY` go.
 - [ ] **Step 6: Commit** as `feat: Auto aims at 64 alive by the distance and the rate`; `git show --stat HEAD` lists exactly
   this task's files.
 
+### Task 4o: Running worlds take new code; smooth motion; energy as fill; the hunting chart; hunters in Auto (added 2026-11-24)
+
+Spec: "A running world takes new code, and what Jump in shows".
+
+**Files:** Modify: `src/control.py` (`Control.update: bool`), `src/evolve.py` (on `update`: save, end, and hand over
+to a new process that resumes **into the same folder**, `--resume <save> --continue`; worlds start in their own process
+group so a page server restart leaves them running), `src/viewer.py` (`POST /control {update}`; launching detached),
+`src/scoreboard.py` (column `chase`, `attacks`), `src/world.py` or `src/creature.py` (counting attacks),
+`src/viewer.html` (Update code; the gliding picture; energy as fill; the Fleeing and chasing chart; the hunters switch
+in Auto), their tests.
+
+**Interfaces:** `python -m src.evolve --resume <save> --continue --out <its own run>`: appends to the run's scoreboard
+from the save's step (rows after it, written before the update, are dropped first), keeps `run.json` and adds
+`updates: [{step, at}]`; `Scoreboard` columns `chase` (share of moves toward a smaller stranger in sight) and `attacks`
+(attacks that landed, in the window).
+
+- [ ] **Step 1: Write the failing tests:** `test_update_goes_on_in_the_same_run` (rows before the save kept, the next
+  row at save + 250, one run folder, `updates` recorded), `test_update_drops_rows_after_the_save`,
+  `test_updated_world_is_the_same_world` (instinct: steps after the update equal the old world's), `test_chase_counts_moving_toward_smaller`,
+  `test_attacks_are_counted`, `test_hunters_switch_in_auto`, `test_update_is_written_to_the_run`,
+  `test_page_has_update_code_and_the_hunting_chart`.
+- [ ] **Step 2: Run them to see them fail.**
+- [ ] **Step 3: Implement** the files above.
+- [ ] **Step 4: Run the suite** · Expected: `OK`.
+- [ ] **Step 5: The owner's world first:** with the owner watching, press Update code on the 21:22 world (34k+ steps):
+  the same card goes on from its step with the new code; its History row and charts are unbroken. Then restart the page
+  server and see both worlds still running. In the ledger.
+- [ ] **Step 6: Look at it** in Jump in: creatures glide; circles keep their size as energy changes; the hunting chart
+  shows with hunters on; the hunters switch works in Auto. No console errors. In the ledger.
+- [ ] **Step 7: Commit** as `feat: running worlds take new code; smooth motion; the hunting chart`.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.
@@ -642,4 +673,4 @@ learner baby's size mutation; the energy cost of a brain), `src/stages.py` (the 
    Step 5 showed intelligence and the level reached not below Task 4d's.
 7. **The proof was judged:** Task 7 Step 3's output is shown to the owner; every failed criterion is reported as failed,
    first, with its numbers.
-8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 4j, 4k, 4l, 4m, 4n, 5 and 6.
+8. **Committed:** `git log --oneline` on `evolve-from-scratch` shows one commit per Task 1, 2, 3, 4d (with 4e), 4f, 4g, 4h, 4i, 4j, 4k, 4l, 4m, 4n, 4o, 5 and 6.

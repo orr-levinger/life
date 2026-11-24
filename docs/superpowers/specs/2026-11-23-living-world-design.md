@@ -254,6 +254,30 @@ The owner: "what are the numbers, what was the score, this view gives very littl
   "only smarter than random", "only with saves". A line says how many of the worlds are shown, with "Clear filters".
   The page remembers the sort and filters in this browser.
 
+### A running world takes new code, and what Jump in shows (the owner, 2026-11-24)
+
+The owner: "we should have this decoupled so a running simulation can handle new updated code" · "if it's too hard,
+pause the running one, take a snapshot, fix the code and resume my run" · "it's in 33K steps, I don't want to lose it" ·
+"motion of creatures should be smooth" · "now that Hunters is on we need a new chart showing running away from bigger
+creatures and chasing smaller creatures" · "creature size is fixed! they don't shrink when they lose energy … an elephant
+loses weight but doesn't shrink" · "why isn't the Hunters toggle editable?"
+
+- **Update code:** a running world's card gets **Update code**. The world saves itself at the step it is at, ends, and
+  goes on at once from that save **in the same run** with the code as it is now: the same card, the same History row,
+  its charts unbroken (one mark "code updated" on them). Nothing of the world is lost; a learning animal's last few
+  unfinished steps of experience (fewer than 65) start afresh, as with any save. A world the page server did not start
+  (from the command line) can be updated the same way. The page server itself can be restarted without stopping any
+  world: worlds do not belong to it.
+- **Smooth motion in Jump in:** the picture glides each creature from where it was to where it is between two frames,
+  instead of jumping. (How far a creature may move in one step is unchanged.)
+- **Size never changes:** a creature's circle is always as big as its size (its genes). Its energy shows as how full the
+  circle is coloured (pale: hungry, solid: full), never as a smaller circle.
+- **The hunting chart:** "Fleeing and chasing": when a stranger at least 1.5 times bigger is in sight, the share of
+  moves away from it (as today's flee score); when a stranger at most two-thirds its size is in sight, the share of
+  moves toward it (new: `chase`), and attacks per 1,000 steps. Shown while hunters are on.
+- **The hunters switch works in Auto too:** the owner may switch hunters on or off in either mode; in Auto it stays as
+  set until Auto's own turn to switch it at difficulty 24.
+
 ### The intelligence exam
 
 The owner: "At the end, whoever survives is smart in nature." · "Intelligence should be rewards / waste or something

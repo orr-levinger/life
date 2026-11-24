@@ -40,15 +40,21 @@ class TestCosts(unittest.TestCase):
         w = make_world()
         c = add(w, 10, 10, size=1.0)
         c.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(c.x, 10.24)  # at most its top speed, 0.4 a step for size 1
-        self.assertAlmostEqual(c.y, 10.32)
-        sprint = 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 2  # faster than cruising costs the square of the speed
+        self.assertAlmostEqual(c.x, 10.48)  # at most its top speed, 0.8 a step for size 1
+        self.assertAlmostEqual(c.y, 10.64)
+        sprint = 0.8 * NO_FOOD.move_cost * (0.8 / 0.25) ** 2  # faster than cruising costs the square of the speed
         self.assertAlmostEqual(c.energy, 50.0 - sprint - LIVING)
+
+    def test_sprinting_is_faster_than_cruising_at_every_size(self):
+        w = make_world()
+        for i, size in enumerate((0.5, 0.56, 0.62, 1.0, 2.0)):
+            c = add(w, 5 + 8 * i, 10, size=size)
+            self.assertGreater(c.top_speed, 1.1 * c.velocity, size)  # a burst is clearly faster than its normal speed
 
     def test_top_speed_grows_with_size(self):
         w = make_world()
         tops = [add(w, 5 + 10 * i, 10, size=size).top_speed for i, size in enumerate((0.5, 1.0, 2.0))]
-        self.assertEqual([round(t, 3) for t in tops], [0.5, 0.4, 0.566])
+        self.assertEqual([round(t, 3) for t in tops], [0.566, 0.8, 1.131])
 
     def test_cruising_costs_as_before(self):
         w = make_world()
@@ -62,7 +68,7 @@ class TestCosts(unittest.TestCase):
         c.apply_action(("MOVE", (c.top_speed, 0.0)), w)
         cost = c.top_speed * NO_FOOD.move_cost * (c.top_speed / c.velocity) ** 2
         self.assertAlmostEqual(c.energy, 150.0 - 2.0 * cost - living(2.0))  # a size-2 body pays twice
-        self.assertGreater(cost / (c.top_speed * NO_FOOD.move_cost), 20)  # about 21 times the cruising cost
+        self.assertGreater(cost / (c.top_speed * NO_FOOD.move_cost), 20)  # far more than cruising
 
     def test_a_big_sprinter_catches_a_small_cruiser(self):
         w = make_world()
@@ -208,7 +214,7 @@ class TestEating(unittest.TestCase):
         self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 2 * LIVING)
         mover = add(w, 20, 5, size=1.0)
         mover.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * LIVING + 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 2)  # a full sprint
+        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * LIVING + 0.8 * NO_FOOD.move_cost * (0.8 / 0.25) ** 2)  # a full sprint
 
     def test_each_creature_counts_its_own_energy(self):
         w = make_world()

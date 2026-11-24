@@ -57,7 +57,7 @@ RULES = (
     Rule("tank", "body", "Energy tank, × size", 100.0, 20.0, 500.0),
     Rule("body_radius", "body", "Body radius, × size", 0.2, 0.05, 1.0),
     Rule("cruise_speed", "body", "Cruising speed, ÷ size", 0.25, 0.05, 1.0),
-    Rule("sprint_speed", "body", "Sprint top speed, × √size", 0.4, 0.1, 1.5),
+    Rule("sprint_speed", "body", "Sprint top speed, × √size", 0.8, 0.1, 3.0),
     Rule("birth_at", "birth", "Has a baby at this share of its tank", 0.7, 0.3, 1.0),
     Rule("low_energy", "birth", "Past its lifespan it dies below this share of its tank", 0.3, 0.0, 0.9),
     Rule("eat_range", "senses", "Eating reach, × both radii", 3.0, 1.0, 10.0),

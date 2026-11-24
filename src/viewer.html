@@ -42,7 +42,7 @@
   #worlds { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px; }
   .world { background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px;
            display: grid; grid-template-columns: minmax(320px, 1fr) minmax(0, 1.3fr); gap: 12px 20px; }
-  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-content: start; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; align-content: start; }
   .tiles .head { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
   .tile { background: var(--page); border-radius: 8px; padding: 10px 12px; }
   .tile > span { display: block; color: var(--muted); font-size: 12px; }
@@ -102,6 +102,7 @@
   #watch .top span { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
   #watch .top label { margin-left: auto; font-size: 12px; display: flex; align-items: center; gap: 6px; }
   #watch canvas { width: 100%; display: block; border-radius: 6px; background: var(--page); }
+  #watch-legend { width: 100%; display: block; margin-top: 8px; }
   #watch .key { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 12px; margin-top: 6px; }
   #watch .key i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
   .resume { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; margin-top: 8px; }
@@ -145,6 +146,7 @@
     <button id="watch-out" class="act" type="button">Jump out</button>
   </div>
   <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
+  <canvas id="watch-legend" height="120" aria-label="What a creature's look means"></canvas>
   <div class="key">
     <span>tan diamond: food</span>
     <span>circle: a creature, as big as its genes made it (its size never changes)</span>
@@ -474,6 +476,7 @@ const NOW_EVERY_MS = 1000, SAMPLES_KEPT = 300;  // one look a second; the energy
 const TILES = [
   ["step", "Step"], ["alive", "Alive"], ["energy", "Average energy"], ["smart", "Intelligence × random"],
   ["hardest", "Difficulty"], ["steer", "Steers to food"], ["born", "Born"], ["died", "Died"], ["generation", "Generation"],
+  ["flee", "Flees bigger"], ["chase", "Chases smaller"],
 ];
 
 function makeTiles(state) {
@@ -500,6 +503,11 @@ async function pollNow(state) {
   updateTiles(state);
 }
 
+const meanOf = (rows, key) => {
+  const known = rows.map((r) => r[key]).filter((v) => v !== null && v !== undefined);
+  return known.length ? known.reduce((total, v) => total + v, 0) / known.length : null;
+};
+
 function liveNumbers(state) {
   const { run, now, samples } = state, last = lastRow(run), s = scores(run);
   const recentRows = last ? run.rows.filter((r) => r.step > last.step - 1000) : [];
@@ -517,6 +525,7 @@ function liveNumbers(state) {
     born: spanned ? now.births - back.births : last ? sum("births") : null,
     died: spanned ? now.deaths - back.deaths : last ? sum("deaths_hunger") + sum("deaths_attack") + sum("deaths_age") : null,
     food: now ? now.food : null,
+    flee: meanOf(recentRows, "flee"), chase: meanOf(recentRows, "chase"),
   };
 }
 
@@ -550,6 +559,15 @@ function updateTiles(state) {
       `${n.died} creatures died in the last 1,000 steps. Only creatures low on energy die: their energy ran out, or they ` +
       `were past their lifespan with less than 30 %.`);
   set("generation", n.generation === null ? "-" : n.generation, "deepest alive", explain("generation", n, run));
+  const share = (v) => v === null ? "-" : `${Math.round(v * 100)} %`;
+  set("flee", share(n.flee), "away from a bigger one",
+      `When a creature at least 1.5 times bigger is in sight, the share of moves away from it, over the last 1,000 steps: ` +
+      `${share(n.flee)}. Running away is how prey survives hunters. "-" while no bigger creature was in sight (or hunters are off).`,
+      n.flee === null ? "" : n.flee >= 0.5 ? "good" : "bad");
+  set("chase", share(n.chase), "toward a smaller one",
+      `When a creature at most two-thirds its size is in sight, the share of moves toward it, over the last 1,000 steps: ` +
+      `${share(n.chase)}. Chasing is how a hunter eats. "-" while no smaller creature was in sight.`,
+      n.chase === null ? "" : n.chase >= 0.5 ? "good" : "");
   const points = state.samples.filter((x) => x.energy !== null);
   const svg = state.tiles.querySelector("svg");
   if (points.length > 1) {
@@ -602,6 +620,42 @@ function resumePicker(run, tell) {
 const VIEW_EVERY = 100, RENEW_EVERY = 2000;  // ms: the picture 10 times a second; the slow mode renewed every 2 s
 let watching = null;  // {name, kind, timers}
 
+// The legend: each meaning drawn by the same code as the world's picture.
+const LEGEND = [
+  ["small, newborn, hungry", { energy: 0.08, age: 60, lifespan: 5000, earned: 0, spent: 0, did: "MOVE", heading: [1, 0] }, 0.7],
+  ["big:, its genes", { energy: 0.5, age: 2500, lifespan: 5000, earned: 30, spent: 30, did: "MOVE", heading: [1, 0] }, 1.9],
+  ["colour:, full", { energy: 0.9, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "MOVE", heading: [1, 0] }, 1.2],
+  ["colour:, half", { energy: 0.4, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "MOVE", heading: [1, 0] }, 1.2],
+  ["arc:, older", { energy: 0.6, age: 3800, lifespan: 5000, earned: 30, spent: 30, did: "MOVE", heading: [1, 0] }, 1.2],
+  ["past its, lifespan", { energy: 0.25, age: 5400, lifespan: 5000, earned: 30, spent: 30, did: "MOVE", heading: [1, 0] }, 1.2],
+  ["eyes:, below random", { energy: 0.6, age: 1500, lifespan: 5000, earned: 10, spent: 40, did: "MOVE", heading: [1, 0] }, 1.2],
+  ["eyes:, very smart", { energy: 0.6, age: 1500, lifespan: 5000, earned: 90, spent: 30, did: "MOVE", heading: [1, 0] }, 1.2],
+  ["ate", { energy: 0.7, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "EAT", heading: [0, 0] }, 1.2],
+  ["ate at, nothing", { energy: 0.5, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "EAT_MISS", heading: [0, 0] }, 1.2],
+  ["attacked", { energy: 0.7, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "ATTACK", heading: [1, 0] }, 1.2],
+];
+
+function drawLegend() {
+  const canvas = document.getElementById("watch-legend"), ink = getComputedStyle(document.documentElement);
+  const color = (name) => ink.getPropertyValue(name).trim();
+  const width = canvas.clientWidth * devicePixelRatio, height = 120 * devicePixelRatio;
+  canvas.width = width; canvas.height = height;
+  const g = canvas.getContext("2d"), cell = width / (LEGEND.length + 1), unit = Math.min(cell / 4, 14 * devicePixelRatio);
+  g.font = `${11 * devicePixelRatio}px system-ui, sans-serif`;
+  g.textAlign = "center";
+  LEGEND.forEach(([words, c, size], i) => {
+    const x = cell * (i + 0.5), y = 44 * devicePixelRatio;
+    drawCreature(g, x, y, size * unit, c, 1.0, Math.max(1.2, devicePixelRatio * 1.2), color);
+    g.fillStyle = color("--muted");
+    words.split(", ").forEach((part, k) => g.fillText(part, x, y + (44 + 13 * k) * devicePixelRatio));
+  });
+  const fx = cell * (LEGEND.length + 0.5), fy = 44 * devicePixelRatio, d = 5 * devicePixelRatio;
+  g.fillStyle = FOOD_COLOUR;
+  g.beginPath(); g.moveTo(fx, fy - d); g.lineTo(fx + d, fy); g.lineTo(fx, fy + d); g.lineTo(fx - d, fy); g.closePath(); g.fill();
+  g.fillStyle = color("--muted");
+  g.fillText("food", fx, fy + 44 * devicePixelRatio);
+}
+
 async function jumpIn(run) {
   if (watching) await jumpOut();
   const speed = Number(document.getElementById("watch-speed").value);
@@ -610,6 +664,7 @@ async function jumpIn(run) {
   document.getElementById("watch-title").innerHTML = `${swatch(run.kind)}Inside ${run.kind} · seed ${run.seed}`;
   document.getElementById("watch-where").textContent = "waiting for the first picture…";
   document.getElementById("watch").hidden = false;
+  drawLegend();
   const renew = () => watching && send("/control", { run: watching.name, watch: true,
     watch_speed: Number(document.getElementById("watch-speed").value) }).catch(() => {});
   watching.timers.push(setInterval(renew, RENEW_EVERY), setInterval(fetchView, VIEW_EVERY));
@@ -661,6 +716,40 @@ function creatureSmarts(c, wanderers) {  // its own energy earned ÷ spent, agai
   return c.spent >= MIN_SPENT && wanderers ? (c.earned / c.spent) / wanderers : null;
 }
 
+// One creature: size the circle, hunger the colour, age the arc (dotted ring once past it), intelligence the eyes,
+// what it just did the flash ring, where it heads the line. Used by the world's picture and by its legend.
+function drawCreature(g, x, y, r, c, wanderers, line, color) {
+  g.fillStyle = hungerColour(c.energy);  // hunger: the body's colour
+  g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
+  g.lineWidth = line;  // what it just did: a flash ring
+  g.strokeStyle = FLASH[c.did] ? color(FLASH[c.did]) : "rgba(0,0,0,0.35)";
+  g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke();
+  const lived = c.lifespan ? c.age / c.lifespan : 0;  // age: an arc of its own lifespan
+  g.strokeStyle = color("--muted");
+  g.beginPath(); g.arc(x, y, r + line * 2, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, lived)); g.stroke();
+  if (lived >= 1) {  // past its lifespan: a dotted outer ring
+    g.setLineDash([line, line * 2]);
+    g.beginPath(); g.arc(x, y, r + line * 4, 0, 2 * Math.PI); g.stroke();
+    g.setLineDash([]);
+  }
+  const [hx, hy] = c.heading, length = Math.hypot(hx, hy);
+  const fx = length ? hx / length : 1, fy = length ? hy / length : 0;  // where it looks
+  const smart = creatureSmarts(c, wanderers);
+  const eye = r * 0.22 * Math.max(0.6, Math.min(1.8, smart ?? 0.6));  // intelligence: the eyes
+  for (const side of [-1, 1]) {
+    const ex = x + fx * r * 0.35 - fy * r * 0.38 * side, ey = y + fy * r * 0.35 + fx * r * 0.38 * side;
+    g.fillStyle = smart !== null && smart >= 1 ? "#ffffff" : "#a8a8a8";
+    g.beginPath(); g.arc(ex, ey, eye, 0, 2 * Math.PI); g.fill();
+    g.fillStyle = "#111";
+    g.beginPath(); g.arc(ex + fx * eye * 0.4, ey + fy * eye * 0.4, eye * 0.55, 0, 2 * Math.PI); g.fill();
+  }
+  if (length > 0) {
+    g.strokeStyle = color("--ink");
+    g.beginPath(); g.moveTo(x + fx * r, y + fy * r); g.lineTo(x + fx * r * 1.8, y + fy * r * 1.8); g.stroke();
+  }
+  return smart;
+}
+
 function paint() {
   if (!watching) return;
   requestAnimationFrame(paint);
@@ -685,34 +774,7 @@ function paint() {
     const from = before.get(c.id) || c;  // a newborn appears where it is
     const x = (from.x + (c.x - from.x) * t) * unit, y = (from.y + (c.y - from.y) * t) * unit;
     const r = Math.max(c.radius * unit, 4);  // size: its genes, never changes
-    g.fillStyle = hungerColour(c.energy);  // hunger: the body's colour
-    g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
-    g.lineWidth = line;  // what it just did: a flash ring
-    g.strokeStyle = FLASH[c.did] ? color(FLASH[c.did]) : "rgba(0,0,0,0.35)";
-    g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke();
-    const lived = c.lifespan ? c.age / c.lifespan : 0;  // age: an arc of its own lifespan
-    g.strokeStyle = color("--muted");
-    g.beginPath(); g.arc(x, y, r + line * 2, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, lived)); g.stroke();
-    if (lived >= 1) {  // past its lifespan: a dotted outer ring
-      g.setLineDash([line, line * 2]);
-      g.beginPath(); g.arc(x, y, r + line * 4, 0, 2 * Math.PI); g.stroke();
-      g.setLineDash([]);
-    }
-    const [hx, hy] = c.heading, length = Math.hypot(hx, hy);
-    const fx = length ? hx / length : 1, fy = length ? hy / length : 0;  // where it looks
-    const smart = creatureSmarts(c, wanderers);
-    const eye = r * 0.22 * Math.max(0.6, Math.min(1.8, smart ?? 0.6));  // intelligence: the eyes
-    for (const side of [-1, 1]) {
-      const ex = x + fx * r * 0.35 - fy * r * 0.38 * side, ey = y + fy * r * 0.35 + fx * r * 0.38 * side;
-      g.fillStyle = smart !== null && smart >= 1 ? "#ffffff" : "#a8a8a8";
-      g.beginPath(); g.arc(ex, ey, eye, 0, 2 * Math.PI); g.fill();
-      g.fillStyle = "#111";
-      g.beginPath(); g.arc(ex + fx * eye * 0.4, ey + fy * eye * 0.4, eye * 0.55, 0, 2 * Math.PI); g.fill();
-    }
-    if (length > 0) {
-      g.strokeStyle = color("--ink");
-      g.beginPath(); g.moveTo(x + fx * r, y + fy * r); g.lineTo(x + fx * r * 1.8, y + fy * r * 1.8); g.stroke();
-    }
+    const smart = drawCreature(g, x, y, r, c, wanderers, line, color);
     watching.drawn.push({ c, x: x / devicePixelRatio, y: y / devicePixelRatio, r: r / devicePixelRatio, smart });
   }
 }

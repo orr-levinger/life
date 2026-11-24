@@ -388,6 +388,12 @@ class TestControlRoom(unittest.TestCase):
         for words in ("tan diamond: food", "eyes: intelligence", "arc: age"):
             self.assertIn(words, page)
 
+    def test_page_has_the_drawn_legend_and_hunting_tiles(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("Flees bigger", "Chases smaller", 'id="watch-legend"'):
+            self.assertIn(words, page)
+
     def test_page_explains_hunger_colours(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

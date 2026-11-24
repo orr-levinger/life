@@ -641,8 +641,24 @@ Spec: "Quarter speed". **Files:** Modify: `src/settings.py` (`SPEED = 0.25`), `s
 - [x] **Step 2: Run it to see it fail.**
 - [x] **Step 3: Implement.**
 - [x] **Step 4: Run the suite** · Expected: `OK`.
-- [ ] **Step 5: Update code** on the owner's world; in Jump in small creatures move in short steps. In the ledger.
-- [ ] **Step 6: Commit** as `feat: quarter speed`.
+- [x] **Step 5: Update code** on the owner's world; in Jump in small creatures move in short steps. In the ledger.
+- [x] **Step 6: Commit** as `feat: quarter speed`.
+
+### Task 4s: A drawn legend for Jump in, and fleeing and chasing tiles (added 2026-11-24; the owner's own instructions)
+
+The owner: "missing many circle meaning look" (the legend was words only) · "add to the metrics dashboard some metric of
+fleeing bigger predator and chasing smaller prey". **Files:** Modify: `src/viewer.html`, `tests/test_viewer.py`.
+- The legend under Jump in shows each meaning as a small drawn creature, drawn by the same code as the world's picture.
+- Two more live tiles: Flees bigger (the share of moves away from a creature 1.5 times bigger in sight, last 1,000 steps)
+  and Chases smaller (the share toward one at most two-thirds its size), each explained on hover; "-" while none is seen.
+
+- [x] **Step 1: Write the failing test:** `test_page_has_the_drawn_legend_and_hunting_tiles` (the words Flees bigger,
+  Chases smaller, and a legend canvas).
+- [x] **Step 2: Run it to see it fail.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run the viewer tests** · Expected: `OK`.
+- [x] **Step 5: Look at it** on the owner's world. In the ledger.
+- [x] **Step 6: Commit** as `feat: a drawn legend and fleeing and chasing tiles`.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 

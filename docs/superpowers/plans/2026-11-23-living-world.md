@@ -672,8 +672,8 @@ above cruising speed), `src/policies.py` (brains' moves scaled to `top_speed`), 
 - [x] **Step 2: Run them to see them fail.**
 - [x] **Step 3: Implement.**
 - [x] **Step 4: Run the suite** · Expected: `OK`.
-- [ ] **Step 5: Update code** on the owner's world; the fleeing and chasing tiles and charts afterwards. In the ledger.
-- [ ] **Step 6: Commit** as `feat: sprinting`.
+- [x] **Step 5: Update code** on the owner's world; the fleeing and chasing tiles and charts afterwards. In the ledger.
+- [x] **Step 6: Commit** as `feat: sprinting`.
 
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 

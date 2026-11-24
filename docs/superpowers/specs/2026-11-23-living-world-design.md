@@ -278,6 +278,23 @@ loses weight but doesn't shrink" · "why isn't the Hunters toggle editable?"
 - **The hunters switch works in Auto too:** the owner may switch hunters on or off in either mode; in Auto it stays as
   set until Auto's own turn to switch it at difficulty 24.
 
+### How a creature looks in Jump in (the owner, 2026-11-24)
+
+The owner: "we should give creatures a distinct look based on their age, intelligence, size, energy" · "create a mockup"
+· on the mockup: "Yes, build it".
+- **Size:** the circle, from its genes; it never changes.
+- **Hunger:** the body colour, red empty → yellow half → green full enough for a baby.
+- **Age:** an arc around it, filling as it lives through its own lifespan; a dotted outer ring once it is past it.
+- **Intelligence:** two eyes looking where it heads; small and grey below random wanderers, larger and white the
+  smarter it is (its own energy earned ÷ spent over its life, divided by the random wanderers' in the latest exam).
+  Each creature now counts its own energy earned and spent.
+- **Heading and action:** the line shows where it heads; a ring flashes green when it eats, amber when it eats at
+  nothing, red when it attacks.
+- **Food** is a small tan diamond, so it is never mistaken for a full creature.
+- **Pointing at a creature** shows its numbers: size, energy, age of lifespan, intelligence, generation, what it did.
+- Saves become format 3 (each creature's energy earned and spent); older saves are converted, those counts starting
+  at zero from the conversion on.
+
 ### The intelligence exam
 
 The owner: "At the end, whoever survives is smart in nature." · "Intelligence should be rewards / waste or something

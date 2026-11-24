@@ -36,9 +36,37 @@ class TestCosts(unittest.TestCase):
         w = make_world()
         c = add(w, 10, 10, size=1.0)
         c.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(c.x, 10.15)  # at most a quarter of a unit a step for size 1
-        self.assertAlmostEqual(c.y, 10.2)
-        self.assertAlmostEqual(c.energy, 50.0 - 0.25 * NO_FOOD.move_cost - NO_FOOD.step_cost)
+        self.assertAlmostEqual(c.x, 10.24)  # at most its top speed, 0.4 a step for size 1
+        self.assertAlmostEqual(c.y, 10.32)
+        sprint = 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 2  # faster than cruising costs the square of the speed
+        self.assertAlmostEqual(c.energy, 50.0 - sprint - NO_FOOD.step_cost)
+
+    def test_top_speed_grows_with_size(self):
+        w = make_world()
+        tops = [add(w, 5 + 10 * i, 10, size=size).top_speed for i, size in enumerate((0.5, 1.0, 2.0))]
+        self.assertEqual([round(t, 3) for t in tops], [0.5, 0.4, 0.566])
+
+    def test_cruising_costs_as_before(self):
+        w = make_world()
+        c = add(w, 10, 10, size=1.0)
+        c.apply_action(("MOVE", (0.2, 0.0)), w)
+        self.assertAlmostEqual(c.energy, 50.0 - 0.2 * NO_FOOD.move_cost - NO_FOOD.step_cost)
+
+    def test_sprinting_costs_the_square_of_the_speed(self):
+        w = make_world()
+        c = add(w, 10, 10, size=2.0, energy=150.0)
+        c.apply_action(("MOVE", (c.top_speed, 0.0)), w)
+        cost = c.top_speed * NO_FOOD.move_cost * (c.top_speed / c.velocity) ** 2
+        self.assertAlmostEqual(c.energy, 150.0 - cost - NO_FOOD.step_cost)
+        self.assertGreater(cost / (c.top_speed * NO_FOOD.move_cost), 20)  # about 21 times the cruising cost
+
+    def test_a_big_sprinter_catches_a_small_cruiser(self):
+        w = make_world()
+        big, small = add(w, 10, 10, size=2.0, energy=150.0), add(w, 12, 10, size=0.5)
+        gap = small.x - big.x
+        big.apply_action(("MOVE", (big.top_speed, 0.0)), w)
+        small.apply_action(("MOVE", (small.top_speed, 0.0)), w)  # running away as fast as it can
+        self.assertLess(small.x - big.x, gap)
 
     def test_speed_is_a_quarter_of_one_over_size(self):
         w = make_world()
@@ -75,7 +103,7 @@ class TestEating(unittest.TestCase):
         self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 2 * NO_FOOD.step_cost)
         mover = add(w, 20, 5, size=1.0)
         mover.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * NO_FOOD.step_cost + 0.25 * NO_FOOD.move_cost)  # a quarter unit at most
+        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * NO_FOOD.step_cost + 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 2)  # a full sprint
 
     def test_each_creature_counts_its_own_energy(self):
         w = make_world()

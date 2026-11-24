@@ -47,7 +47,7 @@ def brain_action(creature: Creature, senses: Senses, attacks_on: bool) -> Action
         return ("ATTACK", senses.other)
     if out[2] > 0:
         return ("EAT", _reachable_food(creature, senses))
-    return ("MOVE", _capped(out[0] * creature.velocity, out[1] * creature.velocity, creature.velocity))
+    return ("MOVE", _capped(out[0] * creature.top_speed, out[1] * creature.top_speed, creature.top_speed))
 
 
 def learner_action(creature: Creature, senses: Senses, choice: int, move: Tuple[float, float]) -> Action:
@@ -56,7 +56,7 @@ def learner_action(creature: Creature, senses: Senses, choice: int, move: Tuple[
         return ("EAT", _reachable_food(creature, senses))
     if choice == 2:
         return ("ATTACK", senses.other) if senses.other is not None else STAY
-    return ("MOVE", _capped(move[0] * creature.velocity, move[1] * creature.velocity, creature.velocity))
+    return ("MOVE", _capped(move[0] * creature.top_speed, move[1] * creature.top_speed, creature.top_speed))
 
 
 def random_action(creature: Creature, senses: Senses, rng: random.Random) -> Action:

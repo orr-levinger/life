@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-from .settings import EAT_MISS_COST, HUNTER_SHARE, SPEED
+from .settings import EAT_MISS_COST, HUNTER_SHARE, SPEED, SPRINT
 
 if TYPE_CHECKING:
     from .brain import Brain
@@ -49,7 +49,8 @@ class Creature:
 
         self.max_energy = size * 100.0
         self.energy = min(energy, self.max_energy)
-        self.velocity = SPEED / size  # small ones are faster, but never cross more than half a unit a step
+        self.velocity = SPEED / size  # cruising speed: small ones are faster
+        self.top_speed = max(self.velocity, SPRINT * math.sqrt(size))  # sprinting: big ones are faster, for a price
         self.radius = size * self.RADIUS_FACTOR
         self.attack_damage = size * 5.0
         self.attack_cost = size * 1.0
@@ -109,13 +110,14 @@ class Creature:
     def _move(self, vector: Tuple[float, float], world: World) -> None:
         dx, dy = vector
         distance = math.hypot(dx, dy)
-        if distance > self.velocity:
-            dx, dy = dx * self.velocity / distance, dy * self.velocity / distance
-            distance = self.velocity
+        if distance > self.top_speed:
+            dx, dy = dx * self.top_speed / distance, dy * self.top_speed / distance
+            distance = self.top_speed
         self.x = min(max(self.x + dx, self.radius), world.width - self.radius)
         self.y = min(max(self.y + dy, self.radius), world.height - self.radius)
-        self.energy -= distance * world.settings.move_cost
-        self._spend(distance * world.settings.move_cost, world)
+        cost = distance * world.settings.move_cost * max(1.0, distance / self.velocity) ** 2  # sprinting costs the square
+        self.energy -= cost
+        self._spend(cost, world)
         self.last_action = "MOVE"
 
     def _attack(self, target: Creature, world: World) -> None:

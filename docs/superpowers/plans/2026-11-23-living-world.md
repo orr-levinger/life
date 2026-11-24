@@ -666,12 +666,12 @@ Spec: "Sprinting". **Files:** Modify: `src/settings.py` (`SPRINT = 0.4`), `src/c
 above cruising speed), `src/policies.py` (brains' moves scaled to `top_speed`), `tests/test_world_rules.py`,
 `tests/test_policies.py`.
 
-- [ ] **Step 1: Write the failing tests:** `test_top_speed_grows_with_size` (0.5, 0.4, 0.57), `test_cruising_costs_as_before`,
+- [x] **Step 1: Write the failing tests:** `test_top_speed_grows_with_size` (0.5, 0.4, 0.57), `test_cruising_costs_as_before`,
   `test_sprinting_costs_the_square_of_the_speed`, `test_a_big_sprinter_catches_a_small_cruiser` (per step it gains),
   `test_brains_can_choose_any_speed_up_to_the_top`, `test_wanderers_keep_cruising`.
-- [ ] **Step 2: Run them to see them fail.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the suite** · Expected: `OK`.
+- [x] **Step 2: Run them to see them fail.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run the suite** · Expected: `OK`.
 - [ ] **Step 5: Update code** on the owner's world; the fleeing and chasing tiles and charts afterwards. In the ledger.
 - [ ] **Step 6: Commit** as `feat: sprinting`.
 

@@ -152,6 +152,10 @@ above.
   one per 10 % a 1,000 steps the creatures rise or per 5 points the energy rises, whichever says more; at most 4 at once.
   So a world that keeps getting easier to live in is pushed faster, and a steady one is still pushed gently.
 - **Random newcomers needed:** the world nearly died out; 4 nudges easier.
+- **Always below 80 % full** (the owner: "we should always be below the max amount of creatures... maybe 80%"): a full
+  world stops having babies, so its slopes go flat and hide how easy life is. While more than 64 of the 80 are alive and
+  the slopes are not falling, Auto makes it harder by at least one nudge per 8 creatures above 64 (so 80 alive: 2), or by
+  the rising rule if that says more; at most 4.
 - The sweet spot is where the rates are near zero under the hardest world the creatures can hold: Auto then gives one
   nudge harder, life gets a little worse, Auto gives it back, and so on.
 - Example (the owner's world of 2026-11-23, steps 16,000 → 17,000): alive 80 → 45 (−44 % a 1,000 steps) and energy

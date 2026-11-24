@@ -548,13 +548,13 @@ place; Auto's hint), `tests/test_viewer.py`.
 
 **Interfaces:** `slope(points: Sequence[Tuple[int, float]]) -> Optional[float]` (least squares, per 1,000 steps);
 `rates(rows) -> Tuple[Optional[float], Optional[float]]` (creatures as a share per 1,000 steps, energy in points per
-1,000 steps); `nudges_for(alive_rate, energy_rate, newcomers) -> int` (+ harder, − easier, 0 when nothing is measured);
-`Dial.review(alive_rate, energy_rate, newcomers) -> int` (the nudges made); `FALLING = -0.05`, `PER_ALIVE = 0.10`,
+1,000 steps); `nudges_for(alive_rate, energy_rate, newcomers, alive) -> int` (+ harder, − easier, 0 when nothing is measured);
+`Dial.review(alive_rate, energy_rate, newcomers, alive) -> int` (the nudges made); `FULL_ENOUGH = 64`, `PER_CROWD = 8`, `FALLING = -0.05`, `PER_ALIVE = 0.10`,
 `PER_ENERGY = 0.05`, `MAX_NUDGES = 4`. `MANY`, `WELL_FED`, `FEW`, `HUNGRY` go.
 
 - [ ] **Step 1: Write the failing tests:** `test_dial`: `test_slope_of_a_straight_line`, `test_one_odd_point_does_not_swing_it`,
   `test_steady_world_one_nudge_harder`, `test_rising_world_more_nudges_harder`, `test_falling_world_eases_by_the_rate`
-  (the owner's crash: −4), `test_slow_fall_eases_once`, `test_newcomers_ease_four`, `test_never_more_than_four`,
+  (the owner's crash: −4), `test_slow_fall_eases_once`, `test_newcomers_ease_four`, `test_crowded_world_pushed_harder` (80 alive, flat: +2), `test_never_more_than_four`,
   `test_easier_takes_back_the_newest_harder_nudges_first`, `test_harder_nudges_take_turns`, the knobs-within-ends, hunters
   and max-level tests on the new signature; `test_evolve`: `test_auto_looks_every_500_steps`,
   `test_auto_reviews_the_rates`; `test_viewer`: `test_page_names_the_new_world_button`.

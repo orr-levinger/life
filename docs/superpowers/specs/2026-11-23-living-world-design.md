@@ -137,30 +137,22 @@ running and running forever until we stop it."
 
 Each knob has an easiest and a hardest value it never passes; they are the ends of its slider.
 
-**Auto follows the rates of change, not the amounts** (the owner, 2026-11-24: "the ease and hardening should be
-somewhat relative to the rate of energy and creature amount so we get to the sweet spot faster" · "it's NOT about
-total amounts, it's about rate of change!" · "it should be based on derivatives"). This replaces the fixed thresholds
-above.
-- **Every 500 steps Auto measures two rates** over the last 1,000 steps: how fast the number alive changes (as a share
-  of the creatures, per 1,000 steps) and how fast the average energy changes (in points of a full tank, per 1,000
-  steps). Each is the slope of a straight line through the scoreboard's points of those 1,000 steps (4 points), so one
-  odd point does not swing it.
-- **Falling** (either rate below −5 % per 1,000 steps): life is getting worse, so Auto makes it easier, in proportion
-  to how fast it falls: one nudge per 10 % a 1,000 steps the creatures fall, or per 5 points a 1,000 steps the energy
-  falls, whichever says more; at most 4 at once. It takes back its own harder nudges first, the newest first.
-- **Not falling** (both rates −5 % or more): life is holding or getting better, so Auto makes it harder: one nudge, plus
-  one per 10 % a 1,000 steps the creatures rise or per 5 points the energy rises, whichever says more; at most 4 at once.
-  So a world that keeps getting easier to live in is pushed faster, and a steady one is still pushed gently.
-- **Random newcomers needed:** the world nearly died out; 4 nudges easier.
-- **Always below 80 % full** (the owner: "we should always be below the max amount of creatures... maybe 80%"): a full
-  world stops having babies, so its slopes go flat and hide how easy life is. While more than 64 of the 80 are alive and
-  the slopes are not falling, Auto makes it harder by at least one nudge per 8 creatures above 64 (so 80 alive: 2), or by
-  the rising rule if that says more; at most 4.
-- The sweet spot is where the rates are near zero under the hardest world the creatures can hold: Auto then gives one
-  nudge harder, life gets a little worse, Auto gives it back, and so on.
-- Example (the owner's world of 2026-11-23, steps 16,000 → 17,000): alive 80 → 45 (−44 % a 1,000 steps) and energy
-  82 % → 36 % (−46 points) → 4 nudges easier at once, where the old rule held.
-- The numbers (500 steps, 1,000 steps, −5 %, 10 %, 5 points, 4) are Claude's, not measured; Task 6 measures them.
+**Auto aims at 64 creatures, stepping by the distance and the rate** (the owner, 2026-11-24: "the ease and hardening
+should be somewhat relative to the rate of energy and creature amount so we get to the sweet spot faster" · "it's NOT
+about total amounts, it's about rate of change!" · "it should be based on derivatives" · "like alpha in gradient
+descent" · "we should always be below the max amount of creatures... maybe 80%" · "80 creatures means too easy, 40 too
+hard, we are trying to get to 80% so life is hard but not too hard"). This replaces the fixed thresholds above.
+- **The target:** 64 creatures alive, 80 % of the room for 80. At 64 life is hard but not too hard.
+- **Every 500 steps Auto takes one step,** in nudges (+ harder, − easier):
+  step = (alive − 64) ÷ 8 + (rate of the creatures) ÷ 10 % + (rate of the energy, only when it falls) ÷ 5 points.
+  The rates are per 1,000 steps, each the slope of a straight line through the last 1,000 steps' points (4 points), so one
+  odd point does not swing it. Like gradient descent, the step is a fixed factor (α) times what is measured; like
+  clipping, it is rounded and never more than 4 nudges either way.
+- **What it does:** 80 alive and steady → 2 harder. 40 alive and steady → 3 easier. 64 and steady → nothing (the sweet
+  spot). 50 alive but rising 20 % a 1,000 steps → nothing (it is recovering by itself). 80 → 45 alive in 1,000 steps with
+  energy 82 % → 36 % (the owner's crash of 2026-11-23) → 4 easier at once, where the old rule held.
+- Easier steps take back Auto's own harder nudges first, the newest first. Random newcomers needed → 4 easier.
+- The numbers (64, 8, 10 %, 5 points, 500 and 1,000 steps, 4) are Claude's, not measured; Task 6 measures them.
 
 **Why not "nobody died" any more.** Measured 2026-11-23 on the first dial run (learning animals, seed 1, steps
 1,000–3,000): the world was full (80 creatures) and gaining energy (earned ÷ spent 1.11–1.20), yet 41–62 creatures

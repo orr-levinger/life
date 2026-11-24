@@ -12,7 +12,7 @@ from src.learner import LEARNING_RATE, Learner, NetWeights
 from src.rules import ROOM_SLOTS as MAX_CREATURES, rule
 from src.settings import START
 BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, rule("eat_miss").start
-from tests.helpers import LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
+from tests.helpers import LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
 from tests.test_learner import live, same
 
 STAY = [0, 0, -1, -1]
@@ -61,7 +61,7 @@ class TestCosts(unittest.TestCase):
         c = add(w, 10, 10, size=2.0, energy=150.0)
         c.apply_action(("MOVE", (c.top_speed, 0.0)), w)
         cost = c.top_speed * NO_FOOD.move_cost * (c.top_speed / c.velocity) ** 2
-        self.assertAlmostEqual(c.energy, 150.0 - cost - LIVING)
+        self.assertAlmostEqual(c.energy, 150.0 - 2.0 * cost - living(2.0))  # a size-2 body pays twice
         self.assertGreater(cost / (c.top_speed * NO_FOOD.move_cost), 20)  # about 21 times the cruising cost
 
     def test_a_big_sprinter_catches_a_small_cruiser(self):
@@ -87,7 +87,7 @@ class TestCosts(unittest.TestCase):
 
 class TestSenseGenes(unittest.TestCase):
     def test_senses_cost_by_area(self):
-        SENSE_COST = rule("sense_cost").start
+        SENSE_COST = rule("vision_cost").start
         w = make_world()
         today = add(w, 10, 10)
         today.vision_width, today.vision_reach, today.hearing = 360.0, 3.0, 0.0
@@ -101,17 +101,50 @@ class TestSenseGenes(unittest.TestCase):
         area = 90.0 / 360.0 * math.pi * 36.0 + math.pi * 4.0
         self.assertAlmostEqual(before - sharp.energy, NO_FOOD.step_cost + SENSE_COST * area)
 
+    def test_a_bigger_body_pays_more_to_live_and_move(self):
+        w = make_world()
+        small, big = add(w, 10, 10, size=1.0), add(w, 20, 10, size=2.0, energy=150.0)
+        for c in (small, big):
+            c.vision_width, c.vision_reach, c.hearing = 30.0, 1.0, 0.0
+        senses = lambda c: w.rules["vision_cost"] * c.sense_area()
+        spent = []
+        for c in (small, big):
+            before = c.energy
+            c.apply_action(("MOVE", (0.1, 0.0)), w)
+            spent.append(before - c.energy - senses(c))
+        self.assertAlmostEqual(spent[0], NO_FOOD.step_cost * 1.0 + 0.1 * NO_FOOD.move_cost * 1.0)
+        self.assertAlmostEqual(spent[1], NO_FOOD.step_cost * 2.0 + 0.1 * NO_FOOD.move_cost * 2.0)  # twice, all of it
+
+    def test_vision_and_hearing_are_priced_apart(self):
+        w = make_world()
+        c = add(w, 10, 10)
+        c.vision_width, c.vision_reach, c.hearing = 90.0, 4.0, 2.0
+        w.rules["vision_cost"], w.rules["hearing_cost"] = 0.0, 0.01
+        before = c.energy
+        c.apply_action(("MOVE", (0.0, 0.0)), w)
+        self.assertAlmostEqual(before - c.energy, NO_FOOD.step_cost + 0.01 * math.pi * 2.0 ** 2)  # hearing alone
+
+    def test_the_sprint_power_is_a_rule(self):
+        w = make_world()
+        c = add(w, 10, 10, size=1.0)
+        c.vision_width, c.vision_reach, c.hearing = 30.0, 1.0, 0.0
+        w.rules["sprint_power"] = 1.0
+        before = c.energy
+        c.apply_action(("MOVE", (0.4, 0.0)), w)
+        sprint = 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 1.0
+        self.assertAlmostEqual(before - c.energy, NO_FOOD.step_cost + sprint + w.rules["vision_cost"] * c.sense_area())
+
     def test_babies_inherit_senses_in_the_limits(self):
         limits = lambda gene: (rule(f"gene.{gene}.low").start, rule(f"gene.{gene}.high").start)
         VISION_WIDTH_LIMITS, VISION_REACH_LIMITS, HEARING_LIMITS = (limits(g) for g in ("vision_width", "vision_reach", "hearing"))
         w = make_world(seed=4)
         crowd(w)
         parent = add(w, 10, 10, energy=80.0)
-        parent.vision_width, parent.vision_reach, parent.hearing = 300.0, 7.9, 2.0
+        parent.vision_width, parent.vision_reach, parent.hearing = 110.0, 9.9, 2.0
         w.step()
         baby = next(c for c in w.creatures if c.parent_id == parent.id)
-        self.assertTrue(300.0 * 0.8 <= baby.vision_width <= min(300.0 * 1.2, 360.0))
-        self.assertTrue(7.9 * 0.8 <= baby.vision_reach <= 8.0)  # never past its limit
+        self.assertTrue(110.0 * 0.8 <= baby.vision_width <= 120.0)  # never past its limit
+        self.assertTrue(9.9 * 0.8 <= baby.vision_reach <= 10.0)
         self.assertTrue(2.0 * 0.8 <= baby.hearing <= 2.0 * 1.2)
         for _ in range(30):
             c = w.add_newcomer()
@@ -201,9 +234,9 @@ class TestHunting(unittest.TestCase):
         prey = add(w, 11, 10, size=1.0, energy=50.0)
         hunter.apply_action(("ATTACK", prey), w)
         self.assertAlmostEqual(prey.energy, 40.0)
-        self.assertAlmostEqual(hunter.energy, 100.0 + 0.8 * 10.0 - 2.0 - LIVING)
+        self.assertAlmostEqual(hunter.energy, 100.0 + 0.8 * 10.0 - 2.0 - living(2.0))
         self.assertAlmostEqual(w.energy_earned, 0.8 * 10.0)
-        self.assertAlmostEqual(w.energy_spent, 2.0 + LIVING)
+        self.assertAlmostEqual(w.energy_spent, 2.0 + living(2.0))
 
     def test_kill_leaves_corpse_and_counts_attack_death(self):
         w = make_world(NO_FOOD_ATTACKS)
@@ -221,14 +254,14 @@ class TestHunting(unittest.TestCase):
         w = make_world(NO_FOOD_ATTACKS)
         hunter = add(w, 11, 10, size=2.0, energy=100.0)
         prey = add(w, 10, 10, size=1.0, energy=50.0)
-        self.assertTrue(all(sense(prey, w).vector[17:21] == 0.0))  # nothing felt yet
+        self.assertTrue(all(sense(prey, w).vector[16:20] == 0.0))  # nothing felt yet
         hunter.apply_action(("ATTACK", prey), w)
         v = sense(prey, w).vector
-        self.assertEqual(v.shape, (21,))
-        self.assertEqual(v[17], 1.0)  # hit
-        self.assertAlmostEqual(v[18], 0.1)  # 10 of its 100 taken
-        self.assertAlmostEqual(v[19], 1.0)  # from the east, where the hunter is
-        self.assertAlmostEqual(v[20], 0.0)
+        self.assertEqual(v.shape, (20,))
+        self.assertEqual(v[16], 1.0)  # hit
+        self.assertAlmostEqual(v[17], 0.1)  # 10 of its 100 taken
+        self.assertAlmostEqual(v[18], 1.0)  # from the east, where the hunter is
+        self.assertAlmostEqual(v[19], 0.0)
 
     def test_pain_lasts_one_step(self):
         w = make_world(NO_FOOD_ATTACKS)
@@ -241,8 +274,8 @@ class TestHunting(unittest.TestCase):
             return [("MOVE", (0.0, 0.0)) for _ in acting]
 
         with mock.patch("src.world.decide_all", nobody_attacks):
-            w.step(lambda c, senses, action: felt.append(senses.vector[17]) if c is prey else None)
-            w.step(lambda c, senses, action: felt.append(senses.vector[17]) if c is prey else None)
+            w.step(lambda c, senses, action: felt.append(senses.vector[16]) if c is prey else None)
+            w.step(lambda c, senses, action: felt.append(senses.vector[16]) if c is prey else None)
         self.assertEqual(felt, [1.0, 0.0])  # felt in the next step, gone the step after
 
     def test_dead_target_is_a_miss(self):

@@ -2,6 +2,7 @@ import contextlib
 import csv
 import io
 import json
+import math
 import tempfile
 import unittest
 import zipfile
@@ -207,11 +208,13 @@ class TestSaves(unittest.TestCase):
                 old = {name: arrays[name] for name in arrays if name != "about"}
                 np.savez(path, **arrays)
                 loaded, _, _ = load_world(path, learner_seed=0)
-            self.assertEqual({(c.vision_width, c.vision_reach, c.hearing) for c in loaded.creatures}, {(360.0, 3.0, 1.5)})
+            for c in loaded.creatures:  # today's senses then, narrowed later to 120° seeing as much ground
+                self.assertEqual((c.vision_width, c.hearing), (120.0, 1.5))
+                self.assertAlmostEqual(c.vision_reach, 3.0 * math.sqrt(3.0))
             if species == "learner":
                 for part in ("w1", "wh"):
                     weights = loaded.learner.state()[f"params.{part}"]
-                    self.assertEqual(weights.shape[-2], 21)
+                    self.assertEqual(weights.shape[-2], 20)
                     self.assertTrue(np.allclose(weights[..., 12:, :], 0.0))
                     self.assertTrue(np.allclose(weights[..., :12, :], old[f"learner.params.{part}"]))
 
@@ -235,6 +238,38 @@ class TestSaves(unittest.TestCase):
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertEqual({(c.fear_of_death, c.love_of_babies, c.learns_from_others) for c in loaded.creatures},
                          {(10.0, 10.0, 0.5)})
+
+    def test_the_owners_world_converts(self):
+        world = make_world(seed=10)
+        populate(world, 4)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 6  # what a format 6 save held: cones to 360, one sense price, 21 inputs with a heard size
+            rules = about["rules"]
+            sense = rules.pop("vision_cost")
+            del rules["hearing_cost"], rules["sprint_power"]
+            rules.update({"sense_cost": sense, "gene.vision_width.high": 360.0, "gene.vision_width.new_high": 360.0,
+                          "gene.vision_reach.high": 8.0, "gene.vision_reach.new_high": 8.0})
+            about["creatures"][0].update({"vision_width": 360.0, "vision_reach": 3.0})
+            about["creatures"][1].update({"vision_width": 100.0, "vision_reach": 4.0})
+            arrays["about"] = np.array(json.dumps(about))
+            w1 = arrays["brain.w1"]
+            old = np.concatenate([w1[:, :16], np.full((w1.shape[0], 1, w1.shape[2]), 0.7), w1[:, 16:]], axis=1)
+            arrays["brain.w1"] = old  # 21 inputs then: the heard size was input 17
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        first, second = loaded.creatures[0], loaded.creatures[1]
+        self.assertEqual(first.vision_width, 120.0)
+        self.assertAlmostEqual(first.vision_reach, 3.0 * math.sqrt(3.0))  # narrowed, it sees as much ground as before
+        self.assertEqual((second.vision_width, second.vision_reach), (100.0, 4.0))  # within 120: untouched
+        self.assertEqual(first.brain.w1.shape, (20, 16))
+        self.assertTrue(np.allclose(first.brain.w1, w1[0]))  # the heard size's weights gone, the rest kept
+        self.assertEqual((loaded.rules["vision_cost"], loaded.rules["hearing_cost"]), (sense, sense))
+        self.assertEqual((loaded.rules["gene.vision_width.high"], loaded.rules["sprint_power"]), (120.0, 2.0))
 
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
@@ -261,6 +296,7 @@ class TestSaves(unittest.TestCase):
             about["format"] = 5
             about = before_rules(about)
             arrays["about"] = np.array(json.dumps(about))
+            arrays["brain.w1"] = np.insert(arrays["brain.w1"], 16, 0.0, axis=1)  # 21 inputs then: a heard size
             np.savez(path, **arrays)
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertEqual(loaded.rules, starting_rules())
@@ -284,9 +320,9 @@ class TestSaves(unittest.TestCase):
             np.savez(path, **arrays)
             loaded, _, _ = load_world(path, learner_seed=0)
         for i, creature in enumerate(loaded.creatures):
-            self.assertEqual(creature.brain.w1.shape, (21, 16))
-            self.assertTrue(np.allclose(creature.brain.w1[17:], 0.0))
-            self.assertTrue(np.allclose(creature.brain.w1[:17], arrays["brain.w1"][i]))
+            self.assertEqual(creature.brain.w1.shape, (20, 16))
+            self.assertTrue(np.allclose(creature.brain.w1[16:], 0.0))  # pain, silent
+            self.assertTrue(np.allclose(creature.brain.w1[:16], arrays["brain.w1"][i][:16]))  # the heard size left later
             self.assertIsNone(creature.hurt)
 
     def test_wider_brains_act_as_before_with_zero_new_weights(self):
@@ -313,7 +349,7 @@ class TestSaves(unittest.TestCase):
             x12 = rng.uniform(-1, 1, 12)
             w1, b1, w2, b2 = (arrays[f"brain.{part}"][i] for part in ("w1", "b1", "w2", "b2"))
             before = np.tanh(np.tanh(x12 @ w1 + b1) @ w2 + b2)
-            now = creature.brain.forward(np.concatenate([x12, rng.uniform(-1, 1, 9)]))  # heard or felt: no effect yet
+            now = creature.brain.forward(np.concatenate([x12, rng.uniform(-1, 1, 8)]))  # heard or felt: no effect yet
             self.assertTrue(np.allclose(before, now))
 
 

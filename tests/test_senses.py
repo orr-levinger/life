@@ -25,10 +25,10 @@ class TestSenses(unittest.TestCase):
     def test_nothing_seen(self):
         me = creature(10, 10)
         s = sense(me, world([me]))
-        self.assertEqual(s.vector.shape, (21,))
+        self.assertEqual(s.vector.shape, (20,))
         self.assertAlmostEqual(s.vector[0], 0.5)
         self.assertAlmostEqual(s.vector[1], 0.0)
-        np.testing.assert_array_equal(s.vector[2:], np.zeros(19))
+        np.testing.assert_array_equal(s.vector[2:], np.zeros(18))
         self.assertIsNone(s.food)
         self.assertIsNone(s.other)
         self.assertIsNone(s.on_food)
@@ -101,15 +101,23 @@ class TestSenses(unittest.TestCase):
         me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)
         other = creature(9, 10, size=2.5, id_=2)
         v = sense(me, world([me, other])).vector
-        self.assertEqual(v.shape, (21,))
+        self.assertEqual(v.shape, (20,))
         self.assertEqual(v[7], 0.0)  # not seen
         self.assertEqual(v[12], 1.0)  # heard
         self.assertAlmostEqual(v[13], 0.5)  # distance ÷ its hearing radius
         self.assertAlmostEqual(v[14], -1.0)  # behind it: west
         self.assertAlmostEqual(v[15], 0.0, places=6)
-        self.assertAlmostEqual(v[16], 1.0)  # twice its size
         far = creature(7.5, 10, id_=3)
         self.assertEqual(sense(me, world([me, far])).vector[12], 0.0)  # 2.5 away: past its hearing
+
+    def test_hearing_gives_no_size(self):
+        me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)
+        small, big = creature(9, 10, size=0.6, id_=2), creature(9, 10, size=2.5, id_=3)
+        heard_small = sense(me, world([me, small])).vector
+        heard_big = sense(me, world([me, big])).vector
+        self.assertEqual(heard_small.shape, (20,))
+        self.assertEqual(list(heard_small[12:16]), list(heard_big[12:16]))  # where and how far: nothing of its size
+        self.assertEqual(heard_small[12], 1.0)
 
     def test_food_is_not_heard(self):
         me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)

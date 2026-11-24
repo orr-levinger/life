@@ -92,9 +92,15 @@ class Creature:
         reach = (self.radius + food.radius) * self.rules["eat_range"]
         return math.hypot(food.x - self.x, food.y - self.y) <= reach
 
+    def vision_area(self) -> float:
+        return self.vision_width / 360.0 * math.pi * self.vision_reach ** 2
+
+    def hearing_area(self) -> float:
+        return math.pi * self.hearing ** 2
+
     def sense_area(self) -> float:
         """The ground its senses cover: its cone's area plus its hearing circle's."""
-        return self.vision_width / 360.0 * math.pi * self.vision_reach ** 2 + math.pi * self.hearing ** 2
+        return self.vision_area() + self.hearing_area()
 
     def _spend(self, amount: float, world: World) -> None:
         self.spent += amount
@@ -114,7 +120,8 @@ class Creature:
             self._attack(param, world)
         else:
             raise ValueError(f"unknown action {kind!r}")
-        living = world.settings.step_cost + self.rules["sense_cost"] * self.sense_area()  # being alive, and its senses, by their area
+        living = (world.settings.step_cost * self.size  # being alive: a bigger body pays more
+                  + self.rules["vision_cost"] * self.vision_area() + self.rules["hearing_cost"] * self.hearing_area())
         self.energy = min(self.energy - living, self.max_energy)
         self._spend(living, world)
 
@@ -145,7 +152,8 @@ class Creature:
             self.facing = (dx / distance, dy / distance)
         self.x = min(max(self.x + dx, self.radius), world.width - self.radius)
         self.y = min(max(self.y + dy, self.radius), world.height - self.radius)
-        cost = distance * world.settings.move_cost * max(1.0, distance / self.velocity) ** 2  # sprinting costs the square
+        sprint = max(1.0, distance / self.velocity) ** self.rules["sprint_power"]  # faster than cruising costs more
+        cost = distance * world.settings.move_cost * self.size * sprint  # a bigger body pays more to move
         self.energy -= cost
         self._spend(cost, world)
         self.last_action = "MOVE"

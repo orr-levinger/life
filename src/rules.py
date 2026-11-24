@@ -43,7 +43,10 @@ RULES = (
     Rule("attack_cost", "costs", "An attack, hit or miss, × size", 1.0, 0.0, 10.0),
     Rule("attack_damage", "costs", "Being hit: energy lost, × the attacker's size", 5.0, 0.0, 50.0),
     Rule("baby_share", "costs", "Having a baby: the share of its energy given to the baby", 0.4, 0.05, 0.9),
-    Rule("sense_cost", "costs", "Senses, per square unit, each step", 0.05 / (math.pi * 3.0 ** 2), 0.0, 0.01),
+    Rule("sprint_power", "costs", "Sprinting: faster than cruising costs the move × (speed ÷ cruising) to this power", 2.0,
+         1.0, 4.0),
+    Rule("vision_cost", "costs", "Vision, per square unit seen, each step", 0.05 / (math.pi * 3.0 ** 2), 0.0, 0.01),
+    Rule("hearing_cost", "costs", "Hearing, per square unit heard, each step", 0.05 / (math.pi * 3.0 ** 2), 0.0, 0.01),
     Rule("world_width", "values", "The world's width", 50.0, 20.0, 200.0),
     Rule("world_height", "values", "The world's height", 30.0, 12.0, 120.0),
     Rule("room", "values", "Room for this many creatures (births pause when full)", 80.0, 10.0, 80.0),
@@ -67,8 +70,8 @@ RULES = (
     Rule("auto_hunters_at", "values", "Auto switches hunters on at this difficulty", 24.0, 0.0, 200.0),
     Rule("auto_every", "values", "Auto looks every this many steps", 500.0, 100.0, 5000.0),
 ) + _gene("size", "Size", 0.5, 2.0, (0.1, 5.0), 0.2, new=(0.5, 2.0)) \
-  + _gene("vision_width", "Vision width (degrees)", 30.0, 360.0, (1.0, 360.0), 0.2, new=(30.0, 360.0)) \
-  + _gene("vision_reach", "Vision reach", 1.0, 8.0, (0.1, 20.0), 0.2, new=(1.0, 8.0)) \
+  + _gene("vision_width", "Vision width (degrees)", 30.0, 120.0, (1.0, 120.0), 0.2, new=(30.0, 120.0)) \
+  + _gene("vision_reach", "Vision reach", 1.0, 10.0, (0.1, 20.0), 0.2, new=(1.0, 10.0)) \
   + _gene("hearing", "Hearing", 0.0, 4.0, (0.0, 20.0), 0.2, new=(0.0, 4.0)) \
   + _gene("fear", "Fear of death", 0.1, 100.0, (0.0, 1000.0), 0.2, start=10.0) \
   + _gene("love", "Love of babies", 0.1, 100.0, (0.0, 1000.0), 0.2, start=10.0) \

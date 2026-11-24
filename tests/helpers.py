@@ -15,7 +15,14 @@ from src.world import World
 NO_FOOD = replace(START, max_food=0, food_per_step=0)  # the easy start with nothing to eat
 NO_FOOD_ATTACKS = replace(NO_FOOD, attacks=True)
 WIDTH, REACH, HEARING = TODAY_SENSES
-LIVING = NO_FOOD.step_cost + rule("sense_cost").start * (WIDTH / 360.0 * math.pi * REACH ** 2 + math.pi * HEARING ** 2)  # a step alive, today's senses
+SENSES = (rule("vision_cost").start * WIDTH / 360.0 * math.pi * REACH ** 2
+          + rule("hearing_cost").start * math.pi * HEARING ** 2)  # a step of today's senses
+LIVING = NO_FOOD.step_cost + SENSES  # a step alive, size 1, today's senses
+
+
+def living(size: float) -> float:
+    """A step alive for a body of `size` with today's senses: a bigger body pays more."""
+    return NO_FOOD.step_cost * size + SENSES
 
 
 def make_world(settings: Settings = NO_FOOD, seed: int = 0, evolving: bool = True, learner=None,

@@ -82,13 +82,13 @@ cost of size), `src/creature.py` (being alive and moving × size; the sprint's p
 no size; 20 in all), `src/brain.py` and `src/learner.py` (20 inputs), `src/saves.py` (the owner's world: cones 120° reach
 5, the heard-size input removed), their tests.
 
-- [ ] **Step 1: Write the failing tests:** `test_a_cone_is_at_most_120`, `test_hearing_gives_no_size`,
+- [x] **Step 1: Write the failing tests:** `test_a_cone_is_at_most_120`, `test_hearing_gives_no_size`,
   `test_a_bigger_body_pays_more_to_live_and_move`, `test_vision_and_hearing_are_priced_apart`,
   `test_the_sprint_power_is_a_rule`, `test_the_owners_world_converts` (cones 120°/5, 20 inputs, the other weights kept).
-- [ ] **Step 2:** run them → they fail.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4:** `$PY -m unittest discover tests` → `OK`.
-- [ ] **Step 5: Commit** as `feat: the rules that were missing`.
+- [x] **Step 2:** run them → they fail.
+- [x] **Step 3: Implement.**
+- [x] **Step 4:** `$PY -m unittest discover tests` → `OK`.
+- [x] **Step 5: Commit** as `feat: the rules that were missing`.
 
 ### Task R4: The brain's size evolves, each neuron costs
 

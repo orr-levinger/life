@@ -15,7 +15,7 @@ import tensorflow as tf
 
 from .brain import jitter
 
-N_IN = 21
+N_IN = 20
 N_HIDDEN = 32
 N_CHOICES = 3  # 0 move, 1 eat, 2 attack
 ATTACK = 2

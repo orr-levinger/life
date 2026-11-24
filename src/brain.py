@@ -13,7 +13,7 @@ def jitter(values: np.ndarray, rng: np.random.Generator, rate: float, scale: flo
 
 
 class Brain:
-    N_IN = 21
+    N_IN = 20
     N_HIDDEN = 16
     N_OUT = 4  # move x, move y, eat, attack
 
@@ -43,7 +43,7 @@ class Brain:
         )
 
     def forward(self, x: np.ndarray) -> np.ndarray:
-        """The 21 senses in, 4 outputs in -1..1 out."""
+        """The 20 senses in, 4 outputs in -1..1 out."""
         if x.shape != (self.N_IN,):
             raise ValueError(f"the brain takes {self.N_IN} inputs, got shape {x.shape}")
         hidden = np.tanh(x @ self.w1 + self.b1)

@@ -19,7 +19,7 @@ def same(a: NetWeights, b: NetWeights) -> bool:
 
 
 def food_senses(angles: np.ndarray) -> np.ndarray:
-    senses = np.zeros((len(angles), 21))
+    senses = np.zeros((len(angles), 20))
     senses[:, 3] = 1.0
     senses[:, 4] = 0.5
     senses[:, 5] = np.cos(angles)
@@ -39,14 +39,14 @@ def toy_rewards(actions, angles: np.ndarray) -> np.ndarray:
 def live(learner: Learner, slot: int, steps: int) -> None:
     """`steps` steps of life with something to sense (all-zero senses would leave the input weights untouched)."""
     for _ in range(steps):
-        learner.act([slot], np.full((1, 21), 0.5), attacks_on=True)
+        learner.act([slot], np.full((1, 20), 0.5), attacks_on=True)
         learner.record(slot, 1.0, False)
 
 
 class TestLearner(unittest.TestCase):
     def test_act_shapes_and_ranges(self):
         learner = learner_with(4)
-        actions = learner.act([0, 1, 2, 3], np.zeros((4, 21)), attacks_on=True)
+        actions = learner.act([0, 1, 2, 3], np.zeros((4, 20)), attacks_on=True)
         self.assertEqual(len(actions), 4)
         for choice, (dx, dy) in actions:
             self.assertIn(choice, (0, 1, 2))  # move, eat or attack
@@ -55,10 +55,10 @@ class TestLearner(unittest.TestCase):
     def test_attack_masked(self):
         learner = learner_with(10)
         choices = [choice for _ in range(100)
-                   for choice, _ in learner.act(list(range(10)), np.zeros((10, 21)), attacks_on=False, learning=False)]
+                   for choice, _ in learner.act(list(range(10)), np.zeros((10, 20)), attacks_on=False, learning=False)]
         self.assertEqual(set(choices), {0, 1})  # move or eat: attack is masked
         allowed = [choice for _ in range(100)
-                   for choice, _ in learner.act(list(range(10)), np.zeros((10, 21)), attacks_on=True, learning=False)]
+                   for choice, _ in learner.act(list(range(10)), np.zeros((10, 20)), attacks_on=True, learning=False)]
         self.assertEqual(set(allowed), {0, 1, 2})
 
     def test_gae_matches_hand_example(self):
@@ -86,7 +86,7 @@ class TestLearner(unittest.TestCase):
     def test_update_changes_only_full_slots(self):
         learner = learner_with(2)
         for step in range(65):
-            learner.act([0, 1], np.zeros((2, 21)), attacks_on=True)
+            learner.act([0, 1], np.zeros((2, 20)), attacks_on=True)
             learner.record(0, 1.0, False)
             if step < 10:
                 learner.record(1, 1.0, False)
@@ -114,7 +114,7 @@ class TestLearner(unittest.TestCase):
         import src.learner as L
         import tensorflow as tf
         p = {name: tf.gather(var, [slot]) for name, var in learner._params.items()}
-        obs = tf.constant(np.full((1, 1, 21), 0.4), tf.float32)
+        obs = tf.constant(np.full((1, 1, 20), 0.4), tf.float32)
         attacks = tf.ones((1, 1))
         choice, move = tf.zeros((1, 1), tf.int32), tf.constant([[[0.3, -0.2]]], tf.float32)
         logits, mean, log_std, value = L._heads(p, obs, attacks)
@@ -129,7 +129,7 @@ class TestLearner(unittest.TestCase):
         import src.learner as L
         learner = learner_with(2)
         for _ in range(70):  # slot 1 lives 70 steps, each a lesson for slot 0, which lives only 10
-            learner.act([0, 1], np.full((2, 21), 0.5), attacks_on=True)
+            learner.act([0, 1], np.full((2, 20), 0.5), attacks_on=True)
             learner.record(1, 1.0, False)
             learner.watch(0, 1, reward=1.0, weight=0.5)
             if len(learner._buffers[0]) < 10:
@@ -147,7 +147,7 @@ class TestLearner(unittest.TestCase):
         for lessons in (False, True):
             learner = learner_with(2, seed=3)
             for _ in range(65):
-                learner.act([0, 1], np.full((2, 21), 0.5), attacks_on=True)
+                learner.act([0, 1], np.full((2, 20), 0.5), attacks_on=True)
                 learner.record(0, 1.0, False)
                 learner.record(1, -1.0, False)
                 if lessons:
@@ -168,7 +168,7 @@ class TestLearner(unittest.TestCase):
 
     def test_unfinished_lessons_are_not_saved(self):
         learner = learner_with(2)
-        learner.act([0, 1], np.full((2, 21), 0.5), attacks_on=True)
+        learner.act([0, 1], np.full((2, 20), 0.5), attacks_on=True)
         learner.record(1, 1.0, False)
         learner.watch(0, 1, reward=1.0, weight=0.5)
         self.assertEqual(len(learner._lessons[0]), 1)
@@ -180,7 +180,7 @@ class TestLearner(unittest.TestCase):
         runs = []
         for _ in range(2):
             learner = learner_with(3, seed=5)
-            runs.append([learner.act([0, 1, 2], np.ones((3, 21)) * 0.3, attacks_on=True) for _ in range(20)])
+            runs.append([learner.act([0, 1, 2], np.ones((3, 20)) * 0.3, attacks_on=True) for _ in range(20)])
         self.assertEqual(runs[0], runs[1])
 
     def test_learns_toy_task(self):

@@ -1,4 +1,4 @@
-"""What a creature senses, as the brain's 21 inputs, and a display label for what it did."""
+"""What a creature senses, as the brain's 20 inputs, and a display label for what it did."""
 from __future__ import annotations
 
 import math
@@ -39,9 +39,9 @@ def in_cone(creature: Creature, dx, dy, distance):
 
 def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> List[Senses]:
     """What each of `creatures` (default: everyone in the world) senses. All distances are computed at once.
-    Inputs 1-3: energy, size, on food. 4-7: nearest food it sees. 8-12: nearest stranger it sees. 13-17: nearest
-    stranger it hears but does not see. 18-21: pain, for one step after a hit: hit, share taken, direction to the
-    hitter."""
+    Inputs 1-3: energy, size, on food. 4-7: nearest food it sees. 8-12: nearest stranger it sees (with its size). 13-16:
+    nearest stranger it hears but does not see (where and how far only: a sound tells no size). 17-20: pain, for one step
+    after a hit: hit, share taken, direction to the hitter."""
     creatures = list(world.creatures) if creatures is None else creatures
     if not creatures:
         return []
@@ -114,7 +114,7 @@ def _relative_size(creature: Creature, other: Creature) -> float:
 
 def _vector(creature: Creature, food: Optional['Food'], other: Optional[Creature],
             on_food: Optional['Food'], heard: Optional[Creature]) -> np.ndarray:
-    vector = np.zeros(21)
+    vector = np.zeros(20)
     vector[0] = creature.energy / creature.max_energy
     vector[1] = (creature.size - SIZE_CENTER) / SIZE_HALF_RANGE
     vector[2] = 1.0 if on_food is not None else 0.0
@@ -123,9 +123,9 @@ def _vector(creature: Creature, food: Optional['Food'], other: Optional[Creature
     if other is not None:
         vector[7:12] = _sighting(creature, other, creature.vision_reach) + (_relative_size(creature, other),)
     if heard is not None:
-        vector[12:17] = _sighting(creature, heard, creature.hearing) + (_relative_size(creature, heard),)
+        vector[12:16] = _sighting(creature, heard, creature.hearing)
     if creature.hurt is not None:
-        vector[17:21] = (1.0,) + creature.hurt
+        vector[16:20] = (1.0,) + creature.hurt
     return vector
 
 

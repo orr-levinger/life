@@ -22,6 +22,15 @@ class TestRules(unittest.TestCase):
         self.assertIsNone(check(rules, "gene.size.low", 1.0))
         self.assertIn("unknown", check(rules, "no_such_rule", 1.0))
 
+    def test_a_cone_is_at_most_120(self):
+        from src.rules import rule
+        self.assertEqual((rule("gene.vision_width.high").start, rule("gene.vision_width.high").high), (120.0, 120.0))
+        self.assertEqual(rule("gene.vision_width.new_high").start, 120.0)
+        self.assertIn("at most 120", check(starting_rules(), "gene.vision_width.high", 200.0))
+        self.assertEqual(rule("gene.vision_reach.high").start, 10.0)  # it sees farther than it hears (4)
+        w = make_world(seed=2)
+        self.assertTrue(all(w.add_newcomer().vision_width <= 120.0 for _ in range(40)))
+
     def test_the_world_reads_its_rules(self):
         w = make_world()
         c = add(w, 10, 10)

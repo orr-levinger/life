@@ -29,14 +29,16 @@ from .settings import TODAY_SENSES
 from .world import World
 
 SAVE_EVERY = 2000  # steps between two saves of a world
-SAVE_FORMAT = 6  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 7  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
-# and 21 brain inputs; 6: the world's rules (2026-11-24)
+# and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
+# hearing priced apart, the sprint's power (2026-11-24)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
 INPUTS_HEARD = 5  # format 4: the brain hears (inputs 13-17)
 INPUTS_PAIN = 4  # format 5: the brain feels pain (inputs 18-21)
+HEARD_SIZE = 16  # format 7: the heard size (input 17, from 0: 16) leaves the brain
 
 
 class SaveError(Exception):
@@ -123,6 +125,9 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         _widen_inputs(arrays, INPUTS_PAIN)
     if about.get("format") == 5:
         about = _from_format_5(about)
+    if about.get("format") == 6:
+        about = _from_format_6(about)
+        _drop_input(arrays, HEARD_SIZE)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -166,10 +171,43 @@ def _from_format_4(about: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _from_format_5(about: Dict[str, Any]) -> Dict[str, Any]:
-    """A format 5 save had no rules of its own: the starting rules, at its size."""
+    """A format 5 save had no rules of its own: the starting rules as format 6 had them (one price for the senses, the
+    square for the sprint), at its size."""
     rules = {**starting_rules(), "world_width": float(about["width"]), "world_height": float(about["height"])}
+    rules["sense_cost"] = rules.pop("vision_cost")
+    del rules["hearing_cost"], rules["sprint_power"]
     rest = {key: value for key, value in about.items() if key not in ("width", "height")}
     return {**rest, "format": 6, "rules": rules}
+
+
+def _from_format_6(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 6 save allowed cones to 360° and priced vision and hearing as one: a cone wider than 120° narrows to
+    120° and reaches farther, so it sees as much ground as before; both senses keep the one price; the sprint's power
+    is the square it was."""
+    rules = dict(about["rules"])
+    price = rules.pop("sense_cost")
+    rules.update({"vision_cost": price, "hearing_cost": price, "sprint_power": 2.0})
+    for key in ("gene.vision_width.high", "gene.vision_width.new_high"):
+        rules[key] = min(rules[key], 120.0)
+    for key in ("gene.vision_width.low", "gene.vision_width.new_low"):
+        rules[key] = min(rules[key], 120.0)
+    rules["gene.vision_reach.high"] = rules["gene.vision_reach.new_high"] = rule("gene.vision_reach.high").start
+
+    def narrowed(creature: Dict[str, Any]) -> Dict[str, Any]:
+        width, reach = creature["vision_width"], creature["vision_reach"]
+        if width <= 120.0:
+            return creature
+        reach = min(reach * math.sqrt(width / 120.0), rules["gene.vision_reach.high"])
+        return {**creature, "vision_width": 120.0, "vision_reach": reach}
+
+    return {**about, "format": 7, "rules": rules, "creatures": [narrowed(c) for c in about["creatures"]]}
+
+
+def _drop_input(arrays: Dict[str, np.ndarray], index: int) -> None:
+    """A format 6 save's brains heard a size (input `index`): its weights leave every brain; the rest are kept."""
+    for name in list(arrays):
+        if name == "brain.w1" or (name.startswith(LEARNER) and name.split(".")[-1] in ("w1", "wh")):
+            arrays[name] = np.delete(arrays[name], index, axis=-2)
 
 
 def _widen_inputs(arrays: Dict[str, np.ndarray], added: int) -> None:

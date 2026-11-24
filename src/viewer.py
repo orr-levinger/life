@@ -27,7 +27,7 @@ from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run
 from .dial import KNOBS, value
 from .evolve import SPECIES
 from .saves import save_header, save_path, saves_of
-from .rules import GROUPS, RULES, check, starting_rules
+from .rules import GENE_MEANS, GROUPS, RULES, check, means, starting_rules
 from .scoreboard import OLDER_LAYOUTS, ROW_KEYS, read_rows
 from .settings import START, Settings
 
@@ -186,9 +186,9 @@ class Controls:
         """Every rule with its value in the world now (its owner's change waiting for the world counts already)."""
         folder = self._run_folder(name)
         values = self._world_rules(folder)
-        return {"groups": [{"name": name, "title": title} for name, title in GROUPS],
-                "rules": [{"name": r.name, "group": r.group, "words": r.words, "start": r.start, "low": r.low,
-                           "high": r.high, "value": values.get(r.name, r.start)} for r in RULES]}
+        return {"groups": [{"name": name, "title": title} for name, title in GROUPS], "genes": GENE_MEANS,
+                "rules": [{"name": r.name, "group": r.group, "words": r.words, "means": means(r.name), "start": r.start,
+                           "low": r.low, "high": r.high, "value": values.get(r.name, r.start)} for r in RULES]}
 
     def _world_rules(self, folder: Path) -> Dict[str, float]:
         numbers = folder / "now.json"

@@ -36,6 +36,13 @@ class TestRules(unittest.TestCase):
         self.assertEqual(set(changes.values()), {0.05})
         self.assertGreaterEqual(len(changes), 8)
 
+    def test_every_rule_and_gene_says_what_it_means(self):
+        from src.rules import GENE_MEANS, means
+        for r in RULES:
+            self.assertGreater(len(means(r.name)), 15, r.name)
+        genes = {r.name.split(".")[1] for r in RULES if r.name.startswith("gene.") and not r.name.startswith("gene.weights")}
+        self.assertEqual(genes - set(GENE_MEANS), set())
+
     def test_every_rule_has_a_group(self):
         from src.rules import GROUPS
         self.assertEqual([g for g, _ in GROUPS], ["costs", "world", "body", "senses", "birth", "genes", "learning", "auto", "exam", "runner"])

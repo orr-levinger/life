@@ -122,12 +122,114 @@ RULES += (
     Rule("gene.layers.start", "genes", "Layers: a newcomer gets", 1.0, 1.0, 3.0),
 )
 
-GROUPS = (("costs", "Costs"), ("world", "World"), ("body", "Body and movement"), ("senses", "Senses and hunting"),
+GROUPS = (("costs", "Costs"), ("world", "World"), ("body", "Body: energy, size and speed"), ("senses", "Eating and hunting"),
           ("birth", "Birth and death"), ("genes", "Genes"), ("learning", "Learning"), ("auto", "Auto"), ("exam", "Exam"),
           ("runner", "Runner"))
 
 _BY_NAME = {rule.name: rule for rule in RULES}
 ROOM_SLOTS = int(_BY_NAME["room"].high)  # a learner keeps a slot for each creature there may ever be room for
+
+
+# What each rule means, in plain words (the "What it means" column of the Rules page).
+MEANS = {
+    "eat_miss": "Energy lost when it tries to eat with no food in reach.",
+    "attack_cost": "Energy the attacker spends on each attack, hit or miss. A bigger attacker pays more.",
+    "attack_damage": "Energy the creature being hit loses. A bigger attacker hits harder.",
+    "baby_share": "When it has a baby, this share of its energy goes into the baby (0.4 = 40 %).",
+    "sprint_power": "Going faster than its normal speed costs extra: at 2, twice its normal speed costs 4 times as much.",
+    "neuron_cost": "Energy each neuron of its brain costs every step. A bigger brain costs more.",
+    "vision_cost": "Energy seeing costs every step, for each square unit of its vision cone. Seeing wider or further "
+                   "costs more.",
+    "hearing_cost": "Energy hearing costs every step, for each square unit of its hearing circle. Hearing further costs "
+                    "more.",
+    "world_width": "How wide the world is, in map units.",
+    "world_height": "How tall the world is, in map units.",
+    "room": "The most creatures that can live at once. While it is full, nobody has a baby.",
+    "soup": "While fewer than this many are alive, random new creatures appear, so the world never dies out.",
+    "newcomer_energy_low": "A random newcomer starts with at least this much energy.",
+    "newcomer_energy_high": "A random newcomer starts with at most this much energy.",
+    "tank": "The most energy a creature can hold. A bigger creature holds more.",
+    "body_radius": "How big its body is on the map. A bigger creature is wider.",
+    "cruise_speed": "How far it moves in one step at its normal speed. A smaller creature is faster.",
+    "sprint_speed": "The fastest it can go in a burst. A bigger creature sprints faster, but sprinting costs a lot.",
+    "birth_at": "It has a baby when its energy reaches this share of its tank (0.7 = 70 % full).",
+    "low_energy": "Once it is older than its lifespan, it dies when its energy falls below this share of its tank.",
+    "eat_range": "How close food must be to eat it, counted in body widths.",
+    "attack_range": "How close another creature must be to hit it, counted in body widths.",
+    "hunter_share": "Of the energy a hit takes from the prey, the hunter keeps this share (0.8 = 80 %).",
+    "corpse_energy": "When a creature dies, it leaves food worth this × its size.",
+    "corpse_steps": "How many steps a dead creature's food stays before it is gone.",
+    "first_creatures": "How many creatures a brand-new world starts with.",
+    "bite": "The most food energy it can eat in one step.",
+    "threat_ratio": "Another creature counts as bigger (a threat to flee) or smaller (prey to chase) when it is this "
+                    "many times its size.",
+    "learn_rollout": "It learns from its own life every this many steps.",
+    "learn_passes": "How many times it goes over those steps when it learns.",
+    "learn_clip": "The most one learning round may change how it behaves (0.2 = 20 %).",
+    "learn_discount": "How much it cares about later rewards: at 0.99 a reward 100 steps away still counts about a "
+                      "third.",
+    "learn_credit": "How far back a reward is credited to the moves that led to it (1 = all the way back).",
+    "learn_explore": "How much it is pushed to try new things instead of repeating what worked.",
+    "learn_guess": "How much it practises guessing how good its situation is (that guess helps it learn).",
+    "learn_spread": "How random a newborn's moves are before it has learned anything.",
+    "auto_target": "Auto makes the world harder or easier to keep about this many creatures alive.",
+    "auto_hunters_at": "Hunting is switched on once Auto's difficulty number reaches this.",
+    "auto_every": "Auto checks the world every this many steps.",
+    "auto_per_creatures": "Auto moves one nudge harder or easier for every this many creatures above or below its "
+                          "target.",
+    "auto_per_alive_rate": "Auto adds one nudge for every this share the number alive grows or shrinks per 1,000 "
+                           "steps.",
+    "auto_per_energy_rate": "Auto adds one nudge for every this share of a full tank the average energy falls per "
+                            "1,000 steps.",
+    "auto_max_nudges": "The most nudges Auto makes in one check.",
+    "auto_measure": "Auto judges how things are going over this many last steps.",
+    "auto_nudge": "How much one nudge changes the costs and the food (0.05 = 5 %).",
+    "exam_every": "How often some creatures take a test in a fixed world, so scores compare over time.",
+    "exam_brains": "How many creatures take each test.",
+    "exam_steps": "How many steps one test lasts.",
+    "exam_max_food": "The test world: the most food pieces at once.",
+    "exam_food_energy_low": "The test world: a food piece is worth at least this.",
+    "exam_food_energy_high": "The test world: a food piece is worth at most this.",
+    "exam_food_per_step": "The test world: new food pieces each step.",
+    "exam_move_cost": "The test world: energy moving costs, per unit of distance.",
+    "exam_step_cost": "The test world: energy being alive costs, each step.",
+    "exam_start_share": "In the test, creatures start with this share of a full tank.",
+    "save_every": "The world saves itself to disk every this many steps.",
+    "row_every": "One row of numbers (one point on the charts) every this many steps.",
+    "control_every": "The world checks this page for your changes every this many steps.",
+    "now_seconds": "How often the live tiles update, in seconds.",
+    "gene.weights.share": "When the gene a baby changes is its brain weights, this share of the weights changes "
+                          "(0.02 = 2 %).",
+    "gene.weights.size": "How much each changed weight moves, up or down.",
+}
+
+# What each gene is, in plain words (the gene table's "What it means" column).
+GENE_MEANS = {
+    "size": "How big its body is. Bigger holds more energy, hits harder and sprints faster, but costs more to live and "
+            "move.",
+    "vision_width": "How wide its vision cone is, in degrees.",
+    "vision_reach": "How far it sees.",
+    "hearing": "How far it hears, all around. Sound tells where and how far, never how big.",
+    "fear": "How much its own death counts as a loss when it learns.",
+    "love": "How much having a baby counts as a reward when it learns.",
+    "learns": "How much it learns from what it sees others go through (1 = as much as from its own life).",
+    "learning_speed": "How fast its brain changes when it learns.",
+    "neurons": "How many neurons each brain layer has. Each neuron costs energy every step.",
+    "layers": "How many layers its brain has.",
+}
+
+_PART_MEANS = {"low": "No creature's {g} goes below this.", "high": "No creature's {g} goes above this.",
+               "start": "A random newcomer starts with this.", "new_low": "A random newcomer gets at least this.",
+               "new_high": "A random newcomer gets at most this.",
+               "change": "When this is the gene a baby changes, it changes by up to this share (0.05 = 5 %)."}
+
+
+def means(name: str) -> str:
+    """What rule `name` means, in plain words."""
+    if name in MEANS:
+        return MEANS[name]
+    part = name.split(".")[2]
+    return _PART_MEANS[part].format(g=_BY_NAME[name].words.split(":")[0].lower())
 
 
 def rule(name: str) -> Rule:

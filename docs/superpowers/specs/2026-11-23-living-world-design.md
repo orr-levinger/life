@@ -295,6 +295,14 @@ The owner: "we should give creatures a distinct look based on their age, intelli
 - Saves become format 3 (each creature's energy earned and spent); older saves are converted, those counts starting
   at zero from the conversion on.
 
+### Quarter speed (the owner, 2026-11-24: "Yes, quarter speed")
+
+A creature's top speed was 1 ÷ its size per step, so the smallest crossed 2 units a step while it can only eat within
+about 1, and kept overshooting food. Now every creature moves at most a quarter of that: `SPEED` 0.25 ÷ size (the
+smallest 0.5 a step, the biggest 0.125). A step is a smaller slice of time; moving costs the same per distance, so energy
+is unaffected; crossing the world takes four times as many steps. Lifespans and every other number in steps stay as
+they are.
+
 ### The intelligence exam
 
 The owner: "At the end, whoever survives is smart in nature." · "Intelligence should be rewards / waste or something

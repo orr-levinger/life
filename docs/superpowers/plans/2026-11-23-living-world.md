@@ -631,6 +631,19 @@ Spec: "How a creature looks in Jump in".
   show; food is a tan diamond; pointing at a creature shows its numbers. No console errors. In the ledger.
 - [x] **Step 6: Commit** as `feat: how a creature looks in Jump in`.
 
+### Task 4r: Quarter speed (added 2026-11-24; the owner: "Yes, quarter speed")
+
+Spec: "Quarter speed". **Files:** Modify: `src/settings.py` (`SPEED = 0.25`), `src/creature.py` (`velocity = SPEED / size`),
+`tests/test_world_rules.py`.
+
+- [ ] **Step 1: Change the test:** `test_move_cost_and_speed_cap` expects a size-1 creature to move at most 0.25 a step;
+  `test_speed_is_a_quarter_of_one_over_size`.
+- [ ] **Step 2: Run it to see it fail.**
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run the suite** · Expected: `OK`.
+- [ ] **Step 5: Update code** on the owner's world; in Jump in small creatures move in short steps. In the ledger.
+- [ ] **Step 6: Commit** as `feat: quarter speed`.
+
 ### Task 5: The brain's size evolves (added 2026-11-23; the owner: "Ok")
 
 Built only after Task 4's check has passed, so a learning failure cannot be confused with this machinery.

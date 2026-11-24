@@ -78,6 +78,15 @@
   .row .num { font-variant-numeric: tabular-nums; }
   .row .num strong { font-weight: 600; font-size: 15px; }
   .good { color: var(--eat); } .bad { color: var(--warn); }
+  #rules-page { display: grid; gap: 14px; }
+  .rules-table { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; overflow-x: auto; }
+  .rules-table h2 { font-size: 15px; margin: 0 0 6px; } .rules-table h2 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .rules-table table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+  .rules-table th { text-align: left; color: var(--muted); font-weight: 400; font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--grid); }
+  .rules-table td { padding: 4px 6px; border-bottom: 1px solid var(--grid); }
+  .rules-table input { width: 84px; background: var(--page); color: var(--ink); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
+  .rules-table .auto { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--muted); color: var(--muted); margin-left: 6px; }
+  .rules-table .error { display: block; }
   .mark { font-size: 11px; border: 1px solid var(--ink); border-radius: 5px; padding: 0 5px; margin-left: 6px; }
   [data-tip] { cursor: help; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
   #tip { position: fixed; z-index: 5; max-width: 340px; background: var(--surface); border: 1px solid var(--muted);
@@ -117,6 +126,7 @@
   <div class="seg">
     <button id="tab-live" type="button">Live</button>
     <button id="tab-history" type="button">History</button>
+    <button id="tab-rules" type="button">Rules</button>
   </div>
   <div id="legend"></div>
   <div id="clock"><i class="dot stale"></i>connecting…</div>
@@ -146,6 +156,7 @@
   <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
   <canvas id="watch-legend" height="120" aria-label="What a creature's look means: point at a creature in the world to see its numbers"></canvas>
 </section>
+<section id="rules-page" hidden></section>
 <div id="runs"></div>
 <div id="charts"></div>
 <div id="tip" role="tooltip"></div>
@@ -186,7 +197,7 @@ const PANELS = [
 const W = 520, H = 250, M = { l: 44, r: 108, t: 10, b: 30 };
 const PENDING_FOR = 20000;  // ms a value moved by hand is shown before the world's own row must confirm it
 let data = [], lastChange = 0, signature = "", picked = null, KNOBS = [], startMode = "auto";
-let view = location.hash === "#history" ? "history" : "live";
+let view = { "#history": "history", "#rules": "rules" }[location.hash] || "live";
 const cards = new Map();  // a running world's controls, kept between polls so a drag is never interrupted
 
 const colorOf = (kind) => {
@@ -1047,9 +1058,89 @@ document.addEventListener("mouseover", (event) => {  // every number explains it
   tip.style.top = `${box.bottom + 6 + tip.offsetHeight > innerHeight ? box.top - tip.offsetHeight - 6 : box.bottom + 6}px`;
 });
 
+// ---- Rules: every cost, value and gene of the running world, each changeable at once ----
+const RULE_TABLES = [["costs", "Costs", "energy a creature pays (a bite of food gives 1)"], ["values", "Values", ""],
+                     ["genes", "Genes", "new limits apply to babies born from now on"]];
+const AUTO_COSTS = [["step_cost", "Being alive, each step, × size"], ["move_cost", "Moving, per unit of distance, × size"]];
+const numberText = (v) => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : String(Number(v.toPrecision(4)));
+
+function ruleInput(rule) {  // one number box: a rule of the world, or one of Auto's two cost knobs
+  return `<input type="number" step="any" data-rule="${rule.name}"${rule.knob ? ' data-knob="1"' : ""} value="${numberText(rule.value)}"
+    data-tip="${rule.words}: from ${numberText(rule.low)} to ${numberText(rule.high)}; a new world starts at ${numberText(rule.start)}"
+    aria-label="${rule.words}">`;
+}
+
+function ruleRow(rule) {
+  return `<tr><td>${rule.words}${rule.knob ? '<span class="auto" data-tip="Auto moves this while the world is on Auto; your change holds on Manual">Auto</span>' : ""}</td>
+    <td>${ruleInput(rule)}<span class="error"></span></td><td>${numberText(rule.low)} – ${numberText(rule.high)}</td>
+    <td>${numberText(rule.start)}</td><td><button class="act" type="button" data-reset="${rule.name}">Reset</button></td></tr>`;
+}
+
+function geneRows(rules) {  // one row a gene: lowest – highest, what a newcomer gets, how much a baby's copy changes
+  const genes = [...new Set(rules.map((r) => r.name.split(".")[1]))];
+  return genes.map((gene) => {
+    const own = (part) => rules.find((r) => r.name === `gene.${gene}.${part}`);
+    const box = (part) => own(part) ? `${ruleInput(own(part))}` : "";
+    const newcomer = own("start") ? box("start") : `${box("new_low")} – ${box("new_high")}`;
+    return `<tr><td>${own("low").words.split(":")[0]}</td><td>${box("low")} – ${box("high")}</td><td>${newcomer}</td>
+      <td>${box("change")}<span class="error"></span></td></tr>`;
+  }).join("");
+}
+
+async function drawRules() {
+  const page = document.getElementById("rules-page"), run = data.find((r) => r.status === "running");
+  if (!run) { page.dataset.run = ""; page.innerHTML = '<div class="nothing"><b>Nothing is running</b>Start a world to see and change its rules.</div>'; return; }
+  const answer = await (await fetch(`/rules?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })).json();
+  const last = lastRow(run) || {};
+  const autoCosts = AUTO_COSTS.map(([name, words]) => {
+    const knob = KNOBS.find((k) => k.name === name);
+    return { name, words, knob: true, value: last[name] ?? knob.start, start: knob.start,
+             low: Math.min(knob.easiest, knob.hardest), high: Math.max(knob.easiest, knob.hardest) };
+  });
+  const rules = [...autoCosts, ...answer.rules];
+  if (page.dataset.run === run.name) {  // already drawn: only the values move, never the box being typed in
+    for (const rule of rules) {
+      const input = page.querySelector(`input[data-rule="${rule.name}"]`);
+      if (input && input !== document.activeElement) input.value = numberText(rule.value);
+    }
+    return;
+  }
+  page.dataset.run = run.name;
+  page.innerHTML = RULE_TABLES.map(([table, title, note]) => {
+    const mine = rules.filter((r) => (r.knob ? "costs" : r.table) === table);
+    const head = table === "genes" ? "<tr><th>Gene</th><th>Lowest – highest</th><th>Newcomer gets</th><th>Baby change (share)</th></tr>"
+                                    : `<tr><th>${table === "costs" ? "Cost" : "Value"}</th><th>Now</th><th>Range</th><th>Start</th><th></th></tr>`;
+    const body = table === "genes" ? geneRows(mine) : mine.map(ruleRow).join("");
+    return `<div class="rules-table"><h2>${title}<small>${note}</small></h2><table>${head}${body}</table></div>`;
+  }).join("");
+  const change = async (name, value, knob, where) => {
+    const error = where.closest("td").querySelector(".error");
+    try {
+      await send("/control", knob ? { run: run.name, settings: { [name]: value } } : { run: run.name, rules: { [name]: value } });
+      say(error, "", "");
+    } catch (problem) {
+      say(error, problem.message, "refused");
+    }
+  };
+  page.querySelectorAll("input[data-rule]").forEach((input) => input.addEventListener("change", () =>
+    change(input.dataset.rule, Number(input.value), !!input.dataset.knob, input)));
+  page.querySelectorAll("button[data-reset]").forEach((button) => button.addEventListener("click", () => {
+    const rule = rules.find((r) => r.name === button.dataset.reset), input = page.querySelector(`input[data-rule="${rule.name}"]`);
+    input.value = numberText(rule.start);
+    change(rule.name, rule.start, !!rule.knob, input);
+  }));
+}
+
 function render() {
-  for (const name of ["live", "history"]) document.getElementById(`tab-${name}`).classList.toggle("on", view === name);
-  const live = view === "live";
+  for (const name of ["live", "history", "rules"]) document.getElementById(`tab-${name}`).classList.toggle("on", view === name);
+  const live = view === "live", rulesView = view === "rules";
+  document.getElementById("rules-page").hidden = !rulesView;
+  document.getElementById("charts").hidden = rulesView;
+  if (rulesView) {
+    for (const id of ["start", "worlds", "runs"]) document.getElementById(id).hidden = true;
+    if (watching) jumpOut();
+    return drawRules();
+  }
   document.getElementById("start").hidden = !live;
   document.getElementById("worlds").hidden = !live;
   if (!live && watching) jumpOut();
@@ -1074,11 +1165,12 @@ function render() {
 
 function show(next) {
   view = next;
-  history.replaceState(null, "", next === "history" ? "#history" : "#");
+  history.replaceState(null, "", next === "live" ? "#" : `#${next}`);
   render();
 }
 document.getElementById("tab-live").addEventListener("click", () => show("live"));
 document.getElementById("tab-history").addEventListener("click", () => show("history"));
+document.getElementById("tab-rules").addEventListener("click", () => show("rules"));
 
 for (const button of document.querySelectorAll("#start-mode button"))
   button.addEventListener("click", () => {

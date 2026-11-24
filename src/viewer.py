@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -26,6 +27,7 @@ from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run
 from .dial import KNOBS, value
 from .evolve import SPECIES
 from .saves import save_header, save_path, saves_of
+from .rules import RULES, check, starting_rules
 from .scoreboard import OLDER_LAYOUTS, ROW_KEYS, read_rows
 from .settings import START, Settings
 
@@ -180,6 +182,34 @@ class Controls:
         numbers = self._run_folder(name) / "now.json"
         return numbers.read_bytes() if numbers.exists() else b"null"
 
+    def rules(self, name: Optional[str]) -> Dict:
+        """Every rule with its value in the world now (its owner's change waiting for the world counts already)."""
+        folder = self._run_folder(name)
+        values = self._world_rules(folder)
+        return {"rules": [{"name": r.name, "table": r.table, "words": r.words, "start": r.start, "low": r.low,
+                           "high": r.high, "value": values[r.name]} for r in RULES]}
+
+    def _world_rules(self, folder: Path) -> Dict[str, float]:
+        numbers = folder / "now.json"
+        now = json.loads(numbers.read_text()) if numbers.exists() else None
+        values = dict(now["rules"]) if now and "rules" in now else starting_rules()
+        pending = read_control(folder)
+        return {**values, **(pending.rules if pending and pending.rules else {})}
+
+    def _rule_changes(self, folder: Path, given: object, current: Optional[Dict[str, float]]) -> Dict[str, float]:
+        """The owner's rule changes so far with `given` added, each checked against the world's rules."""
+        if not isinstance(given, dict):
+            raise Refused(400, "rules must map each rule to its new value")
+        values, changes = self._world_rules(folder), dict(current or {})
+        for name, value in given.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise Refused(400, f"{name} must be a number, not {value!r}")
+            problem = check(values, name, float(value))
+            if problem:
+                raise Refused(400, problem)
+            values[name] = changes[name] = float(value)
+        return changes
+
     def control(self, body: Dict) -> Dict:
         running = self._running()
         name = body.get("run")
@@ -217,12 +247,15 @@ class Controls:
             if not isinstance(body["watch"], bool):
                 raise Refused(400, "watch must be true or false")
             watch_until = time.time() + WATCH_LEASE if body["watch"] else None  # the page renews it while it watches
+        rules = current.rules
+        if "rules" in body:
+            rules = self._rule_changes(folder, body["rules"], current.rules)
         update = body.get("update", False)
         if not isinstance(update, bool):
             raise Refused(400, "update must be true or false")
         if update:  # the world saves and ends; then it goes on from that save with today's code, in the same run
             stop, paused = True, False
-        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused, hunters))
+        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused, hunters, rules))
         if update:
             threading.Thread(target=self._hand_over, args=(folder,), daemon=True).start()
         return {"mode": mode, "settings": None if settings is None else knob_values(settings), "stop": stop,
@@ -285,13 +318,15 @@ def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingH
                 self._send(200, runs(folder))
             elif self.path.startswith("/knobs"):
                 self._send(200, knobs())
-            elif self.path.startswith(("/view", "/saves", "/now")):
+            elif self.path.startswith(("/view", "/saves", "/now", "/rules")):
                 try:
                     name = parse_qs(urlparse(self.path).query).get("run", [None])[0]
                     if self.path.startswith("/view"):
                         self._raw(200, controls.view(name), "application/json")
                     elif self.path.startswith("/now"):
                         self._raw(200, controls.now(name), "application/json")
+                    elif self.path.startswith("/rules"):
+                        self._send(200, controls.rules(name))
                     else:
                         self._send(200, controls.saves(name))
                 except Refused as refused:

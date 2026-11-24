@@ -24,6 +24,13 @@ class TestControl(unittest.TestCase):
         self.assertEqual(stopped, Control("auto", None, True))
         self.assertEqual(leftovers, ["control.json"])  # the temporary file was renamed into place
 
+    def test_rule_changes_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_control(Path(tmp), Control("auto", None, False, rules={"eat_miss": 0.5, "tank": 120.0}))
+            self.assertEqual(read_control(Path(tmp)).rules, {"eat_miss": 0.5, "tank": 120.0})
+            write_control(Path(tmp), Control("auto", None, False))
+            self.assertIsNone(read_control(Path(tmp)).rules)
+
     def test_settings_from_sets_only_the_named_knobs(self):
         settings = settings_from({"move_cost": 1.0, "hunters": True}, START)
         self.assertEqual(settings, replace(START, move_cost=1.0, attacks=True))

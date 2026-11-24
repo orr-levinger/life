@@ -163,6 +163,46 @@ class TestControlRoom(unittest.TestCase):
         write_control(self.root / name, Control("auto", None, False))
         return name
 
+    def test_rules_endpoint_lists_every_rule(self):
+        from src.rules import RULES
+        name = self.running_world()
+        answer = self.server.get(f"/rules?run={name}")
+        self.assertEqual([r["name"] for r in answer["rules"]], [r.name for r in RULES])
+        eat = next(r for r in answer["rules"] if r["name"] == "eat_miss")
+        self.assertEqual((eat["table"], eat["value"], eat["start"], eat["low"], eat["high"]), ("costs", 0.2, 0.2, 0.0, 5.0))
+        (self.root / name / "now.json").write_text(json.dumps({"step": 9, "rules": {**{r.name: r.start for r in RULES},
+                                                                                     "eat_miss": 0.4}}))
+        answer = self.server.get(f"/rules?run={name}")
+        self.assertEqual(next(r for r in answer["rules"] if r["name"] == "eat_miss")["value"], 0.4)  # the world's own
+
+    def test_a_rule_change_out_of_range_is_refused(self):
+        name = self.running_world()
+        status, answer = self.server.post("/control", {"run": name, "rules": {"eat_miss": 9}})
+        self.assertEqual((status, answer["error"]), (400, "Eating at nothing can be at most 5"))
+        status, answer = self.server.post("/control", {"run": name, "rules": {"gene.size.low": 3}})
+        self.assertEqual(status, 400)
+        self.assertIsNone(read_control(self.root / name).rules)
+        status, answer = self.server.post("/control", {"run": name, "rules": {"eat_miss": 0.5}})
+        self.assertEqual(status, 200)
+        status, answer = self.server.post("/control", {"run": name, "rules": {"tank": 150}})
+        self.assertEqual(read_control(self.root / name).rules, {"eat_miss": 0.5, "tank": 150.0})  # changes add up
+
+    def test_page_has_costs_values_and_genes(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('id="tab-rules"', 'id="rules-page"', "function drawRules", "\"Costs\"", "\"Values\"", "\"Genes\"",
+                      "/rules?run="):
+            self.assertIn(words, page)
+
+    def test_page_has_no_switches_and_no_read_only_rows(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        start = page.index("// ---- Rules:")
+        body = page[start:page.index("function render()", start)]  # the Rules page's own code
+        for word in ("checkbox", "readonly", "disabled"):
+            self.assertNotIn(word, body)
+        self.assertIn('type="number"', body)
+
     def test_knobs_list_the_ends_of_every_slider(self):
         answer = self.server.get("/knobs")
         self.assertEqual([k["name"] for k in answer["knobs"]], [k.name for k in KNOBS])

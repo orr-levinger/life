@@ -67,13 +67,13 @@ the difficulty number (put to the owner).
 range, start, Reset; the "Auto" mark on being alive and moving), `tests/test_control.py`, `tests/test_viewer.py`,
 `tests/test_evolve.py`.
 
-- [ ] **Step 1: Write the failing tests:** `test_rules_endpoint_lists_every_rule`, `test_a_rule_change_out_of_range_is_refused`,
+- [x] **Step 1: Write the failing tests:** `test_rules_endpoint_lists_every_rule`, `test_a_rule_change_out_of_range_is_refused`,
   `test_a_rule_change_reaches_the_running_world`, `test_page_has_costs_values_and_genes`,
   `test_page_has_no_switches_and_no_read_only_rows`.
-- [ ] **Step 2:** run them → they fail.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4:** `$PY -m unittest discover tests` → `OK`.
-- [ ] **Step 5: Commit** as `feat: the Rules page`.
+- [x] **Step 2:** run them → they fail.
+- [x] **Step 3: Implement.**
+- [x] **Step 4:** `$PY -m unittest discover tests` → `OK`.
+- [x] **Step 5: Commit** as `feat: the Rules page`.
 
 ### Task R3: The rules that were missing
 

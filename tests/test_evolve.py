@@ -213,6 +213,16 @@ class TestEvolve(unittest.TestCase):
         self.assertEqual(float(rows[1750]["max_food"]), 95)  # Auto's first nudge (at 1,500), from the owner's 100
         self.assertEqual(rows[1750]["food_energy"], rows[1000]["food_energy"])
 
+    def test_a_rule_change_reaches_the_running_world(self):
+        from src.saves import load_world
+        with tempfile.TemporaryDirectory() as folder, \
+                owner_writes_at(500, Control("auto", None, False, rules={"eat_miss": 0.9, "tank": 150.0})):
+            quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder])
+            now = json.loads((Path(folder) / "now.json").read_text())
+            world, _, _ = load_world(Path(folder) / "saves" / f"step-{1000:07d}.npz", learner_seed=0)
+        self.assertEqual((now["rules"]["eat_miss"], now["rules"]["tank"]), (0.9, 150.0))
+        self.assertEqual((world.rules["eat_miss"], world.rules["tank"]), (0.9, 150.0))  # kept in its save
+
     def test_stop_ends_a_run_without_a_limit(self):
         with tempfile.TemporaryDirectory() as folder, owner_writes_at(750, Control("auto", None, True)):
             rows = read_rows(quiet_run(["--seed", "1", "--forever", "--species", "instinct", "--out", folder]))
@@ -363,7 +373,7 @@ class TestEvolve(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder]))
             now = json.loads((Path(folder) / "now.json").read_text())
-        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time"})
+        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time", "rules"})
         self.assertEqual((now["step"], now["alive"]), (1000, int(rows[-1]["population"])))
         self.assertEqual(now["births"], sum(int(r["births"]) for r in rows))
         self.assertEqual(now["deaths"], sum(int(r["deaths_hunger"]) + int(r["deaths_attack"]) + int(r["deaths_age"]) for r in rows))

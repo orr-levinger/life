@@ -128,6 +128,7 @@ def world_now(world: World) -> Dict[str, Any]:
         "step": world.step_count, "alive": len(alive),
         "energy": sum(max(c.energy, 0.0) / c.max_energy for c in alive) / len(alive) if alive else None,
         "food": len(world.foods), "births": world.births, "deaths": sum(world.deaths.values()), "time": time.time(),
+        "rules": dict(world.rules),
     }
 
 
@@ -144,10 +145,15 @@ class _Knobs:
         self.control = control
         self._applied = None
         self._applied_hunters = None
+        self._applied_rules = None
 
-    def take(self, control: Control, dial: Dial) -> bool:
-        """Takes the newest control; returns whether the owner's settings changed the world's."""
+    def take(self, control: Control, dial: Dial, world: World) -> bool:
+        """Takes the newest control: the owner's rule changes reach the world at once (in either mode); returns whether
+        the owner's settings changed the world's."""
         self.control = control
+        if control.rules is not None and control.rules != self._applied_rules:
+            self._applied_rules = dict(control.rules)
+            world.change_rules(control.rules)
         if control.mode != "manual" or control.settings is None:
             self._applied = None  # back in Auto: the same settings sent again later are a new choice
             if control.mode == "auto" and control.hunters is not None and control.hunters != self._applied_hunters:
@@ -213,7 +219,7 @@ def run(args: argparse.Namespace) -> Path:
     if control.settings is not None:  # the world starts from the settings the page asked for, in either mode
         dial.set(control.settings)
     knobs = _Knobs(control)
-    knobs.take(control, dial)
+    knobs.take(control, dial, world)
     world.set_settings(dial.settings, round(dial.level, 2))
 
     board = Scoreboard()
@@ -254,7 +260,7 @@ def run(args: argparse.Namespace) -> Path:
                 if found is not None:
                     if found.stop:
                         break
-                    if knobs.take(found, dial):
+                    if knobs.take(found, dial, world):
                         world.set_settings(dial.settings, round(dial.level, 2))
 
             world.step(board.observe)

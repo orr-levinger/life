@@ -134,6 +134,23 @@ class TestSenseGenes(unittest.TestCase):
         sprint = 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 1.0
         self.assertAlmostEqual(before - c.energy, NO_FOOD.step_cost + sprint + w.rules["vision_cost"] * c.sense_area())
 
+    def test_a_baby_changes_one_gene(self):
+        genes = ("size", "vision_width", "vision_reach", "hearing", "fear_of_death", "love_of_babies", "learns_from_others")
+        picked = set()
+        for seed in range(60):
+            w = make_world(seed=seed)
+            crowd(w)
+            parent = add(w, 10, 10, energy=80.0, policy="brain", brain=fixed_brain(STAY))
+            parent.vision_width, parent.vision_reach, parent.hearing = 100.0, 5.0, 2.0
+            w.step()
+            baby = next(c for c in w.creatures if c.parent_id == parent.id)
+            changed = [g for g in genes if getattr(baby, g) != getattr(parent, g)]
+            self.assertLessEqual(len(changed), 1, changed)  # one gene at most (none when learning speed was picked)
+            for g in changed:
+                self.assertLessEqual(abs(getattr(baby, g) / getattr(parent, g) - 1.0), 0.05 + 1e-9)
+            picked.update(changed)
+        self.assertEqual(picked, set(genes))  # every gene is picked sometime
+
     def test_babies_inherit_senses_in_the_limits(self):
         limits = lambda gene: (rule(f"gene.{gene}.low").start, rule(f"gene.{gene}.high").start)
         VISION_WIDTH_LIMITS, VISION_REACH_LIMITS, HEARING_LIMITS = (limits(g) for g in ("vision_width", "vision_reach", "hearing"))
@@ -660,8 +677,8 @@ class TestLearnersInWorld(unittest.TestCase):
         genes = learner.inborn(baby.slot)
         self.assertGreater(np.mean(genes.w1 == learned.w1), 0.7)
         self.assertLess(np.mean(np.isclose(genes.w1, born_with.w1)), 0.3)
-        self.assertNotEqual(learner.lr(baby.slot), learner.lr(parent.slot))
-        self.assertLess(abs(math.log(learner.lr(baby.slot) / learner.lr(parent.slot))), 1.5)
+        ratio = learner.lr(baby.slot) / learner.lr(parent.slot)  # changed only when learning speed is the baby's one gene
+        self.assertLessEqual(abs(ratio - 1.0), 0.05 + 1e-9)
 
     def test_learner_baby_inherits_born_brain_when_inborn(self):
         learner, _, baby, learned, born_with = self.parent_that_has_learned("inborn")

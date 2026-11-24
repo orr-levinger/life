@@ -69,14 +69,14 @@ RULES = (
     Rule("auto_target", "values", "Auto aims at this many alive", 64.0, 10.0, 80.0),
     Rule("auto_hunters_at", "values", "Auto switches hunters on at this difficulty", 24.0, 0.0, 200.0),
     Rule("auto_every", "values", "Auto looks every this many steps", 500.0, 100.0, 5000.0),
-) + _gene("size", "Size", 0.5, 2.0, (0.1, 5.0), 0.2, new=(0.5, 2.0)) \
-  + _gene("vision_width", "Vision width (degrees)", 30.0, 120.0, (1.0, 120.0), 0.2, new=(30.0, 120.0)) \
-  + _gene("vision_reach", "Vision reach", 1.0, 10.0, (0.1, 20.0), 0.2, new=(1.0, 10.0)) \
-  + _gene("hearing", "Hearing", 0.0, 4.0, (0.0, 20.0), 0.2, new=(0.0, 4.0)) \
-  + _gene("fear", "Fear of death", 0.1, 100.0, (0.0, 1000.0), 0.2, start=10.0) \
-  + _gene("love", "Love of babies", 0.1, 100.0, (0.0, 1000.0), 0.2, start=10.0) \
-  + _gene("learns", "Learning from others", 0.01, 1.0, (0.0, 1.0), 0.2, start=0.5) \
-  + _gene("learning_speed", "Learning speed", 1e-5, 1e-2, (1e-6, 0.1), 0.2, start=3e-4)
+) + _gene("size", "Size", 0.5, 2.0, (0.1, 5.0), 0.05, new=(0.5, 2.0)) \
+  + _gene("vision_width", "Vision width (degrees)", 30.0, 120.0, (1.0, 120.0), 0.05, new=(30.0, 120.0)) \
+  + _gene("vision_reach", "Vision reach", 1.0, 10.0, (0.1, 20.0), 0.05, new=(1.0, 10.0)) \
+  + _gene("hearing", "Hearing", 0.0, 4.0, (0.0, 20.0), 0.05, new=(0.0, 4.0)) \
+  + _gene("fear", "Fear of death", 0.1, 100.0, (0.0, 1000.0), 0.05, start=10.0) \
+  + _gene("love", "Love of babies", 0.1, 100.0, (0.0, 1000.0), 0.05, start=10.0) \
+  + _gene("learns", "Learning from others", 0.01, 1.0, (0.0, 1.0), 0.05, start=0.5) \
+  + _gene("learning_speed", "Learning speed", 1e-5, 1e-2, (1e-6, 0.1), 0.05, start=3e-4)
 
 _BY_NAME = {rule.name: rule for rule in RULES}
 ROOM_SLOTS = int(_BY_NAME["room"].high)  # a learner keeps a slot for each creature there may ever be room for

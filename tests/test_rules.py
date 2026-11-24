@@ -31,6 +31,11 @@ class TestRules(unittest.TestCase):
         w = make_world(seed=2)
         self.assertTrue(all(w.add_newcomer().vision_width <= 120.0 for _ in range(40)))
 
+    def test_a_baby_gene_changes_by_at_most_5_percent(self):
+        changes = {r.name: r.start for r in RULES if r.name.startswith("gene.") and r.name.endswith(".change")}
+        self.assertEqual(set(changes.values()), {0.05})
+        self.assertGreaterEqual(len(changes), 8)
+
     def test_the_world_reads_its_rules(self):
         w = make_world()
         c = add(w, 10, 10)

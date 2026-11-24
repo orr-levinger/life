@@ -23,6 +23,7 @@ if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to 
 
 Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
+GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed")  # a baby changes one
 
 
 class World:
@@ -239,14 +240,16 @@ class World:
         """The baby gets a share of the parent's energy and the parent's brain with mutations (a learner's brain as
         the world's `inherit` says: as it is now, or as the parent was born)."""
         slot = None
+        picked = self.rng.choice(GENES)  # the one gene this baby changes; it copies every other exactly
         if parent.policy == "learner":
             if not self.learner.has_room():
                 return
-            lr_factor = math.exp(self.rng.gauss(0.0, self.rules["gene.learning_speed.change"]))
+            change = self.rules["gene.learning_speed.change"]
+            lr_factor = 1.0 + self.rng.uniform(-change, change) if picked == "learning_speed" else 1.0
             slot = self.learner.baby(parent.slot, self.np_rng, lr_factor, self.inherit, self.rules["brain_change_share"],
                                      self.rules["brain_change_size"])
         gift = self.rules["baby_share"] * parent.energy
-        size = self._inherited(parent.size, "size")
+        size = self._inherited(parent.size, "size", picked)
         x = min(max(parent.x + self.rng.uniform(-1.0, 1.0), 0.0), self.width)
         y = min(max(parent.y + self.rng.uniform(-1.0, 1.0), 0.0), self.height)
         brain = (parent.brain.mutate(self.np_rng, self.rules["brain_change_share"], self.rules["brain_change_size"])
@@ -255,22 +258,25 @@ class World:
         baby = Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
                         parent_id=parent.id, generation=parent.generation + 1, slot=slot, rules=self.rules)
         baby.lifespan = round(self.rng.uniform(*self.settings.lifespan))
-        baby.vision_width = self._inherited(parent.vision_width, "vision_width")
-        baby.vision_reach = self._inherited(parent.vision_reach, "vision_reach")
-        baby.hearing = self._inherited(parent.hearing, "hearing")
-        baby.fear_of_death = self._inherited(parent.fear_of_death, "fear")
-        baby.love_of_babies = self._inherited(parent.love_of_babies, "love")
-        baby.learns_from_others = self._inherited(parent.learns_from_others, "learns")
+        baby.vision_width = self._inherited(parent.vision_width, "vision_width", picked)
+        baby.vision_reach = self._inherited(parent.vision_reach, "vision_reach", picked)
+        baby.hearing = self._inherited(parent.hearing, "hearing", picked)
+        baby.fear_of_death = self._inherited(parent.fear_of_death, "fear", picked)
+        baby.love_of_babies = self._inherited(parent.love_of_babies, "love", picked)
+        baby.learns_from_others = self._inherited(parent.learns_from_others, "learns", picked)
         self.creatures.append(baby)
         self.births += 1
         if parent.policy == "learner":
             self._had_baby.add(id(parent))
 
-    def _inherited(self, value: float, gene: str) -> float:
-        """A parent's gene for its baby: × (1 ± up to the gene's change), kept in the gene's limits."""
-        change = self.rules[f"gene.{gene}.change"]
+    def _inherited(self, value: float, gene: str, picked: str) -> float:
+        """A parent's gene for its baby: the picked gene × (1 ± up to its change), any other copied; kept in the gene's
+        limits (which may have changed since the parent was born)."""
         low, high = gene_limits(self.rules, gene)
-        return min(max(value * (1.0 + self.rng.uniform(-change, change)), low), high)
+        if gene == picked:
+            change = self.rules[f"gene.{gene}.change"]
+            value *= 1.0 + self.rng.uniform(-change, change)
+        return min(max(value, low), high)
 
     def _decay_food(self) -> None:
         kept = []

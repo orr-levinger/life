@@ -90,6 +90,19 @@ no size; 20 in all), `src/brain.py` and `src/learner.py` (20 inputs), `src/saves
 - [x] **Step 4:** `$PY -m unittest discover tests` → `OK`.
 - [x] **Step 5: Commit** as `feat: the rules that were missing`.
 
+### Task R3b: A baby's genes change by at most 5 % (added 2026-11-24; the owner: "just change the max mutation to 5%")
+
+Spec: section 2b. **Files:** Modify `src/rules.py` (every gene's `change` starts at 0.05), `tests/test_rules.py`.
+
+- [x] **Step 1: Write the failing tests:** `test_a_baby_gene_changes_by_at_most_5_percent` (every `gene.*.change` starts
+  at 0.05), `test_a_baby_changes_one_gene` (each baby differs from its parent in at most one gene; over many babies
+  every gene is picked sometime). **Files** also: `src/world.py` (`_birth` picks the one gene), `tests/test_world_rules.py`.
+- [x] **Step 2:** run them → they fail (0.2; every gene changes).
+- [x] **Step 3: Implement.**
+- [x] **Step 4:** `$PY -m unittest discover tests` → `OK`.
+- [x] **Step 5:** the owner's world: `POST /control` with every `gene.*.change` at 0.05; its `now.json` shows them.
+- [x] **Step 6: Commit** as `feat: a baby's genes change by at most 5 %`.
+
 ### Task R4: The brain's size evolves, each neuron costs
 
 As the approved Task 5 of `2026-11-23-living-world.md` (its interfaces and tests), with its numbers as rules

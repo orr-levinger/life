@@ -83,6 +83,15 @@ since step 158,000); the exam's design; Auto's way of steering.
 - The new numbers (reach 10, × size, 0.0005) are Claude's starting values, not measured; the page lets the owner change
   them.
 
+## 2b. A baby's genes change by at most 5 %
+
+The owner: "every gene can change up to 20%?" · "yes 20 too much" · "just change the max mutation to 5%".
+
+- **One gene a baby** (the owner: "5% total across all genes maybe? not every gene? mutations should be small no?" ·
+  "A"): each baby changes one gene, picked at random, by up to its "baby change" (starting **0.05**, was 0.2), and
+  copies every other gene exactly. Learning speed is one of the genes it may pick. The brain's weights keep their own
+  rule. The owner's running world gets the 0.05 through its Rules page.
+
 ## 3. One world at a time
 
 - **At most one running world.** Start is refused while one runs ("Stop the running world first").

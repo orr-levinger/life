@@ -564,9 +564,9 @@ const NOW_EVERY_MS = 1000, SAMPLES_KEPT = 300;  // one look a second; the energy
 const TILES = [
   ["step", "Step"], ["alive", "Alive"], ["energy", "Average energy"], ["smart", "Intelligence × random"],
   ["hardest", "Difficulty"], ["steer", "Steers to food"], ["born", "Born"], ["died", "Died"], ["generation", "Generation"],
-  ["flee", "Flees bigger"], ["chase", "Chases smaller"], ["vision", "Sees"], ["hearing", "Hears"],
-  ["fear", "Fear of death"], ["love", "Love of babies"], ["learns", "Learns from others"], ["neurons", "Neurons"],
-  ["biggest", "Biggest animal"], ["smallest", "Smallest animal"], ["bigbrain", "Biggest brain"], ["smallbrain", "Smallest brain"],
+  ["flee", "Flees bigger"], ["chase", "Chases smaller"], ["size", "Size"], ["brain", "Brain (neurons)"],
+  ["vision", "Sees (degrees)"], ["reach", "Sees how far"], ["hearing", "Hears how far"], ["fear", "Fear of death"],
+  ["love", "Love of babies"], ["learns", "Learns from others"],
 ];
 
 function makeTiles(state) {
@@ -663,33 +663,22 @@ function updateTiles(state) {
       `When a creature at most two-thirds its size is in sight, the share of moves toward it, over the last 1,000 steps: ` +
       `${share(n.chase)}. Chasing is how a hunter eats. "-" while no smaller creature was in sight.`,
       n.chase === null ? "" : n.chase >= 0.5 ? "good" : "");
-  set("vision", n.vision_width === null ? "-" : `${Math.round(n.vision_width)}°`,
-      n.vision_reach === null ? "" : `up to ${n.vision_reach.toFixed(1)} away`,
-      n.vision_width === null ? "No numbers yet." : `The average creature's vision cone is ${Math.round(n.vision_width)}° wide and ` +
-      `reaches ${n.vision_reach.toFixed(1)} units (the world is 50 wide). Both are in its genes; wider or farther costs ` +
-      `energy every step, by the area seen.`);
-  set("hearing", n.hearing === null ? "-" : n.hearing.toFixed(1), "units, all around",
-      n.hearing === null ? "No numbers yet." : `The average creature hears others up to ${n.hearing.toFixed(1)} units away in ` +
-      `every direction, even behind it. In its genes; farther costs energy every step, by the area heard.`);
-  const gene = (v, digits) => v === null ? "-" : v.toFixed(digits);
-  set("fear", gene(n.fear, 1), "a bite = 1", `How much dying counts against the average creature in its learning: ` +
-      `${gene(n.fear, 1)} bites. In its genes, starting at 10; evolution moves it.`);
-  set("love", gene(n.love, 1), "a bite = 1", `How much a baby counts for the average creature in its learning: ` +
-      `${gene(n.love, 1)} bites. In its genes, starting at 10; evolution moves it.`);
-  set("learns", gene(n.learns, 2), "1 = as much as its own", `How much the average creature learns from a step it sees ` +
-      `another live, against a step of its own: ${gene(n.learns, 2)}. In its genes, starting at 0.5; evolution moves it.`);
-  set("neurons", n.neurons === null ? "-" : Math.round(n.neurons), n.layers === null ? "" : `in ${n.layers.toFixed(1)} layers`,
-      `The average brain uses ${n.neurons === null ? "-" : Math.round(n.neurons)} neurons. Its size is in the genes; each ` +
-      `neuron costs energy every step.`);
-  const span = (key, i) => state.now && state.now[key] ? state.now[key][i] : null;
-  const sizeTip = (v, which) => v === null ? "No numbers yet." : `The ${which} creature alive now is size ${v.toFixed(2)} (sizes go from ` +
-    `${state.now && state.now.rules ? state.now.rules["gene.size.low"] : 0.5} to ${state.now && state.now.rules ? state.now.rules["gene.size.high"] : 2}).`;
-  set("biggest", span("size", 1) === null ? "-" : span("size", 1).toFixed(2), "size", sizeTip(span("size", 1), "biggest"));
-  set("smallest", span("size", 0) === null ? "-" : span("size", 0).toFixed(2), "size", sizeTip(span("size", 0), "smallest"));
-  set("bigbrain", span("neurons", 1) === null ? "-" : span("neurons", 1), "neurons",
-      span("neurons", 1) === null ? "No numbers yet." : `The biggest brain alive now has ${span("neurons", 1)} neurons.`);
-  set("smallbrain", span("neurons", 0) === null ? "-" : span("neurons", 0), "neurons",
-      span("neurons", 0) === null ? "No numbers yet." : `The smallest brain alive now has ${span("neurons", 0)} neurons.`);
+  // the genes of the living, each as its average with the lowest and highest (from the world's live numbers)
+  const spread = (key) => state.now && state.now.genes ? state.now.genes[key] : null;
+  const geneTile = (tile, key, digits, unit, words) => {
+    const g = spread(key), show = (v) => `${v.toFixed(digits)}${unit}`;
+    set(tile, g ? show(g[1]) : "-", g ? `min ${show(g[0])} · max ${show(g[2])}` : "",
+        g ? `${words}: average ${show(g[1])}, lowest ${show(g[0])}, highest ${show(g[2])} among the living. In the genes; evolution moves it.`
+          : "No numbers yet.");
+  };
+  geneTile("size", "size", 2, "", "Body size");
+  geneTile("brain", "neurons", 0, "", "Neurons in a brain (each costs energy every step)");
+  geneTile("vision", "vision_width", 0, "°", "Vision cone width");
+  geneTile("reach", "vision_reach", 1, "", "How far it sees");
+  geneTile("hearing", "hearing", 1, "", "How far it hears, all around");
+  geneTile("fear", "fear_of_death", 1, "", "Fear of death (a bite = 1)");
+  geneTile("love", "love_of_babies", 1, "", "Love of babies (a bite = 1)");
+  geneTile("learns", "learns_from_others", 2, "", "Learning from others (1 = as much as from its own step)");
   const points = state.samples.filter((x) => x.energy !== null);
   const svg = state.tiles.querySelector("svg");
   if (points.length > 1) {

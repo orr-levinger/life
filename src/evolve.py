@@ -125,9 +125,17 @@ def world_now(world: World) -> Dict[str, Any]:
         "energy": sum(max(c.energy, 0.0) / c.max_energy for c in alive) / len(alive) if alive else None,
         "food": len(world.foods), "births": world.births, "deaths": sum(world.deaths.values()), "time": time.time(),
         "rules": dict(world.rules),
-        "size": [min(c.size for c in alive), max(c.size for c in alive)] if alive else None,  # smallest, biggest
-        "neurons": [min(brains), max(brains)] if (brains := [c.neurons for c in alive if c.layers]) else None,
+        "genes": {key: _spread([getattr(c, key) for c in alive if key != "neurons" or c.layers]) for key in GENE_TILES},
     }
+
+
+GENE_TILES = ("size", "neurons", "vision_width", "vision_reach", "hearing", "fear_of_death", "love_of_babies",
+              "learns_from_others")
+
+
+def _spread(values: List[float]) -> Optional[List[float]]:
+    """Lowest, average, highest of a gene among the living (None with nobody to measure)."""
+    return [min(values), sum(values) / len(values), max(values)] if values else None
 
 
 def _format(row: Dict[str, Value]) -> str:

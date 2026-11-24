@@ -376,7 +376,9 @@ class TestEvolve(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder]))
             now = json.loads((Path(folder) / "now.json").read_text())
-        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time", "rules", "size", "neurons"})
+        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time", "rules", "genes"})
+        low, mean, high = now["genes"]["size"]
+        self.assertTrue(low <= mean <= high)
         self.assertEqual((now["step"], now["alive"]), (1000, int(rows[-1]["population"])))
         self.assertEqual(now["births"], sum(int(r["births"]) for r in rows))
         self.assertEqual(now["deaths"], sum(int(r["deaths_hunger"]) + int(r["deaths_attack"]) + int(r["deaths_age"]) for r in rows))

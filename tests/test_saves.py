@@ -10,13 +10,23 @@ from pathlib import Path
 
 import numpy as np
 
-from src.dial import TARGET_ALIVE, Dial
+from src.dial import Dial
 from src.evolve import parse_args, run
 from src.learner import Learner
 from src.saves import SAVE_FORMAT, SaveError, load_world, save_world, saves_of
-from src.settings import MAX_CREATURES, START
+from src.rules import ROOM_SLOTS as MAX_CREATURES
+from src.settings import START
 from tests.helpers import make_world, populate
 from tests.test_learner import live
+from src.rules import rule
+
+TARGET_ALIVE = rule("auto_target").start
+
+
+def before_rules(about):
+    """A save from before format 6: the world's size instead of its rules."""
+    rules = about.pop("rules")
+    return {**about, "width": rules["world_width"], "height": rules["world_height"]}
 
 
 def quiet_run(argv):
@@ -142,6 +152,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 1
+            about = before_rules(about)
             del about["dial"]["hunters"]  # what a format 1 save held
             arrays["about"] = np.array(json.dumps(about))
             np.savez(path, **arrays)
@@ -160,6 +171,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 2
+            about = before_rules(about)
             for creature in about["creatures"]:  # what a format 2 save held
                 for key in ("earned", "spent", "vision_width", "vision_reach", "hearing", "facing", "fear_of_death",
                             "love_of_babies", "learns_from_others", "hurt"):
@@ -183,6 +195,7 @@ class TestSaves(unittest.TestCase):
                     arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
                 about = json.loads(str(arrays["about"]))
                 about["format"] = 3
+                about = before_rules(about)
                 for creature in about["creatures"]:  # what a format 3 save held
                     for key in ("vision_width", "vision_reach", "hearing", "facing", "fear_of_death", "love_of_babies",
                                 "learns_from_others", "hurt"):
@@ -212,6 +225,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 4
+            about = before_rules(about)
             for creature in about["creatures"]:  # what a format 4 save held
                 for key in ("fear_of_death", "love_of_babies", "learns_from_others", "hurt"):
                     del creature[key]
@@ -221,6 +235,35 @@ class TestSaves(unittest.TestCase):
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertEqual({(c.fear_of_death, c.love_of_babies, c.learns_from_others) for c in loaded.creatures},
                          {(10.0, 10.0, 0.5)})
+
+    def test_rules_are_kept_in_a_save(self):
+        world = make_world(seed=8)
+        populate(world, 3)
+        world.rules["eat_miss"], world.rules["gene.size.high"] = 0.7, 1.6
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual((loaded.rules["eat_miss"], loaded.rules["gene.size.high"]), (0.7, 1.6))
+        self.assertEqual(loaded.rules, world.rules)
+
+    def test_a_format_5_save_gets_the_starting_rules(self):
+        from src.rules import starting_rules
+        world = make_world(seed=9)
+        populate(world, 3)
+        world.rules["eat_miss"] = 0.7
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 5
+            about = before_rules(about)
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual(loaded.rules, starting_rules())
 
     def test_a_format_4_brain_gets_four_silent_pain_inputs(self):
         world = make_world(seed=7)
@@ -232,6 +275,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 4
+            about = before_rules(about)
             for creature in about["creatures"]:  # what a format 4 save held
                 for key in ("fear_of_death", "love_of_babies", "learns_from_others", "hurt"):
                     del creature[key]
@@ -255,6 +299,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 3
+            about = before_rules(about)
             for creature in about["creatures"]:
                 for key in ("vision_width", "vision_reach", "hearing", "facing", "fear_of_death", "love_of_babies",
                                 "learns_from_others", "hurt"):

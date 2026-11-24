@@ -14,7 +14,6 @@ import numpy as np
 import tensorflow as tf
 
 from .brain import jitter
-from .settings import MUTATION_RATE, MUTATION_SCALE
 
 N_IN = 21
 N_HIDDEN = 32
@@ -214,15 +213,16 @@ class Learner:
     def has_room(self) -> bool:
         return bool(self._free)
 
-    def newcomer(self, np_rng: np.random.Generator) -> int:
-        """A newcomer of the primordial soup: a random network at the standard learning speed. Returns its slot."""
-        return self.allocate(NetWeights.random(np_rng), LEARNING_RATE)
+    def newcomer(self, np_rng: np.random.Generator, lr: float) -> int:
+        """A newcomer of the primordial soup: a random network learning at `lr`. Returns its slot."""
+        return self.allocate(NetWeights.random(np_rng), lr)
 
-    def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str) -> int:
+    def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str, rate: float,
+             scale: float) -> int:
         """A baby's network: the parent's brain as it is now ("learned") or as the parent was born ("inborn"),
         mutated, with the parent's learning speed × `lr_factor`. Returns the baby's slot."""
         genes = self.current(parent_slot) if inherit == "learned" else self.inborn(parent_slot)
-        return self.allocate(genes.mutate(np_rng, MUTATION_RATE, MUTATION_SCALE), self.lr(parent_slot) * lr_factor)
+        return self.allocate(genes.mutate(np_rng, rate, scale), self.lr(parent_slot) * lr_factor)
 
     def lr(self, slot: int) -> float:
         return float(self._lr[slot])

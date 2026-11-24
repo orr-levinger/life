@@ -5,7 +5,6 @@ dying and takes a nudge back when too many die. The exam always happens in TEST_
 """
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 
@@ -28,27 +27,4 @@ START = Settings(max_food=200, food_energy=(20, 40), food_per_step=3.0, move_cos
 TEST_WORLD = Settings(max_food=80, food_energy=(10, 25), food_per_step=3.0, move_cost=1.0, step_cost=0.10,
                       lifespan=(4000, 6000), attacks=False)
 
-BIRTH_AT = 0.7  # a creature with this share of its maximum energy has a baby
-BABY_SHARE = 0.4  # the share of the parent's energy the baby gets
-LOW_ENERGY = 0.3  # past its lifespan, a creature with less than this share of its maximum energy dies of old age
-MAX_CREATURES = 80  # a safety limit that only pauses births, to keep the simulation fast
-SOUP_MIN = 10  # random newcomers appear while fewer than this many live
-START_ENERGY = (50.0, 100.0)  # a newcomer's energy
-VALUE_START = (10.0, 10.0, 0.5)  # fear of death, love of babies, learning from others: genes, at first (the owner, 2026-11-24)
-FEAR_LIMITS = (0.1, 100.0)  # taken from a learner's reward on the step it dies
-LOVE_LIMITS = (0.1, 100.0)  # added to a learner's reward on the step after it has a baby
-LEARN_LIMITS = (0.01, 1.0)  # a lesson from another's step, against a step of its own
-VISION_WIDTH_LIMITS = (30.0, 360.0)  # a vision cone's width in degrees: a gene (the owner, 2026-11-24)
-VISION_REACH_LIMITS = (1.0, 8.0)  # how far it sees: a gene
-HEARING_LIMITS = (0.0, 4.0)  # how far it hears, all around: a gene
-TODAY_SENSES = (360.0, 3.0, 1.5)  # width, reach, hearing of a creature from before senses were genes
-SENSE_COST = 0.05 / (math.pi * 3.0 ** 2)  # energy a step per square unit sensed: today's 3-unit circle costs 0.05
-GENE_MUTATION = 0.2  # a baby's sense and value genes are its parent's × (1 ± up to this)
-HUNTER_SHARE = 0.8  # share of the energy an attacker takes that it keeps
-EAT_MISS_COST = 0.2  # energy lost choosing to eat with no food within reach
-SPEED = 0.25  # cruising speed: this ÷ its size a step (the owner, 2026-11-24: "Yes, quarter speed")
-SPRINT = 0.4  # top speed: this × √size a step, never below cruising; faster than cruising costs the square of the speed
-MUTATION_RATE = 0.1  # share of a baby's brain weights that change
-MUTATION_SCALE = 0.2  # how much a changed weight moves (standard deviation)
-SIZE_MUTATION = 0.2  # a baby's size is its parent's × (1 ± up to this)
-LR_MUTATION = 0.2  # a learning baby's learning speed is its parent's × e^N(0, this)
+TODAY_SENSES = (360.0, 3.0, 1.5)  # width, reach, hearing of a creature no world gave senses to (the exam's; older saves)

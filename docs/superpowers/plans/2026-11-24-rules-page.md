@@ -36,8 +36,8 @@ the page").
 The owner's world has run Tasks 4u, 4v and 4w since step 158,000 (the owner stopped the fair check: "stop it let me just
 run it myself").
 
-- [ ] **Step 1:** `$PY -m unittest discover tests` → `OK`, with the count.
-- [ ] **Step 2:** commit as `feat: learning from others, senses and rewards in the genes`, with both plans' steps marked
+- [x] **Step 1:** `$PY -m unittest discover tests` → `OK`, with the count.
+- [x] **Step 2:** commit as `feat: learning from others, senses and rewards in the genes`, with both plans' steps marked
   (the fair check marked stopped by the owner); `git show --stat HEAD` lists the files of Tasks 4u, 4v and 4w only.
 
 ### Task R1: Every rule in one place
@@ -47,16 +47,18 @@ run it myself").
 their tests.
 
 **Interfaces:** `Rule(name, table: "costs"|"values"|"genes", words, start, low, high)`; `RULES: tuple[Rule, ...]`;
-`starting_rules() -> dict[str, float]`; `check(name, value) -> str | None` (a plain message when out of range).
+`starting_rules() -> dict[str, float]`; `check(rules, name, value) -> str | None` (a plain message when out of range, or a
+gene's lowest above its highest). Auto's nudge size stays a constant of `src/dial.py`: changing it live would rescale
+the difficulty number (put to the owner).
 `World.rules: dict[str, float]`. Genes are rules named `gene.<gene>.low|high|new_low|new_high|start|change`.
 
-- [ ] **Step 1: Write the failing tests:** `test_every_rule_starts_inside_its_range`,
+- [x] **Step 1: Write the failing tests:** `test_every_rule_starts_inside_its_range`,
   `test_a_value_outside_its_range_is_refused`, `test_the_world_reads_its_rules` (changing `eat_miss` in `World.rules`
   changes what eating at nothing costs), `test_rules_are_kept_in_a_save`, `test_a_format_5_save_gets_the_starting_rules`.
-- [ ] **Step 2:** `$PY -m unittest tests.test_rules tests.test_saves` → the five fail (no `src.rules`).
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4:** `$PY -m unittest discover tests` → `OK`; `grep -rn "EAT_MISS_COST\|BIRTH_AT\|BABY_SHARE\|SENSE_COST\|HUNTER_SHARE" src` → only `src/rules.py`.
-- [ ] **Step 5: Commit** as `feat: every rule in one place`.
+- [x] **Step 2:** `$PY -m unittest tests.test_rules tests.test_saves` → the five fail (no `src.rules`).
+- [x] **Step 3: Implement.**
+- [x] **Step 4:** `$PY -m unittest discover tests` → `OK`; `grep -rn "EAT_MISS_COST\|BIRTH_AT\|BABY_SHARE\|SENSE_COST\|HUNTER_SHARE" src` → only `src/rules.py`.
+- [x] **Step 5: Commit** as `feat: every rule in one place`.
 
 ### Task R2: The Rules page
 

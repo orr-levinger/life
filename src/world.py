@@ -15,9 +15,8 @@ from .creature import Creature
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, perceived, sense_all
-from .settings import (BABY_SHARE, BIRTH_AT, FEAR_LIMITS, GENE_MUTATION, HEARING_LIMITS, LEARN_LIMITS, LOVE_LIMITS,
-                       LOW_ENERGY, LR_MUTATION, MAX_CREATURES, MUTATION_RATE, MUTATION_SCALE, SIZE_MUTATION, SOUP_MIN,
-                       START_ENERGY, VALUE_START, VISION_REACH_LIMITS, VISION_WIDTH_LIMITS, Settings)
+from .rules import Rules, gene_limits, starting_rules
+from .settings import Settings
 
 if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to it
     from .learner import Learner
@@ -33,16 +32,17 @@ class World:
 
     def __init__(self, width: int, height: int, settings: Settings, species: str, rng: random.Random,
                  np_rng: np.random.Generator, food_rng: random.Random, evolving: bool = True,
-                 learner: Optional[Learner] = None, inherit: str = "learned") -> None:
+                 learner: Optional[Learner] = None, inherit: str = "learned", rules: Optional[Rules] = None) -> None:
         """`species` is what this world's newcomers are. `evolving=False` is an exam world: nobody is born, dies,
         ages or learns, and food is placed without looking at creatures. `inherit` says what a learning baby gets:
-        the parent's brain as it is now ("learned") or as the parent was born ("inborn")."""
+        the parent's brain as it is now ("learned") or as the parent was born ("inborn"). `rules` are the world's own
+        (default: the starting rules); `width` and `height` set its size rules."""
         if species not in Creature.POLICIES:
             raise ValueError(f"species must be one of {Creature.POLICIES}, got {species!r}")
         if inherit not in INHERIT:
             raise ValueError(f"inherit must be one of {INHERIT}, got {inherit!r}")
-        self.width = width
-        self.height = height
+        self.rules: Rules = starting_rules() if rules is None else rules
+        self.rules["world_width"], self.rules["world_height"] = float(width), float(height)
         self.settings = settings  # how hard survival is right now; the dial changes it
         self.level = 0  # how many of the dial's nudges are in force
         self.species = species
@@ -72,7 +72,22 @@ class World:
         self._next_id += 1
         return new_id
 
+    @property
+    def width(self) -> float:
+        return self.rules["world_width"]
+
+    @property
+    def height(self) -> float:
+        return self.rules["world_height"]
+
+    def change_rules(self, changes: Rules) -> None:
+        """The owner's rule changes, at once; a smaller world brings everything inside it."""
+        self.rules.update(changes)
+        for thing in list(self.creatures) + list(self.foods):
+            thing.x, thing.y = min(thing.x, self.width), min(thing.y, self.height)
+
     def add_creature(self, creature: Creature) -> None:
+        creature.rules = self.rules
         self.creatures.append(creature)
 
     def set_settings(self, settings: Settings, level: int) -> None:
@@ -88,15 +103,18 @@ class World:
         """A creature of this world's species with a random brain, at a random spot: the first creatures, and the
         primordial soup."""
         x, y = self.rng.uniform(1.0, self.width - 1.0), self.rng.uniform(1.0, self.height - 1.0)
-        size = self.rng.uniform(Creature.MIN_SIZE, Creature.MAX_SIZE)
+        r = self.rules
+        size = self.rng.uniform(r["gene.size.new_low"], r["gene.size.new_high"])
         brain = Brain.random(self.np_rng) if self.species == "brain" else None
-        slot = self.learner.newcomer(self.np_rng) if self.species == "learner" else None
-        newcomer = Creature(self.next_id(), x, y, size, self.rng.uniform(*START_ENERGY), self.species, brain, slot=slot)
+        slot = self.learner.newcomer(self.np_rng, r["gene.learning_speed.start"]) if self.species == "learner" else None
+        energy = self.rng.uniform(r["newcomer_energy_low"], r["newcomer_energy_high"])
+        newcomer = Creature(self.next_id(), x, y, size, energy, self.species, brain, slot=slot, rules=r)
         newcomer.lifespan = round(self.rng.uniform(*self.settings.lifespan))
-        newcomer.vision_width = self.rng.uniform(*VISION_WIDTH_LIMITS)
-        newcomer.vision_reach = self.rng.uniform(*VISION_REACH_LIMITS)
-        newcomer.hearing = self.rng.uniform(*HEARING_LIMITS)
-        newcomer.fear_of_death, newcomer.love_of_babies, newcomer.learns_from_others = VALUE_START
+        newcomer.vision_width = self.rng.uniform(r["gene.vision_width.new_low"], r["gene.vision_width.new_high"])
+        newcomer.vision_reach = self.rng.uniform(r["gene.vision_reach.new_low"], r["gene.vision_reach.new_high"])
+        newcomer.hearing = self.rng.uniform(r["gene.hearing.new_low"], r["gene.hearing.new_high"])
+        newcomer.fear_of_death, newcomer.love_of_babies = r["gene.fear.start"], r["gene.love.start"]
+        newcomer.learns_from_others = r["gene.learns.start"]
         self.creatures.append(newcomer)
         self.newcomers += 1
         return newcomer
@@ -160,7 +178,7 @@ class World:
             elif creature.energy <= 0:
                 self.kill(creature, "hunger")
             elif (creature.lifespan is not None and creature.age >= creature.lifespan
-                  and creature.energy < LOW_ENERGY * creature.max_energy):
+                  and creature.energy < self.rules["low_energy"] * creature.max_energy):
                 self.kill(creature, "age")  # past its lifespan, only a creature with low energy dies
 
         if self.learner is not None and self.evolving:
@@ -170,7 +188,7 @@ class World:
                     self.learner.release(dead.slot)
         if self.evolving:
             self._births()
-            if len(self.creatures) < SOUP_MIN:
+            if len(self.creatures) < self.rules["soup"]:
                 self.add_newcomer()
         self._decay_food()
 
@@ -212,9 +230,9 @@ class World:
     def _births(self) -> None:
         """A creature with enough energy has a baby; the safety limit only pauses births."""
         for parent in list(self.creatures):
-            if len(self.creatures) >= MAX_CREATURES:
+            if len(self.creatures) >= self.rules["room"]:
                 return
-            if parent.energy >= BIRTH_AT * parent.max_energy:
+            if parent.energy >= self.rules["birth_at"] * parent.max_energy:
                 self._birth(parent)
 
     def _birth(self, parent: Creature) -> None:
@@ -224,32 +242,35 @@ class World:
         if parent.policy == "learner":
             if not self.learner.has_room():
                 return
-            lr_factor = math.exp(self.rng.gauss(0.0, LR_MUTATION))
-            slot = self.learner.baby(parent.slot, self.np_rng, lr_factor, self.inherit)
-        gift = BABY_SHARE * parent.energy
-        size = parent.size * (1.0 + self.rng.uniform(-SIZE_MUTATION, SIZE_MUTATION))
-        size = min(max(size, Creature.MIN_SIZE), Creature.MAX_SIZE)
+            lr_factor = math.exp(self.rng.gauss(0.0, self.rules["gene.learning_speed.change"]))
+            slot = self.learner.baby(parent.slot, self.np_rng, lr_factor, self.inherit, self.rules["brain_change_share"],
+                                     self.rules["brain_change_size"])
+        gift = self.rules["baby_share"] * parent.energy
+        size = self._inherited(parent.size, "size")
         x = min(max(parent.x + self.rng.uniform(-1.0, 1.0), 0.0), self.width)
         y = min(max(parent.y + self.rng.uniform(-1.0, 1.0), 0.0), self.height)
-        brain = parent.brain.mutate(self.np_rng, MUTATION_RATE, MUTATION_SCALE) if parent.brain is not None else None
+        brain = (parent.brain.mutate(self.np_rng, self.rules["brain_change_share"], self.rules["brain_change_size"])
+                 if parent.brain is not None else None)
         parent.energy -= gift
         baby = Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
-                        parent_id=parent.id, generation=parent.generation + 1, slot=slot)
+                        parent_id=parent.id, generation=parent.generation + 1, slot=slot, rules=self.rules)
         baby.lifespan = round(self.rng.uniform(*self.settings.lifespan))
-        baby.vision_width = self._inherited(parent.vision_width, VISION_WIDTH_LIMITS)
-        baby.vision_reach = self._inherited(parent.vision_reach, VISION_REACH_LIMITS)
-        baby.hearing = self._inherited(parent.hearing, HEARING_LIMITS)
-        baby.fear_of_death = self._inherited(parent.fear_of_death, FEAR_LIMITS)
-        baby.love_of_babies = self._inherited(parent.love_of_babies, LOVE_LIMITS)
-        baby.learns_from_others = self._inherited(parent.learns_from_others, LEARN_LIMITS)
+        baby.vision_width = self._inherited(parent.vision_width, "vision_width")
+        baby.vision_reach = self._inherited(parent.vision_reach, "vision_reach")
+        baby.hearing = self._inherited(parent.hearing, "hearing")
+        baby.fear_of_death = self._inherited(parent.fear_of_death, "fear")
+        baby.love_of_babies = self._inherited(parent.love_of_babies, "love")
+        baby.learns_from_others = self._inherited(parent.learns_from_others, "learns")
         self.creatures.append(baby)
         self.births += 1
         if parent.policy == "learner":
             self._had_baby.add(id(parent))
 
-    def _inherited(self, gene: float, limits: tuple) -> float:
-        """A parent's sense or value gene for its baby: × (1 ± up to GENE_MUTATION), kept in its limits."""
-        return min(max(gene * (1.0 + self.rng.uniform(-GENE_MUTATION, GENE_MUTATION)), limits[0]), limits[1])
+    def _inherited(self, value: float, gene: str) -> float:
+        """A parent's gene for its baby: × (1 ± up to the gene's change), kept in the gene's limits."""
+        change = self.rules[f"gene.{gene}.change"]
+        low, high = gene_limits(self.rules, gene)
+        return min(max(value * (1.0 + self.rng.uniform(-change, change)), low), high)
 
     def _decay_food(self) -> None:
         kept = []

@@ -9,7 +9,9 @@ from src.creature import Creature
 from src.food import Food
 from src.policies import decide_all
 from src.learner import LEARNING_RATE, Learner, NetWeights
-from src.settings import BABY_SHARE, EAT_MISS_COST, MAX_CREATURES, START
+from src.rules import ROOM_SLOTS as MAX_CREATURES, rule
+from src.settings import START
+BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, rule("eat_miss").start
 from tests.helpers import LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, make_world, populate
 from tests.test_learner import live, same
 
@@ -85,7 +87,7 @@ class TestCosts(unittest.TestCase):
 
 class TestSenseGenes(unittest.TestCase):
     def test_senses_cost_by_area(self):
-        from src.settings import SENSE_COST
+        SENSE_COST = rule("sense_cost").start
         w = make_world()
         today = add(w, 10, 10)
         today.vision_width, today.vision_reach, today.hearing = 360.0, 3.0, 0.0
@@ -100,7 +102,8 @@ class TestSenseGenes(unittest.TestCase):
         self.assertAlmostEqual(before - sharp.energy, NO_FOOD.step_cost + SENSE_COST * area)
 
     def test_babies_inherit_senses_in_the_limits(self):
-        from src.settings import HEARING_LIMITS, VISION_REACH_LIMITS, VISION_WIDTH_LIMITS
+        limits = lambda gene: (rule(f"gene.{gene}.low").start, rule(f"gene.{gene}.high").start)
+        VISION_WIDTH_LIMITS, VISION_REACH_LIMITS, HEARING_LIMITS = (limits(g) for g in ("vision_width", "vision_reach", "hearing"))
         w = make_world(seed=4)
         crowd(w)
         parent = add(w, 10, 10, energy=80.0)
@@ -569,7 +572,7 @@ class TestLearnersInWorld(unittest.TestCase):
         self.assertAlmostEqual(learner._lessons[actor.slot][0]["weight"], 0.9)
 
     def test_newcomers_start_with_the_starting_values(self):
-        from src.settings import VALUE_START
+        VALUE_START = tuple(rule(f"gene.{g}.start").start for g in ("fear", "love", "learns"))
         w, learner = self.world()
         for _ in range(5):
             c = w.add_newcomer()
@@ -577,7 +580,8 @@ class TestLearnersInWorld(unittest.TestCase):
         self.assertEqual(VALUE_START, (10.0, 10.0, 0.5))
 
     def test_babies_inherit_values_in_the_limits(self):
-        from src.settings import FEAR_LIMITS, LEARN_LIMITS, LOVE_LIMITS
+        FEAR_LIMITS, LOVE_LIMITS, LEARN_LIMITS = ((rule(f"gene.{g}.low").start, rule(f"gene.{g}.high").start)
+                                                for g in ("fear", "love", "learns"))
         w, learner = self.world()
         crowd(w)
         parent = self.born(w, learner, 10, 10, energy=80.0)

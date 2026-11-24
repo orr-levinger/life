@@ -4,7 +4,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-from .settings import EAT_MISS_COST, HUNTER_SHARE, SENSE_COST, SPEED, SPRINT, TODAY_SENSES, VALUE_START
+from .rules import Rules, rule, starting_rules
+from .settings import TODAY_SENSES
 
 if TYPE_CHECKING:
     from .brain import Brain
@@ -18,22 +19,18 @@ def is_family(a: Creature, b: Creature) -> bool:
 
 
 class Creature:
-    RADIUS_FACTOR = 0.2
     SENSE_RANGE = 3.0  # the rules policy's own fixed sense range; every other creature senses by its genes
-    ATTACK_RANGE_FACTOR = 3.0
-    EAT_RANGE_FACTOR = 3.0
     POLICIES = ("brain", "learner", "random", "rules")
-    MIN_SIZE = 0.5
-    MAX_SIZE = 2.0
-    CORPSE_ENERGY_PER_SIZE = 8.0
-    CORPSE_STEPS = 5
 
     def __init__(self, id: int, x: float, y: float, size: float, energy: float, policy: str,
                  brain: Optional[Brain] = None, parent_id: int = 0, generation: int = 0,
                  slot: Optional[int] = None, vision_width: float = TODAY_SENSES[0],
                  vision_reach: float = TODAY_SENSES[1], hearing: float = TODAY_SENSES[2],
-                 fear_of_death: float = VALUE_START[0], love_of_babies: float = VALUE_START[1],
-                 learns_from_others: float = VALUE_START[2]) -> None:
+                 fear_of_death: float = rule("gene.fear.start").start,
+                 love_of_babies: float = rule("gene.love.start").start,
+                 learns_from_others: float = rule("gene.learns.start").start, rules: Optional[Rules] = None) -> None:
+        """`rules` are its world's (a creature outside any world follows the starting rules); its tank and radius are
+        set at birth from them, its speeds and attack follow them as they change."""
         if policy not in self.POLICIES:
             raise ValueError(f"policy must be one of {self.POLICIES}, got {policy!r}")
         if policy == "brain" and brain is None:
@@ -50,13 +47,10 @@ class Creature:
         self.parent_id = parent_id
         self.generation = generation
 
-        self.max_energy = size * 100.0
+        self.rules = starting_rules() if rules is None else rules
+        self.max_energy = size * self.rules["tank"]
         self.energy = min(energy, self.max_energy)
-        self.velocity = SPEED / size  # cruising speed: small ones are faster
-        self.top_speed = max(self.velocity, SPRINT * math.sqrt(size))  # sprinting: big ones are faster, for a price
-        self.radius = size * self.RADIUS_FACTOR
-        self.attack_damage = size * 5.0
-        self.attack_cost = size * 1.0
+        self.radius = size * self.rules["body_radius"]
         self.vision_width = vision_width  # degrees of its vision cone: a gene
         self.vision_reach = vision_reach  # how far it sees: a gene
         self.hearing = hearing  # how far it hears, all around: a gene
@@ -75,9 +69,27 @@ class Creature:
         self.intent = "REST"  # display only
         self.intended_vector: Tuple[float, float] = (0.0, 0.0)  # display only
 
+    @property
+    def velocity(self) -> float:
+        """Cruising speed: small ones are faster."""
+        return self.rules["cruise_speed"] / self.size
+
+    @property
+    def top_speed(self) -> float:
+        """Sprinting: big ones are faster, for a price; never below cruising."""
+        return max(self.velocity, self.rules["sprint_speed"] * math.sqrt(self.size))
+
+    @property
+    def attack_damage(self) -> float:
+        return self.size * self.rules["attack_damage"]
+
+    @property
+    def attack_cost(self) -> float:
+        return self.size * self.rules["attack_cost"]
+
     def can_reach(self, food: Food) -> bool:
         """The one eat-range rule: close enough to take a bite."""
-        reach = (self.radius + food.radius) * self.EAT_RANGE_FACTOR
+        reach = (self.radius + food.radius) * self.rules["eat_range"]
         return math.hypot(food.x - self.x, food.y - self.y) <= reach
 
     def sense_area(self) -> float:
@@ -102,15 +114,15 @@ class Creature:
             self._attack(param, world)
         else:
             raise ValueError(f"unknown action {kind!r}")
-        living = world.settings.step_cost + SENSE_COST * self.sense_area()  # being alive, and its senses, by their area
+        living = world.settings.step_cost + self.rules["sense_cost"] * self.sense_area()  # being alive, and its senses, by their area
         self.energy = min(self.energy - living, self.max_energy)
         self._spend(living, world)
 
     def _eat(self, food: Optional[Food], world: World) -> None:
         """The creature chose to eat: one bite of `food` if it is still there and within reach, otherwise a miss."""
         if food is None or food not in world.foods or food.energy <= 0 or not self.can_reach(food):
-            self.energy -= EAT_MISS_COST
-            self._spend(EAT_MISS_COST, world)
+            self.energy -= self.rules["eat_miss"]
+            self._spend(self.rules["eat_miss"], world)
             self.last_action = "EAT_MISS"
             return
         amount = min(1.0, food.energy)
@@ -144,7 +156,7 @@ class Creature:
             return
         self.energy -= self.attack_cost
         self._spend(self.attack_cost, world)
-        attack_range = (self.radius + target.radius) * self.ATTACK_RANGE_FACTOR
+        attack_range = (self.radius + target.radius) * self.rules["attack_range"]
         if (target not in world.creatures or target.energy <= 0 or is_family(self, target)
                 or math.hypot(target.x - self.x, target.y - self.y) > attack_range):
             self.last_action = "ATTACK_MISS"
@@ -154,14 +166,14 @@ class Creature:
         dx, dy = self.x - target.x, self.y - target.y
         distance = math.hypot(dx, dy)
         target.hurt = (taken / target.max_energy, dx / distance if distance else 0.0, dy / distance if distance else 0.0)
-        self.energy += HUNTER_SHARE * taken
-        self._earn(HUNTER_SHARE * taken, world)
+        self.energy += self.rules["hunter_share"] * taken
+        self._earn(self.rules["hunter_share"] * taken, world)
         self.last_action = "ATTACK"
         target.last_action = "HIT_BY_ATTACK"
         if target.energy <= 0:
             from .food import Food
-            corpse = Food(target.x, target.y, remaining_duration=self.CORPSE_STEPS,
-                          energy=target.size * self.CORPSE_ENERGY_PER_SIZE)
+            corpse = Food(target.x, target.y, remaining_duration=round(self.rules["corpse_steps"]),
+                          energy=target.size * self.rules["corpse_energy"])
             world.foods.append(corpse)
             world.foods_created_this_step.add(id(corpse))
             world.kill(target, "attack")

@@ -10,10 +10,13 @@ from unittest import mock
 
 from src import control as control_module
 from src.control import Control, read_control, write_control
-from src.dial import TARGET_ALIVE, Dial, rates, value, with_value
-from src.evolve import CONTROL_EVERY, FIRST_CREATURES, REVIEW_EVERY, ROW_EVERY, parse_args, run
+from src.dial import Dial, rates, value, with_value
+from src.evolve import CONTROL_EVERY, FIRST_CREATURES, ROW_EVERY, parse_args, run
 from src.scoreboard import ROW_KEYS
 from src.settings import START
+from src.rules import rule
+
+TARGET_ALIVE, REVIEW_EVERY = rule("auto_target").start, round(rule("auto_every").start)
 
 EXAM_COLUMNS = ("intelligence", "wanderers")
 

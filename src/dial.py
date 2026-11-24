@@ -12,11 +12,10 @@ import math
 from dataclasses import asdict, dataclass, replace
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
+from .rules import Rules, starting_rules
 from .settings import START, Settings
 
 NUDGE = 0.05  # how much one nudge changes one knob
-HUNTERS_AT = 24  # at this difficulty the next harder nudge switches hunters on
-TARGET_ALIVE = 64  # 80 % of the room for 80: life hard, but not too hard
 PER_CREATURES = 8  # one nudge per this many creatures away from the target
 PER_ALIVE_RATE = 0.10  # one nudge per 10 % a 1,000 steps the number alive moves
 PER_ENERGY_RATE = 0.05  # one nudge per 5 points of a full tank a 1,000 steps the average energy falls
@@ -108,12 +107,12 @@ def rates(rows: Sequence[Mapping[str, float]]) -> Tuple[Optional[float], Optiona
     return (alive / mean_alive if alive is not None and mean_alive else None), energy
 
 
-def step_for(alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int) -> int:
+def step_for(alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int, target: float) -> int:
     """Auto's step, in nudges (+ harder, - easier): the distance from the target and the rates, each times its alpha.
     A rate not measured yet counts as steady; rising energy never eases."""
     if newcomers > 0:
         return -MAX_NUDGES  # the world nearly died out
-    step = (alive - TARGET_ALIVE) / PER_CREATURES
+    step = (alive - target) / PER_CREATURES
     step += (alive_rate or 0.0) / PER_ALIVE_RATE
     step += min(energy_rate or 0.0, 0.0) / PER_ENERGY_RATE
     return max(-MAX_NUDGES, min(MAX_NUDGES, round(step)))
@@ -131,6 +130,7 @@ class Dial:
         self._next_easier = 0
         self._hunters: Optional[bool] = None  # the owner's hunters switch, in Auto: Auto leaves hunters as set
         self.max_level = max_level
+        self.rules: Rules = starting_rules()  # the world's rules (its target and when hunters come): the runner hands them
 
     @property
     def settings(self) -> Settings:
@@ -168,7 +168,7 @@ class Dial:
 
     def review(self, alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int) -> int:
         """One look: takes the step `step_for` says and returns the nudges it made (+ harder, - easier, 0 none)."""
-        wanted, made = step_for(alive, alive_rate, energy_rate, newcomers), 0
+        wanted, made = step_for(alive, alive_rate, energy_rate, newcomers, self.rules["auto_target"]), 0
         while made < wanted and self._harder() == "harder":
             made += 1
         while made > wanted and self._easier() == "easier":
@@ -183,7 +183,7 @@ class Dial:
     def _harder(self) -> str:
         if self.max_level is not None and self.level >= self.max_level - TOLERANCE:
             return "hold"
-        if self._hunters is None and not self._settings.attacks and self.level >= HUNTERS_AT - TOLERANCE:
+        if self._hunters is None and not self._settings.attacks and self.level >= self.rules["auto_hunters_at"] - TOLERANCE:
             return self._nudge(replace(self._settings, attacks=True))
         for _ in KNOBS:
             knob = KNOBS[self._next_harder % len(KNOBS)]

@@ -24,13 +24,14 @@ from .brain import Brain
 from .creature import Creature
 from .dial import Dial, settings_from_state, settings_state
 from .food import Food
-from .settings import MAX_CREATURES, TODAY_SENSES, VALUE_START
+from .rules import ROOM_SLOTS, rule, starting_rules
+from .settings import TODAY_SENSES
 from .world import World
 
 SAVE_EVERY = 2000  # steps between two saves of a world
-SAVE_FORMAT = 5  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 6  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
-# and 21 brain inputs (2026-11-24)
+# and 21 brain inputs; 6: the world's rules (2026-11-24)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -69,7 +70,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
         next_brain += creature.brain is not None
     about = {
         "format": SAVE_FORMAT, "step": world.step_count, "species": world.species, "inherit": world.inherit,
-        "width": world.width, "height": world.height, "settings": settings_state(world.settings), "level": world.level,
+        "rules": dict(world.rules), "settings": settings_state(world.settings), "level": world.level,
         "dial": dial.state(),
         "counters": {"births": world.births, "newcomers": world.newcomers, "deaths": dict(world.deaths),
                      "total_bites": world.total_bites, "energy_earned": world.energy_earned,
@@ -120,6 +121,8 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
     if about.get("format") == 4:
         about = _from_format_4(about)
         _widen_inputs(arrays, INPUTS_PAIN)
+    if about.get("format") == 5:
+        about = _from_format_5(about)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -156,10 +159,17 @@ def _from_format_3(about: Dict[str, Any]) -> Dict[str, Any]:
 
 def _from_format_4(about: Dict[str, Any]) -> Dict[str, Any]:
     """A format 4 save had no value genes and no pain: its creatures get the starting amounts and feel nothing."""
-    fear, love, learns = VALUE_START
+    fear, love, learns = (rule(f"gene.{gene}.start").start for gene in ("fear", "love", "learns"))
     return {**about, "format": 5, "creatures": [{**c, "fear_of_death": fear, "love_of_babies": love,
                                                  "learns_from_others": learns, "hurt": None}
                                                 for c in about["creatures"]]}
+
+
+def _from_format_5(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 5 save had no rules of its own: the starting rules, at its size."""
+    rules = {**starting_rules(), "world_width": float(about["width"]), "world_height": float(about["height"])}
+    rest = {key: value for key, value in about.items() if key not in ("width", "height")}
+    return {**rest, "format": 6, "rules": rules}
 
 
 def _widen_inputs(arrays: Dict[str, np.ndarray], added: int) -> None:
@@ -186,10 +196,12 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
     if about["species"] == "learner":
         from .learner import Learner  # TensorFlow is loaded only for learning animals
 
-        learner = Learner(MAX_CREATURES, learner_seed)
+        learner = Learner(ROOM_SLOTS, learner_seed)
         learner.load_state({key[len(LEARNER):]: value for key, value in arrays.items() if key.startswith(LEARNER)})
-    world = World(about["width"], about["height"], settings_from_state(about["settings"]), about["species"],
-                  random.Random(), np.random.default_rng(), random.Random(), learner=learner, inherit=about["inherit"])
+    rules = about["rules"]
+    world = World(rules["world_width"], rules["world_height"], settings_from_state(about["settings"]), about["species"],
+                  random.Random(), np.random.default_rng(), random.Random(), learner=learner, inherit=about["inherit"],
+                  rules=dict(rules))
     world.set_settings(world.settings, about["level"])
     set_random_state(world.rng, about["random"]["rng"])
     set_random_state(world.food_rng, about["random"]["food_rng"])
@@ -204,7 +216,8 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
     for saved in about["creatures"]:
         brain = None if saved["brain"] is None else Brain(*(arrays[f"brain.{part}"][saved["brain"]] for part in BRAIN_PARTS))
         creature = Creature(saved["id"], saved["x"], saved["y"], saved["size"], saved["energy"], saved["policy"], brain,
-                            parent_id=saved["parent_id"], generation=saved["generation"], slot=saved["slot"])
+                            parent_id=saved["parent_id"], generation=saved["generation"], slot=saved["slot"],
+                            rules=world.rules)
         creature.energy, creature.age, creature.lifespan = saved["energy"], saved["age"], saved["lifespan"]
         creature.food_eaten, creature.last_action, creature.intent = saved["food_eaten"], saved["last_action"], saved["intent"]
         creature.intended_vector = tuple(saved["heading"])

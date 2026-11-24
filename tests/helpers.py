@@ -8,13 +8,14 @@ import numpy as np
 
 from src.brain import Brain
 from src.creature import Creature
-from src.settings import SENSE_COST, START, TODAY_SENSES, Settings
+from src.rules import rule
+from src.settings import START, TODAY_SENSES, Settings
 from src.world import World
 
 NO_FOOD = replace(START, max_food=0, food_per_step=0)  # the easy start with nothing to eat
 NO_FOOD_ATTACKS = replace(NO_FOOD, attacks=True)
 WIDTH, REACH, HEARING = TODAY_SENSES
-LIVING = NO_FOOD.step_cost + SENSE_COST * (WIDTH / 360.0 * math.pi * REACH ** 2 + math.pi * HEARING ** 2)  # a step alive, today's senses
+LIVING = NO_FOOD.step_cost + rule("sense_cost").start * (WIDTH / 360.0 * math.pi * REACH ** 2 + math.pi * HEARING ** 2)  # a step alive, today's senses
 
 
 def make_world(settings: Settings = NO_FOOD, seed: int = 0, evolving: bool = True, learner=None,

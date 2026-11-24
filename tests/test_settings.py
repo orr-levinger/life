@@ -1,7 +1,8 @@
 import unittest
 from dataclasses import FrozenInstanceError
 
-from src.settings import LOW_ENERGY, START, TEST_WORLD, Settings
+from src.rules import rule
+from src.settings import START, TEST_WORLD, Settings
 
 
 class TestSettings(unittest.TestCase):
@@ -28,7 +29,7 @@ class TestSettings(unittest.TestCase):
             START.max_food = 1
 
     def test_only_the_poorly_fed_die_of_old_age(self):
-        self.assertEqual(LOW_ENERGY, 0.3)
+        self.assertEqual(rule("low_energy").start, 0.3)
 
 
 if __name__ == "__main__":

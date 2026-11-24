@@ -36,7 +36,7 @@ from .hall_of_fame import HallOfFame
 from .saves import (SAVE_EVERY, SaveError, load_world, random_state, save_header, save_path, save_world,
                     set_random_state)
 from .scoreboard import ROW_KEYS, Scoreboard, Value, migrate_scoreboard, read_rows
-from .settings import MAX_CREATURES
+from .rules import ROOM_SLOTS
 from .world import INHERIT, World
 
 WIDTH, HEIGHT = 50, 30
@@ -44,7 +44,6 @@ FIRST_CREATURES = 30
 DEFAULT_STEPS = 100000
 CONTROL_EVERY = 25  # steps between two looks at the control file: a knob moved on the page arrives within a second
 ROW_EVERY = 250  # steps between two rows of the scoreboard (a new point on every chart)
-REVIEW_EVERY = 500  # steps between two of Auto's looks
 RATE_STEPS = 1000  # Auto's rates are measured over the last this many steps
 EXAM_EVERY = 2000
 PAUSE_LOOK = 0.25  # seconds between two looks at the control file while paused
@@ -210,6 +209,7 @@ def run(args: argparse.Namespace) -> Path:
         dial.max_level = args.max_level
         set_random_state(exam_rng, extra["exam_rng"])
         first_creatures = 0  # the first creatures were counted in the old run's windows
+    dial.rules = world.rules  # Auto's target and when hunters come are the world's rules
     if control.settings is not None:  # the world starts from the settings the page asked for, in either mode
         dial.set(control.settings)
     knobs = _Knobs(control)
@@ -281,9 +281,10 @@ def run(args: argparse.Namespace) -> Path:
                 since_review.append(row)
                 recent.append(row)
 
-            if step % REVIEW_EVERY == 0:
+            every = round(world.rules["auto_every"])  # steps between two of Auto's looks
+            if step % every == 0:
                 if args.species and knobs.control.mode == "auto":  # a yardstick world is held at its level
-                    soup = sum(r["newcomers"] for r in since_review) - (first_creatures if step == REVIEW_EVERY else 0)
+                    soup = sum(r["newcomers"] for r in since_review) - (first_creatures if step == every else 0)
                     alive_rate, energy_rate = rates(list(recent))
                     dial.review(len(world.creatures), alive_rate, energy_rate, soup)
                     world.set_settings(dial.settings, round(dial.level, 2))
@@ -317,7 +318,7 @@ def _new_world(args: argparse.Namespace) -> Tuple[World, Dial]:
     if policy == "learner":
         from .learner import Learner  # TensorFlow is loaded only for learning animals
 
-        learner = Learner(MAX_CREATURES, args.seed)
+        learner = Learner(ROOM_SLOTS, args.seed)
     dial = Dial(max_level=args.max_level)
     dial.turn_to(args.level)
     world = World(WIDTH, HEIGHT, dial.settings, policy, random.Random(args.seed),

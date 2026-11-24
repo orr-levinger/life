@@ -7,7 +7,11 @@ import numpy as np
 from src.brain import Brain
 from src.exam import exam_worlds, run_exam
 from src.learner import NetWeights
-from src.settings import TEST_WORLD
+from src.exam import exam_settings
+from src.rules import starting_rules
+
+RULES = starting_rules()
+TEST_WORLD = exam_settings(RULES)
 from tests.helpers import LIVING, NO_FOOD, fixed_brain
 
 EAT = [0, 0, 1, -1]
@@ -20,7 +24,7 @@ def brains(n: int, seed: int = 0):
 
 class TestExam(unittest.TestCase):
     def test_copies_start_identical(self):
-        with_brains, with_walkers = exam_worlds(brains(3), [0.5, 1.0, 2.0], seed=4)
+        with_brains, with_walkers = exam_worlds(brains(3), [0.5, 1.0, 2.0], seed=4, rules=RULES)
         self.assertGreater(len(with_brains.foods), 0)
         self.assertEqual([(f.x, f.y, f.energy) for f in with_brains.foods],
                          [(f.x, f.y, f.energy) for f in with_walkers.foods])
@@ -30,20 +34,21 @@ class TestExam(unittest.TestCase):
         self.assertEqual({c.policy for c in with_walkers.creatures}, {"random"})
 
     def test_exam_uses_the_fixed_test_world(self):
-        for world in exam_worlds(brains(2), [1.0, 1.0], seed=1):
-            self.assertIs(world.settings, TEST_WORLD)
+        for world in exam_worlds(brains(2), [1.0, 1.0], seed=1, rules=RULES):
+            self.assertEqual(world.settings, TEST_WORLD)
             self.assertFalse(world.evolving)
 
     def test_same_seed_same_result(self):
         sizes = [0.7, 1.3, 1.9, 1.0]
-        self.assertEqual(run_exam(brains(4), sizes, seed=8, steps=100), run_exam(brains(4), sizes, seed=8, steps=100))
+        self.assertEqual(run_exam(brains(4), sizes, seed=8, rules={**RULES, "exam_steps": 100}), run_exam(brains(4), sizes, seed=8, rules={**RULES, "exam_steps": 100}))
 
     def test_intelligence_is_energy_earned_over_spent(self):
         """With nothing to eat, a brain that always eats earns nothing and spends the miss, the step and its senses
         each step."""
-        with mock.patch("src.exam.TEST_WORLD", replace(TEST_WORLD, max_food=0, food_per_step=0)):
-            result = run_exam([fixed_brain(EAT)] * 2, [1.0, 1.0], seed=1, steps=50)
-            with_brains, _ = exam_worlds([fixed_brain(EAT)] * 2, [1.0, 1.0], seed=1)
+        no_food = {**RULES, "exam_max_food": 5.0, "exam_food_per_step": 0.1, "exam_steps": 50}
+        with mock.patch("src.world.World.spawn_food", lambda self: None):  # nothing to eat
+            result = run_exam([fixed_brain(EAT)] * 2, [1.0, 1.0], seed=1, rules=no_food)
+            with_brains, _ = exam_worlds([fixed_brain(EAT)] * 2, [1.0, 1.0], seed=1, rules=no_food)
         self.assertEqual((result.intelligence, result.wanderers), (0.0, 0.0))
         for _ in range(10):
             with_brains.step()
@@ -51,14 +56,14 @@ class TestExam(unittest.TestCase):
         self.assertAlmostEqual(with_brains.energy_spent, 2 * 10 * (0.2 + TEST_WORLD.step_cost + LIVING - NO_FOOD.step_cost))
 
     def test_wanderers_are_measured_beside_the_brains(self):
-        result = run_exam(brains(6), [1.0] * 6, seed=3, steps=200)
+        result = run_exam(brains(6), [1.0] * 6, seed=3, rules={**RULES, "exam_steps": 200})
         self.assertGreater(result.wanderers, 0.0)  # random wanderers find some food in the test world
         self.assertGreaterEqual(result.intelligence, 0.0)
 
     def test_exam_leaves_brains_unchanged(self):
         sitters = brains(3)
         before = [b.copy() for b in sitters]
-        run_exam(sitters, [1.0, 1.5, 0.5], seed=2, steps=50)
+        run_exam(sitters, [1.0, 1.5, 0.5], seed=2, rules={**RULES, "exam_steps": 50})
         for b, original in zip(sitters, before):
             for name in ("w1", "b1", "w2", "b2"):
                 np.testing.assert_array_equal(getattr(b, name), getattr(original, name))
@@ -67,7 +72,7 @@ class TestExam(unittest.TestCase):
         rng = np.random.default_rng(0)
         nets = [NetWeights.random(rng) for _ in range(3)]
         with mock.patch("src.learner.Learner.update") as update, mock.patch("src.learner.Learner.record") as record:
-            result = run_exam(nets, [1.0, 1.5, 0.5], seed=2, steps=50)
+            result = run_exam(nets, [1.0, 1.5, 0.5], seed=2, rules={**RULES, "exam_steps": 50})
         update.assert_not_called()
         record.assert_not_called()
         self.assertIsInstance(result.intelligence, float)

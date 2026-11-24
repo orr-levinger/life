@@ -423,7 +423,7 @@ class TestLifeAndDeath(unittest.TestCase):
         self.assertTrue(0.8 <= baby.size <= 1.2)
         self.assertLessEqual(abs(baby.x - parent.x), 1.0)
         changed = np.mean(baby.brain.w1 != parent_brain.w1)
-        self.assertTrue(0.0 < changed < 0.3)  # a mutated copy of the parent's brain
+        self.assertTrue(0.0 <= changed < 0.05)  # the parent's brain: a copy, or a few weights changed when they are the gene
         self.assertEqual(w.births, 1)
 
     def test_no_birth_below_seventy_percent(self):
@@ -691,16 +691,16 @@ class TestLearnersInWorld(unittest.TestCase):
     def test_learner_baby_inherits_learned_brain(self):
         learner, parent, baby, learned, born_with = self.parent_that_has_learned("learned")
         genes = learner.inborn(baby.slot)
-        self.assertGreater(np.mean(genes.w1 == learned.w1), 0.7)
-        self.assertLess(np.mean(np.isclose(genes.w1, born_with.w1)), 0.3)
+        self.assertGreater(np.mean(genes.w1[:, :32] == learned.w1[:, :32]), 0.7)  # its 32 neurons in use
+        self.assertLess(np.mean(np.isclose(genes.w1[:, :32], born_with.w1[:, :32])), 0.3)
         ratio = learner.lr(baby.slot) / learner.lr(parent.slot)  # changed only when learning speed is the baby's one gene
         self.assertLessEqual(abs(ratio - 1.0), 0.05 + 1e-9)
 
     def test_learner_baby_inherits_born_brain_when_inborn(self):
         learner, _, baby, learned, born_with = self.parent_that_has_learned("inborn")
         genes = learner.inborn(baby.slot)
-        self.assertGreater(np.mean(np.isclose(genes.w1, born_with.w1)), 0.7)
-        self.assertLess(np.mean(genes.w1 == learned.w1), 0.3)
+        self.assertGreater(np.mean(np.isclose(genes.w1[:, :32], born_with.w1[:, :32])), 0.7)
+        self.assertLess(np.mean(genes.w1[:, :32] == learned.w1[:, :32]), 0.3)
 
     def test_birth_is_not_a_negative_reward(self):
         w, learner = self.world()

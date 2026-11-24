@@ -33,23 +33,16 @@ from .creature import Creature
 from .dial import Dial, rates
 from .exam import ExamResult, run_exam
 from .hall_of_fame import HallOfFame
-from .saves import (SAVE_EVERY, SaveError, load_world, random_state, save_header, save_path, save_world,
+from .saves import (SaveError, load_world, random_state, save_header, save_path, save_world,
                     set_random_state)
 from .scoreboard import ROW_KEYS, Scoreboard, Value, migrate_scoreboard, read_rows
 from .rules import ROOM_SLOTS
 from .world import INHERIT, World
 
 WIDTH, HEIGHT = 50, 30
-FIRST_CREATURES = 30
 DEFAULT_STEPS = 100000
-CONTROL_EVERY = 25  # steps between two looks at the control file: a knob moved on the page arrives within a second
-ROW_EVERY = 250  # steps between two rows of the scoreboard (a new point on every chart)
-RATE_STEPS = 1000  # Auto's rates are measured over the last this many steps
-EXAM_EVERY = 2000
 PAUSE_LOOK = 0.25  # seconds between two looks at the control file while paused
 NOW_EVERY = 25  # steps between two looks at whether now.json is due (the live page's every-second numbers)
-NOW_SECONDS = 0.5  # now.json is written at most this often: the page asks once a second, a fast world need not pay more
-EXAM_BRAINS = 20
 SPECIES = {"learning": "learner", "instinct": "brain"}  # the name on the command line -> the creatures' policy
 YARDSTICKS = ("random", "rules")
 
@@ -110,7 +103,8 @@ def world_view(world: World) -> Dict[str, Any]:
         "step": world.step_count, "width": world.width, "height": world.height,
         "creatures": [{"id": c.id, "x": round(c.x, 3), "y": round(c.y, 3), "radius": round(c.radius, 3), "size": round(c.size, 3),
                        "energy": round(max(c.energy, 0.0) / c.max_energy, 3),
-                       "heading": [round(v, 3) for v in c.intended_vector], "did": c.last_action,
+                       "heading": [round(v, 3) for v in c.intended_vector], "did": c.last_action, "intent": c.intent,
+                       "target": c.target, "baby": c.had_baby_at == world.step_count,
                        "generation": c.generation, "age": c.age, "lifespan": c.lifespan,
                        "earned": round(c.earned, 2), "spent": round(c.spent, 2),
                        "facing": [round(v, 3) for v in c.facing], "vision_width": round(c.vision_width, 1),
@@ -131,6 +125,8 @@ def world_now(world: World) -> Dict[str, Any]:
         "energy": sum(max(c.energy, 0.0) / c.max_energy for c in alive) / len(alive) if alive else None,
         "food": len(world.foods), "births": world.births, "deaths": sum(world.deaths.values()), "time": time.time(),
         "rules": dict(world.rules),
+        "size": [min(c.size for c in alive), max(c.size for c in alive)] if alive else None,  # smallest, biggest
+        "neurons": [min(brains), max(brains)] if (brains := [c.neurons for c in alive if c.layers]) else None,
     }
 
 
@@ -235,9 +231,9 @@ def run(args: argparse.Namespace) -> Path:
                    {"seed": args.seed, "kind": args.kind, "exam_rng": random_state(exam_rng)})
         saved.add(world.step_count)
     since_review: List[Dict[str, Value]] = []  # the rows since Auto's last look (their newcomers)
-    recent = deque(maxlen=RATE_STEPS // ROW_EVERY)  # the rows of the last 1,000 steps (Auto's rates)
+    recent = deque(maxlen=400)  # the latest rows; Auto measures its rates over the rules' last steps of them
     next_tick = time.perf_counter()  # while watched: when the next step may start
-    now_written = -NOW_SECONDS  # when now.json was last written
+    now_written = -world.rules["now_seconds"]  # when now.json was last written
     viz = _open_window() if args.window else None
 
     csv_path = out / "scoreboard.csv"
@@ -253,7 +249,8 @@ def run(args: argparse.Namespace) -> Path:
             if args.steps is not None and step > args.steps:
                 break
             watched = knobs.control.watched(time.time())
-            if watched or step % CONTROL_EVERY == 0:  # watched: every step, so Jump out is instant
+            r = world.rules  # the runner's numbers too: changed on the Rules page, they apply at once
+            if watched or step % round(r["control_every"]) == 0:  # watched: every step, so Jump out is instant
                 found = read_control(out)
                 while found is not None and found.paused and not found.stop:  # paused: no step until Continue
                     os.utime(csv_path)  # still alive: the page keeps a paused world in Live
@@ -271,16 +268,17 @@ def run(args: argparse.Namespace) -> Path:
                 next_tick = max(next_tick, time.perf_counter()) + 1.0 / knobs.control.watch_speed
                 time.sleep(max(0.0, next_tick - time.perf_counter()))
 
-            if step % NOW_EVERY == 0 and time.perf_counter() - now_written >= NOW_SECONDS:  # it never changes the world
+            if step % NOW_EVERY == 0 and time.perf_counter() - now_written >= r["now_seconds"]:  # it never changes the world
                 write_json(out / "now.json", world_now(world))
                 now_written = time.perf_counter()
 
-            if args.species and step % EXAM_EVERY == 0:  # a measurement only: it never changes the world
-                sample = exam_rng.sample(world.creatures, min(EXAM_BRAINS, len(world.creatures)))
-                exam_seed = args.seed * 100_000 + step // EXAM_EVERY
-                exam = run_exam(_exam_brains(world, sample), [c.size for c in sample], exam_seed)
+            exam_every = round(r["exam_every"])
+            if args.species and step % exam_every == 0:  # a measurement only: it never changes the world
+                sample = exam_rng.sample(world.creatures, min(round(r["exam_brains"]), len(world.creatures)))
+                exam_seed = args.seed * 100_000 + step // exam_every
+                exam = run_exam(_exam_brains(world, sample), [c.size for c in sample], exam_seed, r)
 
-            if step % ROW_EVERY == 0:
+            if step % round(r["row_every"]) == 0:
                 row = board.row(world, exam, knobs.control.mode == "manual")
                 exam = None  # each exam appears in exactly one row
                 writer.writerow(row)
@@ -293,12 +291,13 @@ def run(args: argparse.Namespace) -> Path:
             if step % every == 0:
                 if args.species and knobs.control.mode == "auto":  # a yardstick world is held at its level
                     soup = sum(r["newcomers"] for r in since_review) - (first_creatures if step == every else 0)
-                    alive_rate, energy_rate = rates(list(recent))
+                    measured = [row for row in recent if row["step"] > step - r["auto_measure"]]
+                    alive_rate, energy_rate = rates(measured)
                     dial.review(len(world.creatures), alive_rate, energy_rate, soup)
                     world.set_settings(dial.settings, round(dial.level, 2))
                 since_review = []
 
-            if step % SAVE_EVERY == 0:
+            if step % round(r["save_every"]) == 0:
                 save()
 
             if viz is not None:
@@ -332,7 +331,7 @@ def _new_world(args: argparse.Namespace) -> Tuple[World, Dial]:
     world = World(WIDTH, HEIGHT, dial.settings, policy, random.Random(args.seed),
                   np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
                   inherit=args.inherit)
-    for _ in range(FIRST_CREATURES):
+    for _ in range(round(world.rules["first_creatures"])):
         world.add_newcomer()
     return world, dial
 

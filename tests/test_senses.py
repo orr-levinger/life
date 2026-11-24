@@ -84,6 +84,13 @@ class TestSenses(unittest.TestCase):
         self.assertEqual(display_intent(me, ("MOVE", (-1.0, 0.0)), s), "RUN_AWAY")
         self.assertEqual(display_intent(me, ("ATTACK", hunter), s), "ATTACK")
 
+    def test_display_intent_chase(self):
+        me = creature(10, 10, size=2.0, id_=1)
+        prey = creature(12, 10, size=1.0, id_=2)
+        s = sense(me, world([me, prey], [food(10, 12)]))
+        self.assertEqual(display_intent(me, ("MOVE", (1.0, 0.0)), s), "CHASE")  # toward a smaller one
+        self.assertEqual(display_intent(me, ("MOVE", (0.0, 1.0)), s), "GO_TO_FOOD")
+
     def eye(self, x, y, width, reach, hearing, size=1.25):
         me = Creature(1, x, y, size, size * 50.0, "random", vision_width=width, vision_reach=reach, hearing=hearing)
         me.facing = (1.0, 0.0)

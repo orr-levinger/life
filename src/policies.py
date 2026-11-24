@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 import numpy as np
 
 from .creature import is_family
-from .senses import THREAT_RATIO, Senses
+from .senses import Senses
 from .sensors import ProximitySensor
 
 if TYPE_CHECKING:
@@ -79,17 +79,17 @@ def rules_action(creature: Creature, world: World, rng: random.Random) -> Action
     others = [
         (obj, dist, angle) for kind, obj, dist, angle in sightings
         if kind == "creature" and not is_family(creature, obj)
-        and not (1 / THREAT_RATIO < obj.size / creature.size < THREAT_RATIO)
+        and not (1 / creature.rules["threat_ratio"] < obj.size / creature.size < creature.rules["threat_ratio"])
     ]
     foods = [(obj, dist, angle) for kind, obj, dist, angle in sightings if kind == "food"]
     v = creature.velocity
 
     if others:
         other, dist, angle = others[0]
-        if other.size >= creature.size * THREAT_RATIO:
+        if other.size >= creature.size * creature.rules["threat_ratio"]:
             return ("MOVE", (math.cos(angle + math.pi) * v, math.sin(angle + math.pi) * v))
         attack_range = (creature.radius + other.radius) * creature.rules["attack_range"]
-        if creature.size >= other.size * THREAT_RATIO and dist <= attack_range:
+        if creature.size >= other.size * creature.rules["threat_ratio"] and dist <= attack_range:
             return ("ATTACK", other)
         return ("MOVE", (math.cos(angle) * v, math.sin(angle) * v))
 

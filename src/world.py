@@ -24,7 +24,7 @@ if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to 
 Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
-         "brain")  # a baby changes one
+         "layers", "neurons", "weights")  # a baby changes one
 
 
 class World:
@@ -44,6 +44,8 @@ class World:
         if inherit not in INHERIT:
             raise ValueError(f"inherit must be one of {INHERIT}, got {inherit!r}")
         self.rules: Rules = starting_rules() if rules is None else rules
+        if learner is not None:
+            learner.rules = self.rules  # learning's numbers are the world's rules
         self.rules["world_width"], self.rules["world_height"] = float(width), float(height)
         self.settings = settings  # how hard survival is right now; the dial changes it
         self.level = 0  # how many of the dial's nudges are in force
@@ -109,7 +111,7 @@ class World:
         size = self.rng.uniform(r["gene.size.new_low"], r["gene.size.new_high"])
         brain = Brain.random(self.np_rng) if self.species == "brain" else None
         slot = (self.learner.newcomer(self.np_rng, r["gene.learning_speed.start"], round(r["gene.layers.start"]),
-                                      round(r["gene.neurons.start"])) if self.species == "learner" else None)
+                                      round(r["gene.neurons.start"]), r["learn_spread"]) if self.species == "learner" else None)
         energy = self.rng.uniform(r["newcomer_energy_low"], r["newcomer_energy_high"])
         newcomer = Creature(self.next_id(), x, y, size, energy, self.species, brain, slot=slot, rules=r)
         newcomer.lifespan = round(self.rng.uniform(*self.settings.lifespan))
@@ -249,18 +251,17 @@ class World:
                 return
             change = self.rules["gene.learning_speed.change"]
             lr_factor = 1.0 + self.rng.uniform(-change, change) if picked == "learning_speed" else 1.0
-            grow = None if picked != "brain" else {
-                "rng": self.rng, "layer_share": self.rules["brain_layer_share"],
-                "neurons": gene_limits(self.rules, "neurons"), "layers": gene_limits(self.rules, "layers")}
-            slot = self.learner.baby(parent.slot, self.np_rng, lr_factor, self.inherit, self.rules["brain_change_share"],
-                                     self.rules["brain_change_size"], grow)
+            brain_gene = picked if picked in ("layers", "neurons", "weights") else None
+            slot = self.learner.baby(parent.slot, self.np_rng, lr_factor, self.inherit, brain_gene, self.rng, self.rules)
         gift = self.rules["baby_share"] * parent.energy
         size = self._inherited(parent.size, "size", picked)
         x = min(max(parent.x + self.rng.uniform(-1.0, 1.0), 0.0), self.width)
         y = min(max(parent.y + self.rng.uniform(-1.0, 1.0), 0.0), self.height)
-        brain = (parent.brain.mutate(self.np_rng, self.rules["brain_change_share"], self.rules["brain_change_size"])
-                 if parent.brain is not None else None)
+        brain = parent.brain
+        if brain is not None and picked == "weights":  # an instinct brain changes only when its weights are the gene
+            brain = brain.mutate(self.np_rng, self.rules["gene.weights.share"], self.rules["gene.weights.size"])
         parent.energy -= gift
+        parent.had_baby_at = self.step_count
         baby = Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
                         parent_id=parent.id, generation=parent.generation + 1, slot=slot, rules=self.rules)
         baby.lifespan = round(self.rng.uniform(*self.settings.lifespan))

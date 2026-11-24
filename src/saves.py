@@ -24,15 +24,15 @@ from .brain import Brain
 from .creature import Creature
 from .dial import Dial, settings_from_state, settings_state
 from .food import Food
-from .rules import ROOM_SLOTS, rule, starting_rules
+from .rules import ROOM_SLOTS, RULES, rule, starting_rules
 from .settings import TODAY_SENSES
 from .world import World
 
-SAVE_EVERY = 2000  # steps between two saves of a world
-SAVE_FORMAT = 8  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 9  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
-# hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64 (2026-11-24)
+# hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
+# a rule, the three brain genes (2026-11-24)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -131,6 +131,8 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
     if about.get("format") == 7:
         about = _from_format_7(about)
         _room_to_grow(arrays)
+    if about.get("format") == 8:
+        about = _from_format_8(about)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -208,9 +210,16 @@ def _from_format_6(about: Dict[str, Any]) -> Dict[str, Any]:
 
 def _from_format_7(about: Dict[str, Any]) -> Dict[str, Any]:
     """A format 7 save had no brain genes: their rules start at their starting values."""
-    new = ("neuron_cost", "brain_layer_share", "gene.neurons.low", "gene.neurons.high", "gene.neurons.start",
+    new = ("neuron_cost", "gene.neurons.low", "gene.neurons.high", "gene.neurons.start",
            "gene.layers.low", "gene.layers.high", "gene.layers.start")
     return {**about, "format": 8, "rules": {**about["rules"], **{name: rule(name).start for name in new}}}
+
+
+def _from_format_8(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 8 save had fewer rules: every rule it lacks starts at its starting value; the ones gone (the brain's
+    old change and layer-share rules) leave."""
+    kept = about["rules"]
+    return {**about, "format": 9, "rules": {r.name: kept.get(r.name, r.start) for r in RULES}}
 
 
 def _room_to_grow(arrays: Dict[str, np.ndarray]) -> None:

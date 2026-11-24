@@ -11,12 +11,14 @@ from unittest import mock
 from src import control as control_module
 from src.control import Control, read_control, write_control
 from src.dial import Dial, rates, value, with_value
-from src.evolve import CONTROL_EVERY, FIRST_CREATURES, ROW_EVERY, parse_args, run
+from src.evolve import parse_args, run
 from src.scoreboard import ROW_KEYS
 from src.settings import START
-from src.rules import rule
+from src.rules import rule, starting_rules
 
 TARGET_ALIVE, REVIEW_EVERY = rule("auto_target").start, round(rule("auto_every").start)
+CONTROL_EVERY, ROW_EVERY = round(rule("control_every").start), round(rule("row_every").start)
+FIRST_CREATURES = round(rule("first_creatures").start)
 
 EXAM_COLUMNS = ("intelligence", "wanderers")
 
@@ -236,7 +238,7 @@ class TestEvolve(unittest.TestCase):
         argv = ["--seed", "2", "--steps", "3000", "--species", "instinct", "--out"]
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
             examined = read_rows(quiet_run(argv + [a]))
-            with mock.patch("src.evolve.EXAM_EVERY", 10 ** 9):
+            with mock.patch("src.world.starting_rules", lambda: {**starting_rules(), "exam_every": 10.0 ** 9}):
                 unexamined = read_rows(quiet_run(argv + [b]))
         self.assertNotEqual(at_reviews(examined)[1]["intelligence"], "")
         self.assertEqual({row["intelligence"] for row in unexamined}, {""})
@@ -287,7 +289,7 @@ class TestEvolve(unittest.TestCase):
                                          "lifespan", "earned", "spent", "size", "facing", "vision_width",
                                          "vision_reach", "hearing", "fear_of_death", "love_of_babies",
                                          "learns_from_others", "neurons", "layers",
-                                         "learning_speed"})
+                                         "learning_speed", "intent", "target", "baby"})
         self.assertTrue(0.0 <= creature["energy"] <= 1.0)
         self.assertTrue(0.0 <= creature["x"] <= 50 and 0.0 <= creature["y"] <= 30)
         self.assertEqual(set(view["foods"][0]), {"x", "y", "radius"})
@@ -374,7 +376,7 @@ class TestEvolve(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder]))
             now = json.loads((Path(folder) / "now.json").read_text())
-        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time", "rules"})
+        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time", "rules", "size", "neurons"})
         self.assertEqual((now["step"], now["alive"]), (1000, int(rows[-1]["population"])))
         self.assertEqual(now["births"], sum(int(r["births"]) for r in rows))
         self.assertEqual(now["deaths"], sum(int(r["deaths_hunger"]) + int(r["deaths_attack"]) + int(r["deaths_age"]) for r in rows))
@@ -384,7 +386,7 @@ class TestEvolve(unittest.TestCase):
     def test_now_never_changes_the_world(self):
         argv = ["--seed", "2", "--steps", "500", "--species", "instinct", "--out"]
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
-            with mock.patch("src.evolve.NOW_SECONDS", 0.0):  # written every 25 steps
+            with mock.patch("src.world.starting_rules", lambda: {**starting_rules(), "now_seconds": 0.0}):  # every 25 steps
                 with_now = quiet_run(argv + [a]).read_text()
             with mock.patch("src.evolve.world_now", return_value={}) as asked, mock.patch("src.evolve.write_json"):
                 without = quiet_run(argv + [b]).read_text()  # never looked at, never written

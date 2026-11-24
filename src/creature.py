@@ -58,6 +58,8 @@ class Creature:
         self.fear_of_death = fear_of_death  # how bad dying feels to its learning: a gene
         self.love_of_babies = love_of_babies  # how good a baby feels to its learning: a gene
         self.learns_from_others = learns_from_others  # how much a lesson from another counts: a gene
+        self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
+        self.had_baby_at: Optional[int] = None  # the step it last had a baby (display only)
         self.neurons = 0  # the neurons its brain uses (a learner's, which the world sets); each costs energy
         self.layers = 0
         self.hurt: Optional[Tuple[float, float, float]] = None  # one step after a hit: share taken, direction to the hitter
@@ -114,6 +116,7 @@ class Creature:
 
     def apply_action(self, action: Tuple[str, Any], world: World) -> None:
         kind, param = action
+        self.target = param.id if kind == "ATTACK" and param is not None else None  # whom it went for (display only)
         if kind == "MOVE":
             self._move(param, world)
         elif kind == "EAT":
@@ -135,7 +138,7 @@ class Creature:
             self._spend(self.rules["eat_miss"], world)
             self.last_action = "EAT_MISS"
             return
-        amount = min(1.0, food.energy)
+        amount = min(self.rules["bite"], food.energy)
         food.energy -= amount
         self.energy += amount
         self.food_eaten += amount

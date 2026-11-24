@@ -7,7 +7,7 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
-from .senses import THREAT_RATIO, Senses
+from .senses import Senses
 
 if TYPE_CHECKING:
     from .creature import Creature
@@ -113,10 +113,11 @@ class Scoreboard:
             if senses.food is not None and (senses.food.x, senses.food.y) != (creature.x, creature.y):
                 self._toward_food.append(_cosine(dx, dy, senses.food.x - creature.x, senses.food.y - creature.y))
         other = senses.other
-        if other is not None and other.size >= THREAT_RATIO * creature.size:
+        bigger = creature.rules["threat_ratio"]
+        if other is not None and other.size >= bigger * creature.size:
             away = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) < 0
             self._fled.append(1.0 if away else 0.0)
-        if other is not None and other.size * THREAT_RATIO <= creature.size:  # prey: at most two-thirds its size
+        if other is not None and other.size * bigger <= creature.size:  # prey: the other way round
             toward = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) > 0
             self._chased.append(1.0 if toward else 0.0)
         if kind == "ATTACK":

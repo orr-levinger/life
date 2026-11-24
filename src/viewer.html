@@ -566,6 +566,7 @@ const TILES = [
   ["hardest", "Difficulty"], ["steer", "Steers to food"], ["born", "Born"], ["died", "Died"], ["generation", "Generation"],
   ["flee", "Flees bigger"], ["chase", "Chases smaller"], ["vision", "Sees"], ["hearing", "Hears"],
   ["fear", "Fear of death"], ["love", "Love of babies"], ["learns", "Learns from others"], ["neurons", "Neurons"],
+  ["biggest", "Biggest animal"], ["smallest", "Smallest animal"], ["bigbrain", "Biggest brain"], ["smallbrain", "Smallest brain"],
 ];
 
 function makeTiles(state) {
@@ -680,6 +681,15 @@ function updateTiles(state) {
   set("neurons", n.neurons === null ? "-" : Math.round(n.neurons), n.layers === null ? "" : `in ${n.layers.toFixed(1)} layers`,
       `The average brain uses ${n.neurons === null ? "-" : Math.round(n.neurons)} neurons. Its size is in the genes; each ` +
       `neuron costs energy every step.`);
+  const span = (key, i) => state.now && state.now[key] ? state.now[key][i] : null;
+  const sizeTip = (v, which) => v === null ? "No numbers yet." : `The ${which} creature alive now is size ${v.toFixed(2)} (sizes go from ` +
+    `${state.now && state.now.rules ? state.now.rules["gene.size.low"] : 0.5} to ${state.now && state.now.rules ? state.now.rules["gene.size.high"] : 2}).`;
+  set("biggest", span("size", 1) === null ? "-" : span("size", 1).toFixed(2), "size", sizeTip(span("size", 1), "biggest"));
+  set("smallest", span("size", 0) === null ? "-" : span("size", 0).toFixed(2), "size", sizeTip(span("size", 0), "smallest"));
+  set("bigbrain", span("neurons", 1) === null ? "-" : span("neurons", 1), "neurons",
+      span("neurons", 1) === null ? "No numbers yet." : `The biggest brain alive now has ${span("neurons", 1)} neurons.`);
+  set("smallbrain", span("neurons", 0) === null ? "-" : span("neurons", 0), "neurons",
+      span("neurons", 0) === null ? "No numbers yet." : `The smallest brain alive now has ${span("neurons", 0)} neurons.`);
   const points = state.samples.filter((x) => x.energy !== null);
   const svg = state.tiles.querySelector("svg");
   if (points.length > 1) {
@@ -733,55 +743,61 @@ const VIEW_EVERY = 100, RENEW_EVERY = 2000;  // ms: the picture 10 times a secon
 let watching = null;  // {name, kind, timers}
 
 // The legend: each meaning drawn by the same code as the world's picture.
-// The legend: each meaning drawn by the same code as the world's picture, in two rows.
-const PLAIN = { energy: 0.7, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "MOVE", facing: [1, 0], vision_width: 90,
-                vision_reach: 3, hearing: 1, fear_of_death: 3, love_of_babies: 10, learns_from_others: 0.2, neurons: 32,
-                layers: 1, learning_speed: 3e-4 };
-const LEGEND = [
-  ["small,, its genes", { ...PLAIN }, 0.7],
-  ["big", { ...PLAIN }, 1.6],
-  ["colour:, full", { ...PLAIN, energy: 0.9 }, 1.1],
-  ["colour:, hungry", { ...PLAIN, energy: 0.1 }, 1.1],
-  ["arc:, older", { ...PLAIN, age: 3800 }, 1.1],
-  ["past its, lifespan", { ...PLAIN, age: 5400, energy: 0.25 }, 1.1],
-  ["wide eyes:, wide cone", { ...PLAIN, vision_width: 120 }, 1.1],
-  ["big eyes:, sees far", { ...PLAIN, vision_reach: 9 }, 1.1],
-  ["big ears:, hears far", { ...PLAIN, hearing: 3.5 }, 1.1],
-  ["big head:, many neurons", { ...PLAIN, neurons: 64 }, 1.1],
-  ["folds:, layers", { ...PLAIN, neurons: 64, layers: 3 }, 1.1],
-  ["quills:, fears death", { ...PLAIN, fear_of_death: 80 }, 1.1],
-  ["round:, loves babies", { ...PLAIN, love_of_babies: 100 }, 1.1],
-  ["antennae:, learns from others", { ...PLAIN, learns_from_others: 1 }, 1.1],
-  ["stripes:, learns fast", { ...PLAIN, learning_speed: 5e-3 }, 1.1],
-  ["ate", { ...PLAIN, did: "EAT" }, 1.1],
-  ["attacked", { ...PLAIN, did: "ATTACK" }, 1.1],
-  ["cone:, what it sees", { ...PLAIN, vision_width: 110, vision_reach: 1.5, hearing: 0 }, 0.8],
-  ["dotted:, what it hears", { ...PLAIN, vision_reach: 0, hearing: 1.5 }, 0.8],
+// The index: the colours, what a creature is doing, and its body's symbols; each drawn by the picture's own code.
+const PLAIN = { energy: 0.7, age: 1500, lifespan: 5000, earned: 30, spent: 30, did: "MOVE", intent: "WANDER", facing: [1, 0],
+                vision_width: 70, vision_reach: 3, hearing: 1, fear_of_death: 3, love_of_babies: 10, learns_from_others: 0.2,
+                neurons: 32, layers: 1, learning_speed: 3e-4 };
+const INDEX = [
+  ["Colour", [["full: green", { ...PLAIN, energy: 0.9 }], ["half: yellow", { ...PLAIN, energy: 0.45 }],
+              ["hungry: red", { ...PLAIN, energy: 0.08 }], ["arc: its age", { ...PLAIN, age: 3800 }],
+              ["dotted: past, its lifespan", { ...PLAIN, age: 5400, energy: 0.25 }]]],
+  ["Doing", [["eating", { ...PLAIN, did: "EAT" }], ["eating at, nothing", { ...PLAIN, did: "EAT_MISS" }],
+             ["attacking: a strike, line to its target", { ...PLAIN, did: "ATTACK", strike: true }],
+             ["hit", { ...PLAIN, did: "HIT_BY_ATTACK" }], ["chasing", { ...PLAIN, intent: "CHASE" }],
+             ["fleeing", { ...PLAIN, intent: "RUN_AWAY" }], ["had a baby", { ...PLAIN, baby: true }]]],
+  ["Body", [["wide-set eyes:, wide cone", { ...PLAIN, vision_width: 120 }], ["big eyes:, sees far", { ...PLAIN, vision_reach: 9 }],
+            ["big ears:, hears far", { ...PLAIN, hearing: 3.5 }], ["big head:, many neurons", { ...PLAIN, neurons: 64 }],
+            ["folds:, brain layers", { ...PLAIN, neurons: 64, layers: 3 }], ["quills:, fears death", { ...PLAIN, fear_of_death: 80 }]]],
+  ["", [["round:, loves babies", { ...PLAIN, love_of_babies: 100 }], ["antennae:, learns from others", { ...PLAIN, learns_from_others: 1 }],
+        ["stripes:, learns fast", { ...PLAIN, learning_speed: 5e-3 }],
+        ["cone:, what it sees", { ...PLAIN, vision_width: 110, vision_reach: 1.5, hearing: 0, senses: true }],
+        ["dotted circle:, what it hears", { ...PLAIN, vision_reach: 0, hearing: 1.5, senses: true }], ["food", { food: true }]]],
 ];
-const LEGEND_ROW_HEIGHT = 112;
+const INDEX_ROW = 104, INDEX_LABEL = 64;
 
 function drawLegend() {
   const canvas = document.getElementById("watch-legend"), ink = getComputedStyle(document.documentElement);
-  const color = (name) => ink.getPropertyValue(name).trim();
-  const perRow = Math.ceil((LEGEND.length + 1) / 2), dpr = devicePixelRatio;
-  const width = canvas.clientWidth * dpr, height = 2 * LEGEND_ROW_HEIGHT * dpr;
-  canvas.style.height = `${2 * LEGEND_ROW_HEIGHT}px`;
+  const color = (name) => ink.getPropertyValue(name).trim(), dpr = devicePixelRatio;
+  const perRow = Math.max(...INDEX.map(([, items]) => items.length));
+  canvas.style.height = `${INDEX.length * INDEX_ROW}px`;
+  const width = canvas.clientWidth * dpr, height = INDEX.length * INDEX_ROW * dpr;
   canvas.width = width; canvas.height = height;
-  const g = canvas.getContext("2d"), cell = width / perRow, unit = Math.min(cell / 4.5, 13 * dpr);
-  g.font = `${11 * dpr}px system-ui, sans-serif`;
-  g.textAlign = "center";
-  LEGEND.forEach(([words, c, size], i) => {
-    const x = cell * (i % perRow + 0.5), y = (Math.floor(i / perRow) * LEGEND_ROW_HEIGHT + 40) * dpr;
-    if (words.startsWith("cone") || words.startsWith("dotted")) drawSenses(g, x, y, c, Math.min(cell * 0.2, 20 * dpr), true, color);
-    drawCreature(g, x, y, size * unit, c, 1.0, Math.max(1.2, dpr * 1.2), color);
-    g.fillStyle = color("--muted");
-    words.split(", ").forEach((part, k) => g.fillText(part, x, y + (40 + 13 * k) * dpr));
+  const g = canvas.getContext("2d"), cell = (width - INDEX_LABEL * dpr) / perRow, unit = Math.min(cell / 5, 12 * dpr);
+  const line = Math.max(1.2, dpr * 1.2);
+  INDEX.forEach(([title, items], row) => {
+    const top = row * INDEX_ROW * dpr;
+    g.fillStyle = color("--ink"); g.font = `600 ${12 * dpr}px system-ui, sans-serif`; g.textAlign = "left";
+    g.fillText(title, 4 * dpr, top + 38 * dpr);
+    g.font = `${11 * dpr}px system-ui, sans-serif`; g.textAlign = "center";
+    items.forEach(([words, c], i) => {
+      const x = INDEX_LABEL * dpr + cell * (i + 0.5), y = top + 34 * dpr, r = unit * 1.1;
+      if (c.food) {
+        const d = 5 * dpr; g.fillStyle = FOOD_COLOUR;
+        g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill();
+      } else {
+        if (c.senses) drawSenses(g, x, y, c, Math.min(cell * 0.18, 18 * dpr), true, color);
+        const cx = c.strike ? x - cell * 0.18 : x;
+        drawCreature(g, cx, y, r, c, 1.0, line, color);
+        if (c.strike) {
+          const target = { ...PLAIN, did: "HIT_BY_ATTACK" }, tx = x + cell * 0.25;
+          drawCreature(g, tx, y, r * 0.7, target, 1.0, line, color);
+          drawStrike(g, { x: cx, y, r }, { x: tx, y, r: r * 0.7 }, line, true);
+        }
+      }
+      g.fillStyle = color("--muted");
+      words.split(", ").forEach((part, k) => g.fillText(part, x, y + (34 + 12 * k) * dpr));
+    });
   });
-  const i = LEGEND.length, fx = cell * (i % perRow + 0.5), fy = (Math.floor(i / perRow) * LEGEND_ROW_HEIGHT + 40) * dpr, d = 5 * dpr;
-  g.fillStyle = FOOD_COLOUR;
-  g.beginPath(); g.moveTo(fx, fy - d); g.lineTo(fx + d, fy); g.lineTo(fx, fy + d); g.lineTo(fx - d, fy); g.closePath(); g.fill();
-  g.fillStyle = color("--muted");
-  g.fillText("food", fx, fy + 40 * dpr);
 }
 
 async function jumpIn(run) {
@@ -838,7 +854,7 @@ function hungerColour(energy) {
 }
 
 const FOOD_COLOUR = "#b4977a", MIN_SPENT = 5;  // a creature's intelligence is shown once it has spent this much
-const FLASH = { EAT: "--eat", EAT_MISS: "--miss", ATTACK: "--warn", ATTACK_MISS: "--warn" };
+const SIGN = { eat: "#2fbf71", miss: "#e0a23a", attack: "#e5484d", baby: "#e889b8", chase: "#e8873a", flee: "#f5d547" };
 
 function creatureSmarts(c, wanderers) {  // its own energy earned ÷ spent, against the random wanderers' in the last exam
   return c.spent >= MIN_SPENT && wanderers ? (c.earned / c.spent) / wanderers : null;
@@ -859,6 +875,61 @@ function creatureShape(c) {
     antennae: (c.learns_from_others ?? 0) * 1.3,  // learns from others
     stripes: Math.max(0, Math.round((speed + 5) / 3 * 5)),  // learning speed
   };
+}
+
+// What it is doing, in the creature's own frame (it faces +x): rings for eating and a baby, red spikes when hit, speed
+// lines with an arrow (chasing) or a ! (fleeing). Attacking is the strike line, drawn between the two by the picture.
+function drawDoing(g, r, c, line, color) {
+  const ring = (colour, dashed) => {
+    g.strokeStyle = colour; g.lineWidth = line * 1.8;
+    if (dashed) g.setLineDash([line * 2, line * 2]);
+    g.beginPath(); g.arc(0, 0, r * 1.3, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  };
+  if (c.did === "EAT") {
+    ring(SIGN.eat);
+    g.fillStyle = FOOD_COLOUR;
+    for (const [dx, dy] of [[1.5, -0.5], [1.8, 0.3], [1.4, 0.6]]) { g.beginPath(); g.arc(r * dx, r * dy, Math.max(1, r * 0.12), 0, Math.PI * 2); g.fill(); }
+  }
+  if (c.did === "EAT_MISS") ring(SIGN.miss, true);
+  if (c.baby) ring(SIGN.baby);
+  if (c.did === "HIT_BY_ATTACK") {
+    g.strokeStyle = SIGN.attack; g.lineWidth = line * 1.4;
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2;
+      g.beginPath(); g.moveTo(Math.cos(a) * r * 1.3, Math.sin(a) * r * 1.3); g.lineTo(Math.cos(a) * r * 1.75, Math.sin(a) * r * 1.75); g.stroke();
+    }
+  }
+  if (c.intent === "CHASE" || c.intent === "RUN_AWAY") {
+    g.strokeStyle = color("--muted"); g.lineWidth = line; g.globalAlpha = 0.7;
+    for (const dy of [-0.4, 0, 0.4]) { g.beginPath(); g.moveTo(-r * 1.35, dy * r); g.lineTo(-r * 2.3, dy * r); g.stroke(); }
+    g.globalAlpha = 1;
+    if (c.intent === "CHASE") {
+      g.fillStyle = SIGN.chase;
+      g.beginPath(); g.moveTo(r * 1.5, -r * 0.35); g.lineTo(r * 2.2, 0); g.lineTo(r * 1.5, r * 0.35); g.closePath(); g.fill();
+    } else {
+      g.save(); g.rotate(-Math.atan2(...(c.facing || [1, 0]).slice().reverse()));  // the ! stays upright
+      g.fillStyle = SIGN.flee; g.font = `bold ${Math.max(9, r * 1.1)}px system-ui, sans-serif`; g.textAlign = "center";
+      g.fillText("!", 0, -r * 1.35); g.restore();
+    }
+  }
+}
+
+// Attacking: a red strike line from the attacker to the one it went for; a star where it lands (none when it missed).
+function drawStrike(g, from, to, line, landed) {
+  const dx = to.x - from.x, dy = to.y - from.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+  const sx = from.x + ux * from.r * 1.1, sy = from.y + uy * from.r * 1.1, ex = to.x - ux * to.r * 1.2, ey = to.y - uy * to.r * 1.2;
+  g.strokeStyle = SIGN.attack; g.lineWidth = line * 2;
+  if (!landed) g.setLineDash([line * 2, line * 2]);
+  g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); g.stroke(); g.setLineDash([]);
+  const head = Math.max(4, from.r * 0.5);
+  g.fillStyle = SIGN.attack;
+  g.beginPath(); g.moveTo(ex, ey); g.lineTo(ex - ux * head - uy * head * 0.6, ey - uy * head + ux * head * 0.6);
+  g.lineTo(ex - ux * head + uy * head * 0.6, ey - uy * head - ux * head * 0.6); g.closePath(); g.fill();
+  if (landed) {
+    g.fillStyle = SIGN.flee; g.beginPath();
+    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2, rr = (i % 2 ? 0.25 : 0.6) * to.r; g.lineTo(to.x + Math.cos(a) * rr, to.y - to.r * 1.1 + Math.sin(a) * rr); }
+    g.closePath(); g.fill();
+  }
 }
 
 // One creature, its shape from its genes, turned where it faces; hunger the body's colour, age the arc (a dotted ring
@@ -888,10 +959,10 @@ function drawCreature(g, x, y, r, c, wanderers, line, color) {
     const px = r * Math.sign(ca) * Math.abs(ca) ** (2 / s.roundness), py = r * 0.92 * Math.sign(sa) * Math.abs(sa) ** (2 / s.roundness);
     t ? g.lineTo(px, py) : g.moveTo(px, py);
   }
-  g.closePath(); g.fill();
-  g.lineWidth = line;  // what it just did: a flash ring
-  g.strokeStyle = FLASH[c.did] ? color(FLASH[c.did]) : "rgba(0,0,0,0.35)";
-  g.stroke();
+  g.closePath();
+  g.fillStyle = c.did === "HIT_BY_ATTACK" ? SIGN.attack : hungerColour(c.energy);  // hit: it turns red
+  g.fill();
+  g.lineWidth = line; g.strokeStyle = "rgba(0,0,0,0.35)"; g.stroke();
   g.strokeStyle = "rgba(0,0,0,0.45)"; g.lineWidth = Math.max(0.8, r * 0.05);  // stripes: learning speed
   for (let i = 0; i < s.stripes; i++) {
     const sx = -r * (0.2 + i * 0.13);
@@ -919,6 +990,7 @@ function drawCreature(g, x, y, r, c, wanderers, line, color) {
     g.fillStyle = "#ffffff"; g.beginPath(); g.arc(ex, ey, er, 0, Math.PI * 2); g.fill();
     g.fillStyle = "#111111"; g.beginPath(); g.arc(ex + er * 0.35, ey, er * 0.55, 0, Math.PI * 2); g.fill();
   }
+  drawDoing(g, r, c, line, color);
   g.restore();
   g.strokeStyle = color("--muted"); g.lineWidth = line;  // age: an arc of its own lifespan
   g.beginPath(); g.arc(x, y, r * 1.25 + line * 2, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, lived)); g.stroke();
@@ -1008,6 +1080,12 @@ function paint() {
     const smart = drawCreature(g, x, y, r, c, wanderers, line, color);
     const [sx, sy] = toScreen(x, y);
     watching.drawn.push({ c, x: sx / devicePixelRatio, y: sy / devicePixelRatio, r: r * camera.zoom / devicePixelRatio, smart });
+  }
+  const where = new Map(watching.drawn.map((d) => [d.c.id, d]));
+  for (const { c, x, y } of placed) {  // attacking: strike lines, over the creatures
+    if (c.target === null || c.target === undefined || !where.has(c.target)) continue;
+    const to = placed.find((p) => p.c.id === c.target), r = Math.max(c.radius * unit, 4), tr = Math.max(to.c.radius * unit, 4);
+    drawStrike(g, { x, y, r }, { x: to.x, y: to.y, r: tr }, line, c.did === "ATTACK");
   }
   if (followed) {  // the one it follows: a ring
     g.strokeStyle = color("--ink"); g.lineWidth = line;
@@ -1284,8 +1362,8 @@ document.addEventListener("mouseover", (event) => {  // every number explains it
 });
 
 // ---- Rules: every cost, value and gene of the running world, each changeable at once ----
-const RULE_TABLES = [["costs", "Costs", "energy a creature pays (a bite of food gives 1)"], ["values", "Values", ""],
-                     ["genes", "Genes", "new limits apply to babies born from now on"]];
+const RULE_GROUPS = { costs: "energy a creature pays (a bite of food gives 1)", genes: "new limits apply to babies born from now on",
+                      exam: "changing the exam makes older scores incomparable" };
 const AUTO_COSTS = [["step_cost", "Being alive, each step, × size"], ["move_cost", "Moving, per unit of distance, × size"]];
 const numberText = (v) => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : String(Number(v.toPrecision(4)));
 
@@ -1331,12 +1409,14 @@ async function drawRules() {
     return;
   }
   page.dataset.run = run.name;
-  page.innerHTML = RULE_TABLES.map(([table, title, note]) => {
-    const mine = rules.filter((r) => (r.knob ? "costs" : r.table) === table);
-    const head = table === "genes" ? "<tr><th>Gene</th><th>Lowest – highest</th><th>Newcomer gets</th><th>Baby change (share)</th></tr>"
-                                    : `<tr><th>${table === "costs" ? "Cost" : "Value"}</th><th>Now</th><th>Range</th><th>Start</th><th></th></tr>`;
-    const body = table === "genes" ? geneRows(mine) : mine.map(ruleRow).join("");
-    return `<div class="rules-table"><h2>${title}<small>${note}</small></h2><table>${head}${body}</table></div>`;
+  page.innerHTML = answer.groups.map(({ name, title }) => {
+    const mine = rules.filter((r) => (r.knob ? "costs" : r.group) === name);
+    const genes = name === "genes", geneRules = mine.filter((r) => r.name.split(".").length === 3 && !r.name.startsWith("gene.weights"));
+    const head = genes ? "<tr><th>Gene</th><th>Lowest – highest</th><th>Newcomer gets</th><th>Baby change (share)</th></tr>"
+                       : `<tr><th>${name === "costs" ? "Cost" : "Rule"}</th><th>Now</th><th>Range</th><th>Start</th><th></th></tr>`;
+    const body = genes ? geneRows(geneRules) + mine.filter((r) => r.name.startsWith("gene.weights")).map(ruleRow).join("")
+                       : mine.map(ruleRow).join("");
+    return `<div class="rules-table"><h2>${title}<small>${RULE_GROUPS[name] || ""}</small></h2><table>${head}${body}</table></div>`;
   }).join("");
   const change = async (name, value, knob, where) => {
     const error = where.closest("td").querySelector(".error");

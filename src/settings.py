@@ -1,7 +1,7 @@
 """The world's settings: how hard survival is right now, and the rules of life that never change.
 
 The living world starts at START, the easy start. The dial (src/dial.py) nudges one setting at a time while nobody is
-dying and takes a nudge back when too many die. The exam always happens in TEST_WORLD, which never changes.
+dying and takes a nudge back when too many die. The exam's world is a set of rules (src/rules.py).
 """
 from __future__ import annotations
 
@@ -22,9 +22,5 @@ class Settings:
 # Starting values from the design; the plan tunes them by measurement.
 START = Settings(max_food=200, food_energy=(20, 40), food_per_step=3.0, move_cost=0.5, step_cost=0.05,
                  lifespan=(4000, 6000), attacks=False)
-
-# The intelligence exam always happens here, whatever the living world's settings, so scores compare across time.
-TEST_WORLD = Settings(max_food=80, food_energy=(10, 25), food_per_step=3.0, move_cost=1.0, step_cost=0.10,
-                      lifespan=(4000, 6000), attacks=False)
 
 TODAY_SENSES = (360.0, 3.0, 1.5)  # width, reach, hearing of a creature no world gave senses to (the exam's; older saves)

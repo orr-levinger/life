@@ -2,7 +2,11 @@ import unittest
 from dataclasses import FrozenInstanceError
 
 from src.rules import rule
-from src.settings import START, TEST_WORLD, Settings
+from src.exam import exam_settings
+from src.rules import starting_rules
+from src.settings import START, Settings
+
+TEST_WORLD = exam_settings(starting_rules())
 
 
 class TestSettings(unittest.TestCase):

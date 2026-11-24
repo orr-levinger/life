@@ -169,7 +169,7 @@ class TestControlRoom(unittest.TestCase):
         answer = self.server.get(f"/rules?run={name}")
         self.assertEqual([r["name"] for r in answer["rules"]], [r.name for r in RULES])
         eat = next(r for r in answer["rules"] if r["name"] == "eat_miss")
-        self.assertEqual((eat["table"], eat["value"], eat["start"], eat["low"], eat["high"]), ("costs", 0.2, 0.2, 0.0, 5.0))
+        self.assertEqual((eat["group"], eat["value"], eat["start"], eat["low"], eat["high"]), ("costs", 0.2, 0.2, 0.0, 5.0))
         (self.root / name / "now.json").write_text(json.dumps({"step": 9, "rules": {**{r.name: r.start for r in RULES},
                                                                                      "eat_miss": 0.4}}))
         answer = self.server.get(f"/rules?run={name}")
@@ -190,7 +190,7 @@ class TestControlRoom(unittest.TestCase):
     def test_page_has_costs_values_and_genes(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ('id="tab-rules"', 'id="rules-page"', "function drawRules", "\"Costs\"", "\"Values\"", "\"Genes\"",
+        for words in ('id="tab-rules"', 'id="rules-page"', "function drawRules", "RULE_GROUPS", "answer.groups",
                       "/rules?run="):
             self.assertIn(words, page)
 
@@ -200,6 +200,16 @@ class TestControlRoom(unittest.TestCase):
         for words in ("CHART_SPANS = [[10000, \"10k\"], [50000, \"50k\"], [0, \"all\"]]", "CHART_POINTS", "CHART_SMOOTH",
                       "span: 10000", "function chartRows", "function smoothed", "marks.filter((m) => m.byYou)"):
             self.assertIn(words, page)
+
+    def test_page_shows_the_groups(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("RULE_GROUPS", "/rules?run="):
+            self.assertIn(words, page)
+        answer = self.server.get(f"/rules?run={self.running_world()}")
+        self.assertEqual([g["name"] for g in answer["groups"]],
+                         ["costs", "world", "body", "senses", "birth", "genes", "learning", "auto", "exam", "runner"])
+        self.assertEqual(answer["groups"][0]["title"], "Costs")
 
     def test_page_has_no_switches_and_no_read_only_rows(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
@@ -449,15 +459,16 @@ class TestControlRoom(unittest.TestCase):
     def test_page_explains_the_creature_look(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ('id="watch-legend"', "past its, lifespan", "food", "function creatureShape", "big ears:, hears far",
-                      "big head:, many neurons", "folds:, layers", "quills:, fears death", "stripes:, learns fast"):
+        for words in ('id="watch-legend"', "dotted: past, its lifespan", "hungry: red", "function creatureShape",
+                      "big ears:, hears far", "big head:, many neurons", "folds:, brain layers", "quills:, fears death",
+                      "attacking: a strike, line to its target", "chasing", "fleeing", "function drawStrike"):
             self.assertIn(words, page)
         self.assertNotIn("tan diamond: food", page)  # the owner: the words-only key "is not helping"
 
     def test_page_draws_cones_and_hearing(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ("function drawSenses", "c.vision_width", "c.hearing", "cone:, what it sees", "dotted:, what it hears",
+        for words in ("function drawSenses", "c.vision_width", "c.hearing", "cone:, what it sees", "dotted circle:, what it hears",
                       '"vision_width"', '"hearing"'):
             self.assertIn(words, page)
 

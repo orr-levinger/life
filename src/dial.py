@@ -15,11 +15,6 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from .rules import Rules, starting_rules
 from .settings import START, Settings
 
-NUDGE = 0.05  # how much one nudge changes one knob
-PER_CREATURES = 8  # one nudge per this many creatures away from the target
-PER_ALIVE_RATE = 0.10  # one nudge per 10 % a 1,000 steps the number alive moves
-PER_ENERGY_RATE = 0.05  # one nudge per 5 points of a full tank a 1,000 steps the average energy falls
-MAX_NUDGES = 4  # the most one look may move, either way
 TOLERANCE = 1e-9
 
 
@@ -30,10 +25,9 @@ class Knob:
     easiest: float  # the ends of the knob's slider: it never passes them
     hardest: float
 
-    @property
-    def factor(self) -> float:
+    def factor(self, nudge: float) -> float:
         """What one harder nudge multiplies the knob by (an easier nudge divides by it)."""
-        return 1.0 + NUDGE * self.harder
+        return 1.0 + nudge * self.harder
 
 
 KNOBS = (
@@ -74,9 +68,9 @@ def with_value(settings: Settings, name: str, number: float) -> Settings:
     return replace(settings, **{name: number})
 
 
-def difficulty(settings: Settings) -> float:
+def difficulty(settings: Settings, nudge: float) -> float:
     """How many 5 % nudges harder than the easy start `settings` are (below zero: easier); hunters count as one."""
-    nudges = sum(math.log(value(settings, k.name) / value(START, k.name)) / math.log(k.factor) for k in KNOBS)
+    nudges = sum(math.log(value(settings, k.name) / value(START, k.name)) / math.log(k.factor(nudge)) for k in KNOBS)
     return nudges + (settings.attacks - START.attacks)
 
 
@@ -107,15 +101,16 @@ def rates(rows: Sequence[Mapping[str, float]]) -> Tuple[Optional[float], Optiona
     return (alive / mean_alive if alive is not None and mean_alive else None), energy
 
 
-def step_for(alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int, target: float) -> int:
+def step_for(alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int, rules: Rules) -> int:
     """Auto's step, in nudges (+ harder, - easier): the distance from the target and the rates, each times its alpha.
     A rate not measured yet counts as steady; rising energy never eases."""
+    most = round(rules["auto_max_nudges"])
     if newcomers > 0:
-        return -MAX_NUDGES  # the world nearly died out
-    step = (alive - target) / PER_CREATURES
-    step += (alive_rate or 0.0) / PER_ALIVE_RATE
-    step += min(energy_rate or 0.0, 0.0) / PER_ENERGY_RATE
-    return max(-MAX_NUDGES, min(MAX_NUDGES, round(step)))
+        return -most  # the world nearly died out
+    step = (alive - rules["auto_target"]) / rules["auto_per_creatures"]
+    step += (alive_rate or 0.0) / rules["auto_per_alive_rate"]
+    step += min(energy_rate or 0.0, 0.0) / rules["auto_per_energy_rate"]
+    return max(-most, min(most, round(step)))
 
 
 def _at(knob: Knob, settings: Settings, end: float) -> bool:
@@ -139,7 +134,7 @@ class Dial:
     @property
     def level(self) -> float:
         """The difficulty now."""
-        return difficulty(self._settings)
+        return difficulty(self._settings, self.rules["auto_nudge"])
 
     def state(self) -> Dict:
         """What a save keeps: the knobs, the nudges Auto can take back, whose turn it is, and the top level."""
@@ -168,7 +163,7 @@ class Dial:
 
     def review(self, alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int) -> int:
         """One look: takes the step `step_for` says and returns the nudges it made (+ harder, - easier, 0 none)."""
-        wanted, made = step_for(alive, alive_rate, energy_rate, newcomers, self.rules["auto_target"]), 0
+        wanted, made = step_for(alive, alive_rate, energy_rate, newcomers, self.rules), 0
         while made < wanted and self._harder() == "harder":
             made += 1
         while made > wanted and self._easier() == "easier":
@@ -189,7 +184,7 @@ class Dial:
             knob = KNOBS[self._next_harder % len(KNOBS)]
             self._next_harder += 1
             if not _at(knob, self._settings, knob.hardest):
-                return self._nudge(with_value(self._settings, knob.name, value(self._settings, knob.name) * knob.factor))
+                return self._nudge(with_value(self._settings, knob.name, value(self._settings, knob.name) * knob.factor(self.rules["auto_nudge"])))
         return "hold"  # every knob is at its hardest
 
     def _nudge(self, harder: Settings) -> str:
@@ -209,6 +204,6 @@ class Dial:
             knob = KNOBS[self._next_easier % len(KNOBS)]
             self._next_easier += 1
             if not _at(knob, self._settings, knob.easiest):
-                self._settings = with_value(self._settings, knob.name, value(self._settings, knob.name) / knob.factor)
+                self._settings = with_value(self._settings, knob.name, value(self._settings, knob.name) / knob.factor(self.rules["auto_nudge"]))
                 return "easier"
         return "hold"  # every knob is at its easiest

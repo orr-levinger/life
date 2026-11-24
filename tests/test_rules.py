@@ -9,7 +9,7 @@ class TestRules(unittest.TestCase):
         names = [rule.name for rule in RULES]
         self.assertEqual(len(names), len(set(names)))  # each rule once
         for rule in RULES:
-            self.assertIn(rule.table, ("costs", "values", "genes"))
+            self.assertIn(rule.group, [name for name, _ in __import__("src.rules", fromlist=["GROUPS"]).GROUPS])
             self.assertTrue(rule.low <= rule.start <= rule.high, rule.name)
         self.assertEqual(starting_rules(), {rule.name: rule.start for rule in RULES})
 
@@ -35,6 +35,26 @@ class TestRules(unittest.TestCase):
         changes = {r.name: r.start for r in RULES if r.name.startswith("gene.") and r.name.endswith(".change")}
         self.assertEqual(set(changes.values()), {0.05})
         self.assertGreaterEqual(len(changes), 8)
+
+    def test_every_rule_has_a_group(self):
+        from src.rules import GROUPS
+        self.assertEqual([g for g, _ in GROUPS], ["costs", "world", "body", "senses", "birth", "genes", "learning", "auto", "exam", "runner"])
+        for r in RULES:
+            self.assertIn(r.group, dict(GROUPS))
+        for name in ("learn_rollout", "learn_passes", "learn_clip", "learn_discount", "learn_credit", "learn_explore",
+                     "learn_guess", "learn_spread", "auto_per_creatures", "auto_per_alive_rate", "auto_per_energy_rate",
+                     "auto_max_nudges", "auto_measure", "gene.weights.share", "gene.weights.size", "gene.layers.low",
+                     "gene.neurons.low"):
+            self.assertIn(name, starting_rules())
+        self.assertEqual((starting_rules()["gene.weights.share"], starting_rules()["gene.weights.size"]), (0.02, 0.02))
+
+    def test_auto_reads_its_rules(self):
+        from src.dial import step_for
+        rules = starting_rules()
+        self.assertEqual(step_for(72, 0.0, 0.0, 0, rules), 1)  # 8 above the target of 64: one nudge harder
+        self.assertEqual(step_for(72, 0.0, 0.0, 0, {**rules, "auto_target": 72.0}), 0)
+        self.assertEqual(step_for(72, 0.0, 0.0, 0, {**rules, "auto_per_creatures": 4.0}), 2)
+        self.assertEqual(step_for(80, 1.0, 0.0, 0, {**rules, "auto_max_nudges": 2.0}), 2)
 
     def test_the_world_reads_its_rules(self):
         w = make_world()

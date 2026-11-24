@@ -97,6 +97,42 @@ class TestBrainSize(unittest.TestCase):
         self.assertEqual(learner.active_neurons(slot), 64)  # 32 + 32
 
 
+class TestBrainGenes(unittest.TestCase):
+    def test_layers_neurons_and_weights_are_separate_genes(self):
+        import random
+        from src.rules import starting_rules
+        rules = starting_rules()
+        for kind in (None, "layers", "neurons", "weights"):
+            learner = Learner(2, 0)
+            parent = learner.allocate(NetWeights.random(np.random.default_rng(8)), LEARNING_RATE)
+            baby = learner.baby(parent, np.random.default_rng(9), 1.0, "learned", kind, random.Random(3), rules)
+            before, after = learner.current(parent), learner.current(baby)
+            sizes = (list(before.size), list(after.size))
+            moved = sum(int((a != b).sum()) for a, b in zip(before.arrays()[:-1], after.arrays()[:-1]))
+            total = sum(a.size for a in before.arrays()[:-1])
+            if kind is None:
+                self.assertEqual((sizes[0], moved), (sizes[1], 0))  # an exact copy
+            elif kind == "layers":
+                self.assertNotEqual(sizes[0][0], sizes[1][0])
+                self.assertEqual(sizes[0][1], sizes[1][1])
+            elif kind == "neurons":
+                self.assertEqual(sizes[0][0], sizes[1][0])
+                self.assertEqual(abs(sizes[1][1] - sizes[0][1]), 1)  # one neuron more or fewer
+            else:
+                self.assertEqual(sizes[0], sizes[1])
+                self.assertTrue(0.01 * total < moved < 0.03 * total)  # about 2 % of its weights
+                largest = max(float(np.abs(a - b).max()) for a, b in zip(before.arrays()[:-1], after.arrays()[:-1]))
+                self.assertLess(largest, 0.15)  # each by a little (normal noise of 0.02)
+
+    def test_learning_reads_its_rules(self):
+        from src.rules import starting_rules
+        learner = Learner(1, 0)
+        learner.rules = {**starting_rules(), "learn_rollout": 16.0}
+        slot = learner.allocate(NetWeights.random(np.random.default_rng(1)), LEARNING_RATE)
+        live(learner, slot, 17)
+        self.assertEqual(learner.update(), 1)  # a round after 16 steps, not 64
+
+
 class TestLearner(unittest.TestCase):
     def test_act_shapes_and_ranges(self):
         learner = learner_with(4)
@@ -176,7 +212,7 @@ class TestLearner(unittest.TestCase):
         lb = {"obs": obs, "attacks": attacks, "choice": choice, "move": move, "logp": own - behaviour_shift,
               "adv": tf.constant([[1.5]]), "target": tf.constant([[2.0]]), "mask": tf.ones((1, 1)),
               "weight": tf.constant([[0.5]]), "size": tf.constant([[1.0, 32.0, 0.0, 0.0]])}  # it learns half as much from others
-        expected = 0.5 * (-1.5 + L.VALUE_WEIGHT * (float(value[0, 0]) - 2.0) ** 2) / L.ROLLOUT
+        expected = 0.5 * (-1.5 + 0.5 * (float(value[0, 0]) - 2.0) ** 2) / 64  # its own value weight 0.5, a 64-step round
         return p, lb, expected
 
     def test_lessons_train_at_half_weight(self):
@@ -195,7 +231,7 @@ class TestLearner(unittest.TestCase):
         self.assertTrue(same(learner.current(0), learner.inborn(0)))  # lessons alone change nothing
 
         p, lb, expected = self.one_lesson(learner, 0, 0.0)  # the watcher would make the move as likely as the actor
-        self.assertAlmostEqual(float(L.lesson_loss(p, lb)[0]), expected, places=5)  # half an own step's loss
+        self.assertAlmostEqual(float(L.lesson_loss(p, lb, 0.5, 64)[0]), expected, places=5)  # half an own step's loss
 
         trained = []
         for lessons in (False, True):
@@ -216,7 +252,7 @@ class TestLearner(unittest.TestCase):
         learner = learner_with(1)
         _, _, expected = self.one_lesson(learner, 0, 0.0)
         p, lb, _ = self.one_lesson(learner, 0, 5.0)  # the watcher would make it e^5 times likelier than the actor
-        self.assertAlmostEqual(float(L.lesson_loss(p, lb)[0]), expected, places=5)
+        self.assertAlmostEqual(float(L.lesson_loss(p, lb, 0.5, 64)[0]), expected, places=5)
         self.assertAlmostEqual(float(L.lesson_weight(math.exp(5.0), 0.5)), 0.5)
         self.assertAlmostEqual(float(L.lesson_weight(0.2, 0.5)), 0.1)
 

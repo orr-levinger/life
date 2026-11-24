@@ -14,20 +14,14 @@ import numpy as np
 import tensorflow as tf
 
 from .brain import jitter
+from .rules import rule, starting_rules
 
 N_IN = 20
 N_HIDDEN = 32
 N_CHOICES = 3  # 0 move, 1 eat, 2 attack
 ATTACK = 2
-ROLLOUT = 64
-LEARNING_RATE = 3e-4  # the Learning team's rate, and the first generation's in the Both team
-GAMMA = 0.99
-LAM = 0.95
-CLIP = 0.2
-EPOCHS = 4
-VALUE_WEIGHT = 0.5
-ENTROPY_WEIGHT = 0.01
-INITIAL_SPREAD = 0.5  # starting standard deviation of the move
+LEARNING_RATE = rule("gene.learning_speed.start").start  # a newcomer's, from the rules
+INITIAL_SPREAD = rule("learn_spread").start  # a newborn's first spread, from the rules
 ADAM_BETAS = (0.9, 0.999)
 ADAM_EPS = 1e-8
 MASKED = -1e9
@@ -75,7 +69,8 @@ class NetWeights:
     size: np.ndarray
 
     @classmethod
-    def random(cls, np_rng: np.random.Generator, layers: int = FIRST_LAYERS, neurons: int = FIRST_NEURONS) -> NetWeights:
+    def random(cls, np_rng: np.random.Generator, layers: int = FIRST_LAYERS, neurons: int = FIRST_NEURONS,
+               spread: float = INITIAL_SPREAD) -> NetWeights:
         """Hidden and critic weights scaled 1/sqrt(inputs); the policy heads start small so the first odds are even; a
         deeper layer starts with strength 0, so it says nothing until it learns or mutates."""
         size = np.array([layers] + [neurons if layer < layers else 0 for layer in range(MAX_LAYERS)], dtype=float)
@@ -85,7 +80,7 @@ class NetWeights:
             w3=np_rng.normal(0.0, 1.0 / math.sqrt(ROOM), SHAPES["w3"]), b3=np.zeros(ROOM), s3=np.zeros(1),
             wc=np_rng.normal(0.0, 0.01, SHAPES["wc"]), bc=np.zeros(N_CHOICES),
             wm=np_rng.normal(0.0, 0.01, SHAPES["wm"]), bm=np.zeros(2),
-            log_std=np.full(2, math.log(INITIAL_SPREAD)),
+            log_std=np.full(2, math.log(spread)),
             wh=np_rng.normal(0.0, 1.0 / math.sqrt(N_IN), SHAPES["wh"]), bh=np.zeros(N_CRITIC),
             wv=np_rng.normal(0.0, 1.0 / math.sqrt(N_CRITIC), SHAPES["wv"]), bv=np.zeros(1),
             size=size,
@@ -140,7 +135,7 @@ class NetWeights:
 
 
 def gae(rewards: np.ndarray, values: np.ndarray, dones: np.ndarray, last_value: float,
-        gamma: float = GAMMA, lam: float = LAM) -> Tuple[np.ndarray, np.ndarray]:
+        gamma: float, lam: float) -> Tuple[np.ndarray, np.ndarray]:
     """Generalized advantage estimation. dones[t] = 1 means the life ended after step t (nothing bootstraps past it)."""
     advantages = np.zeros(len(rewards))
     running = 0.0
@@ -183,15 +178,15 @@ def lesson_weight(ratio, learns):
     return tf.cast(learns, tf.float32) * tf.minimum(1.0, tf.cast(ratio, tf.float32))
 
 
-def lesson_loss(p: Dict[str, tf.Tensor], lb: Dict[str, tf.Tensor]) -> tf.Tensor:
+def lesson_loss(p: Dict[str, tf.Tensor], lb: Dict[str, tf.Tensor], value_weight: float, rollout: float) -> tf.Tensor:
     """Each slot's loss from its lessons [K]: per lesson, its weight times (minus the advantage, plus the value error);
     summed over a slot's lessons and divided by a rollout's steps, so a lesson counts against an own step's mean."""
     logits, mean, log_std, value = _heads(p, lb["obs"], lb["attacks"], lb["size"])
     logp = _log_prob(logits, mean, log_std, lb["choice"], lb["move"])
     weight = tf.stop_gradient(lesson_weight(tf.exp(logp - lb["logp"]), lb["weight"])) * lb["mask"]
     policy = -tf.exp(logp - tf.stop_gradient(logp)) * lb["adv"]  # its value is -adv; its gradient -adv × d logp
-    error = VALUE_WEIGHT * tf.square(value - lb["target"])
-    return tf.reduce_sum(weight * (policy + error), axis=1) / ROLLOUT
+    error = value_weight * tf.square(value - lb["target"])
+    return tf.reduce_sum(weight * (policy + error), axis=1) / rollout
 
 
 def _entropy(logits, log_std):
@@ -214,6 +209,7 @@ class Learner:
         self._buffers: List[List[dict]] = [[] for _ in range(slots)]
         self._pending: Dict[int, dict] = {}
         self._free: List[int] = list(range(slots))
+        self.rules = starting_rules()  # its numbers (a world hands it its own rules)
         self._size = np.zeros((slots, 1 + MAX_LAYERS))  # each slot's brain genes: layers, neurons of each
         self._lessons: List[List[dict]] = [[] for _ in range(slots)]  # steps of others each slot saw: {step, next_obs}
         self._last: Dict[int, dict] = {}  # each slot's last recorded step, which a watcher may take as a lesson
@@ -283,18 +279,26 @@ class Learner:
     def has_room(self) -> bool:
         return bool(self._free)
 
-    def newcomer(self, np_rng: np.random.Generator, lr: float, layers: int, neurons: int) -> int:
+    def newcomer(self, np_rng: np.random.Generator, lr: float, layers: int, neurons: int, spread: float) -> int:
         """A newcomer of the primordial soup: a random network of `layers` layers of `neurons`, learning at `lr`."""
-        return self.allocate(NetWeights.random(np_rng, layers, neurons), lr)
+        return self.allocate(NetWeights.random(np_rng, layers, neurons, spread), lr)
 
-    def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str, rate: float,
-             scale: float, grow: Optional[dict] = None) -> int:
-        """A baby's network: the parent's brain as it is now ("learned") or as the parent was born ("inborn"),
-        mutated, with the parent's learning speed × `lr_factor`; when `grow` is given (the brain is the gene this baby
-        changes), its size changes once (`NetWeights.grown`'s arguments). Returns the baby's slot."""
+    def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str, gene: Optional[str],
+             rng, rules: Dict[str, float]) -> int:
+        """A baby's network: the parent's brain as it is now ("learned") or as the parent was born ("inborn"), with the
+        parent's learning speed × `lr_factor`; when one of its brain genes is the baby's changed gene, that one changes:
+        "layers" a layer more or fewer, "neurons" a neuron more or fewer, "weights" a few weights a little. Otherwise
+        the brain is an exact copy. Returns the baby's slot."""
         genes = self.current(parent_slot) if inherit == "learned" else self.inborn(parent_slot)
-        genes = genes.mutate(np_rng, rate, scale)
-        return self.allocate(genes.grown(**grow) if grow else genes, self.lr(parent_slot) * lr_factor)
+        if gene == "weights":
+            genes = genes.mutate(np_rng, rules["gene.weights.share"], rules["gene.weights.size"])
+        elif gene == "layers":
+            genes = genes.grown(rng, 1.0, (rules["gene.neurons.low"], rules["gene.neurons.high"]),
+                                (rules["gene.layers.low"], rules["gene.layers.high"]))
+        elif gene == "neurons":
+            genes = genes.grown(rng, 0.0, (rules["gene.neurons.low"], rules["gene.neurons.high"]),
+                                (rules["gene.layers.low"], rules["gene.layers.high"]))
+        return self.allocate(genes, self.lr(parent_slot) * lr_factor)
 
     def active_neurons(self, slot: int) -> int:
         """How many neurons a slot's brain uses: the neurons of each layer it has."""
@@ -388,7 +392,7 @@ class Learner:
         both = tf.constant(np.concatenate([obs, next_obs], axis=1), tf.float32)
         size = tf.constant(self._size[slots], tf.float32)
         value = _heads(p, both, tf.ones(both.shape[:2]), size)[3].numpy()
-        target = reward + GAMMA * value[:, length:] * (1.0 - done)
+        target = reward + self.rules["learn_discount"] * value[:, length:] * (1.0 - done)
         adv = target - value[:, :length]
         for k in range(len(slots)):
             known = mask[k] > 0
@@ -402,24 +406,26 @@ class Learner:
 
     def update(self) -> int:
         """One PPO update for every slot with a full rollout (64 steps plus the one that bootstraps them)."""
-        full = [slot for slot in range(self.slots) if len(self._buffers[slot]) > ROLLOUT]
+        rollout = round(self.rules["learn_rollout"])
+        full = [slot for slot in range(self.slots) if len(self._buffers[slot]) > rollout]
         if not full:
             return 0
         batch = {key: [] for key in ("obs", "choice", "move", "logp", "attacks", "adv", "ret")}
         for slot in full:
-            steps = self._buffers[slot][:ROLLOUT]
+            steps = self._buffers[slot][:rollout]
             column = {key: np.array([s[key] for s in steps]) for key in steps[0]}
-            adv, ret = gae(column["reward"], column["value"], column["done"], self._buffers[slot][ROLLOUT]["value"])
+            adv, ret = gae(column["reward"], column["value"], column["done"], self._buffers[slot][rollout]["value"],
+                           self.rules["learn_discount"], self.rules["learn_credit"])
             batch["adv"].append((adv - adv.mean()) / (adv.std() + 1e-8))
             batch["ret"].append(ret)
             for key in ("obs", "choice", "move", "logp", "attacks"):
                 batch[key].append(column[key])
-            self._buffers[slot] = self._buffers[slot][ROLLOUT:]
+            self._buffers[slot] = self._buffers[slot][rollout:]
         tensors = {key: tf.constant(np.stack(values), dtype=tf.int32 if key == "choice" else tf.float32)
                    for key, values in batch.items()}
         lessons = self._lesson_batch(full)
         size = tf.constant(self._size[full], tf.float32)
-        for _ in range(EPOCHS):
+        for _ in range(round(self.rules["learn_passes"])):
             self._ppo_step(full, tensors, lessons, size)
         return len(full)
 
@@ -431,13 +437,15 @@ class Learner:
             tape.watch(list(p.values()))
             logits, mean, log_std, value = _heads(p, b["obs"], b["attacks"], size)
             ratio = tf.exp(_log_prob(logits, mean, log_std, b["choice"], b["move"]) - b["logp"])
-            clipped = tf.clip_by_value(ratio, 1.0 - CLIP, 1.0 + CLIP)
+            clip = self.rules["learn_clip"]
+            clipped = tf.clip_by_value(ratio, 1.0 - clip, 1.0 + clip)
             policy_loss = -tf.reduce_mean(tf.minimum(ratio * b["adv"], clipped * b["adv"]), axis=1)
             value_loss = tf.reduce_mean(tf.square(value - b["ret"]), axis=1)
             entropy = tf.reduce_mean(_entropy(logits, log_std), axis=1)
-            loss = tf.reduce_sum(policy_loss + VALUE_WEIGHT * value_loss - ENTROPY_WEIGHT * entropy)
+            guess, explore = self.rules["learn_guess"], self.rules["learn_explore"]
+            loss = tf.reduce_sum(policy_loss + guess * value_loss - explore * entropy)
             if lessons is not None:
-                loss += tf.reduce_sum(lesson_loss(p, lessons))
+                loss += tf.reduce_sum(lesson_loss(p, lessons, guess, self.rules["learn_rollout"]))
         grads = tape.gradient(loss, list(p.values()))
         self._adam(slots, idx, p, dict(zip(p.keys(), grads)))
 

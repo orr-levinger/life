@@ -1,12 +1,14 @@
 import unittest
 from dataclasses import fields, replace
 
-from src.dial import (KNOBS, MAX_NUDGES, Dial, difficulty, rates, slope, step_for, value,
+from src.dial import (KNOBS, Dial, difficulty, rates, slope, step_for, value,
                       with_value)
 from src.settings import START, Settings
 
 from src.rules import rule  # noqa: E402
-TARGET_ALIVE, HUNTERS_AT = rule("auto_target").start, rule("auto_hunters_at").start
+from src.rules import starting_rules  # noqa: E402
+RULES = starting_rules()
+TARGET_ALIVE, HUNTERS_AT, MAX_NUDGES = RULES["auto_target"], RULES["auto_hunters_at"], round(RULES["auto_max_nudges"])
 EASY = (TARGET_ALIVE + 8, 0.0, 0.0, 0)  # 8 above the target, steady: one nudge harder
 HARD = (TARGET_ALIVE - 8, 0.0, 0.0, 0)  # 8 below the target, steady: one nudge easier
 
@@ -50,37 +52,37 @@ class TestRates(unittest.TestCase):
 
 class TestStep(unittest.TestCase):
     def test_at_the_target_and_steady_holds(self):
-        self.assertEqual(step_for(64, 0.0, 0.0, 0, TARGET_ALIVE), 0)
+        self.assertEqual(step_for(64, 0.0, 0.0, 0, RULES), 0)
 
     def test_full_and_steady_two_harder(self):
-        self.assertEqual(step_for(80, 0.0, 0.0, 0, TARGET_ALIVE), 2)
+        self.assertEqual(step_for(80, 0.0, 0.0, 0, RULES), 2)
 
     def test_forty_and_steady_three_easier(self):
-        self.assertEqual(step_for(40, 0.0, 0.0, 0, TARGET_ALIVE), -3)
+        self.assertEqual(step_for(40, 0.0, 0.0, 0, RULES), -3)
 
     def test_recovering_world_is_left_alone(self):
-        self.assertEqual(step_for(50, 0.20, 0.0, 0, TARGET_ALIVE), 0)  # below the target but rising 20 % a 1,000 steps
+        self.assertEqual(step_for(50, 0.20, 0.0, 0, RULES), 0)  # below the target but rising 20 % a 1,000 steps
 
     def test_the_owner_s_crash_eases_four(self):
         crash = rows([80, 68, 55, 45], [0.82, 0.65, 0.48, 0.36], start=16250)
         alive_rate, energy_rate = rates(crash)
-        self.assertEqual(step_for(45, alive_rate, energy_rate, 0, TARGET_ALIVE), -4)
+        self.assertEqual(step_for(45, alive_rate, energy_rate, 0, RULES), -4)
 
     def test_falling_energy_eases(self):
-        self.assertEqual(step_for(64, 0.0, -0.10, 0, TARGET_ALIVE), -2)  # 10 points a 1,000 steps
+        self.assertEqual(step_for(64, 0.0, -0.10, 0, RULES), -2)  # 10 points a 1,000 steps
 
     def test_rising_energy_alone_never_eases(self):
-        self.assertEqual(step_for(64, 0.0, 0.30, 0, TARGET_ALIVE), 0)
+        self.assertEqual(step_for(64, 0.0, 0.30, 0, RULES), 0)
 
     def test_newcomers_ease_four(self):
-        self.assertEqual(step_for(80, 0.5, 0.2, 2, TARGET_ALIVE), -MAX_NUDGES)
+        self.assertEqual(step_for(80, 0.5, 0.2, 2, RULES), -MAX_NUDGES)
 
     def test_never_more_than_four(self):
-        self.assertEqual(step_for(80, 1.0, 0.0, 0, TARGET_ALIVE), MAX_NUDGES)
-        self.assertEqual(step_for(10, -1.0, -1.0, 0, TARGET_ALIVE), -MAX_NUDGES)
+        self.assertEqual(step_for(80, 1.0, 0.0, 0, RULES), MAX_NUDGES)
+        self.assertEqual(step_for(10, -1.0, -1.0, 0, RULES), -MAX_NUDGES)
 
     def test_nothing_measured_counts_as_steady(self):
-        self.assertEqual(step_for(72, None, None, 0, TARGET_ALIVE), 1)
+        self.assertEqual(step_for(72, None, None, 0, RULES), 1)
 
 
 class TestDial(unittest.TestCase):
@@ -157,14 +159,14 @@ class TestDial(unittest.TestCase):
         dial = Dial()
         for n in range(1, 13):
             dial.review(*EASY)
-            self.assertAlmostEqual(difficulty(dial.settings), n)
-        self.assertAlmostEqual(difficulty(replace(START, attacks=True)), 1.0)
+            self.assertAlmostEqual(difficulty(dial.settings, 0.05), n)
+        self.assertAlmostEqual(difficulty(replace(START, attacks=True), 0.05), 1.0)
 
     def test_difficulty_of_the_owner_s_settings(self):
         settings = with_value(START, "food_energy", 30 * 0.95 ** 3)
-        self.assertAlmostEqual(difficulty(settings), 3.0)
+        self.assertAlmostEqual(difficulty(settings, 0.05), 3.0)
         settings = with_value(settings, "lifespan", 5000 / 0.95 ** 2)
-        self.assertAlmostEqual(difficulty(settings), 1.0)
+        self.assertAlmostEqual(difficulty(settings, 0.05), 1.0)
 
     def test_set_forgets_the_nudges_to_take_back(self):
         dial = Dial()

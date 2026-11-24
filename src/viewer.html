@@ -103,8 +103,6 @@
   #watch .top label { margin-left: auto; font-size: 12px; display: flex; align-items: center; gap: 6px; }
   #watch canvas { width: 100%; display: block; border-radius: 6px; background: var(--page); }
   #watch-legend { width: 100%; display: block; margin-top: 8px; }
-  #watch .key { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 12px; margin-top: 6px; }
-  #watch .key i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
   .resume { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; margin-top: 8px; }
   .resume select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
   #resume-bar { grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 8px 12px; }
@@ -146,16 +144,7 @@
     <button id="watch-out" class="act" type="button">Jump out</button>
   </div>
   <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
-  <canvas id="watch-legend" height="120" aria-label="What a creature's look means"></canvas>
-  <div class="key">
-    <span>tan diamond: food</span>
-    <span>circle: a creature, as big as its genes made it (its size never changes)</span>
-    <span>colour: hunger, red: hungry, yellow: half full, green: full enough for a baby</span>
-    <span>arc: age, how much of its own lifespan it has lived; dotted ring: past it</span>
-    <span>eyes: intelligence, small and grey below random wanderers, bigger and white the smarter</span>
-    <span>flash ring: <i style="border:2px solid var(--eat)"></i>ate <i style="border:2px solid var(--miss)"></i>ate at nothing <i style="border:2px solid var(--warn)"></i>attacked</span>
-    <span>point at a creature to see its numbers</span>
-  </div>
+  <canvas id="watch-legend" height="120" aria-label="What a creature's look means: point at a creature in the world to see its numbers"></canvas>
 </section>
 <div id="runs"></div>
 <div id="charts"></div>

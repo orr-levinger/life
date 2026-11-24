@@ -385,8 +385,9 @@ class TestControlRoom(unittest.TestCase):
     def test_page_explains_the_creature_look(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ("tan diamond: food", "eyes: intelligence", "arc: age"):
+        for words in ('id="watch-legend"', "eyes:, very smart", "past its, lifespan", "food"):  # the drawn legend's labels
             self.assertIn(words, page)
+        self.assertNotIn("tan diamond: food", page)  # the owner: the words-only key "is not helping"
 
     def test_page_has_the_drawn_legend_and_hunting_tiles(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
@@ -397,7 +398,7 @@ class TestControlRoom(unittest.TestCase):
     def test_page_explains_hunger_colours(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        self.assertIn("red: hungry", page)
+        self.assertIn("hungerColour", page)
 
     def test_page_has_pause_and_resume(self):
         with urllib.request.urlopen(self.server.base + "/") as response:

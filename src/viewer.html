@@ -58,6 +58,8 @@
   .knob label { font-size: 12px; }
   .knob output { font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
   .knob input[type=range] { grid-column: 1 / -1; width: 100%; margin: 2px 0 0; accent-color: var(--ink); }
+  .knob-group { border-top: 1px solid var(--grid); margin-top: 8px; padding-top: 4px; }
+  .knob-group h4 { margin: 2px 0 0; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   .knob small { grid-column: 1 / -1; color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; }
   .knob input:disabled { opacity: 0.55; }
   .switch { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 8px; }
@@ -445,6 +447,13 @@ const SENSE_COSTS = [
   ["hearing_cost", "Cost of hearing (per square unit of its circle, per step)", (g) => Math.PI * g.hearing[1] ** 2],
 ];
 
+// The world card's sliders in groups: each of Auto's knobs and each senses price named in exactly one.
+const KNOB_GROUPS = [
+  ["Food", ["max_food", "food_energy", "food_per_step"]],
+  ["Costs", ["move_cost", "step_cost", "vision_cost", "hearing_cost"]],
+  ["Life", ["lifespan"]],
+];
+
 // A running world's controls: built once, then only their values are updated, so a drag is never interrupted.
 function makeCard(run) {
   const card = document.createElement("div");
@@ -500,12 +509,24 @@ function makeCard(run) {
     send("/control", { run: state.run.name, stop: true })
       .catch((problem) => { stop.disabled = false; stop.textContent = "Stop"; tell(problem); });
   });
-  const box = card.querySelector(".knobs");
+  const box = card.querySelector(".knobs"), groups = {};
+  for (const [heading, names] of KNOB_GROUPS) {
+    const group = document.createElement("div");
+    group.className = "knob-group";
+    group.innerHTML = `<h4>${heading}</h4>`;
+    box.append(group);
+    for (const name of names) groups[name] = group;
+  }
+  const groupOf = (name) => {
+    if (!groups[name]) throw new Error(`the slider ${name} is in no group`);
+    return groups[name];
+  };
   for (const knob of KNOBS) {
     const low = Math.min(knob.easiest, knob.hardest), high = Math.max(knob.easiest, knob.hardest);
     const harderIsLess = knob.hardest < knob.easiest;
     const row = document.createElement("div");
     row.className = "knob";
+    row.dataset.knob = knob.name;
     row.innerHTML = `<label for="${run.name}-${knob.name}">${knob.label}</label><output></output>
       <input type="range" id="${run.name}-${knob.name}" min="${low}" max="${high}" step="${knob.step}">
       <small><span>${knobFmt(low)} · ${harderIsLess ? "harder" : "easier"}</span><span>${harderIsLess ? "easier" : "harder"} · ${knobFmt(high)}</span></small>`;
@@ -513,7 +534,7 @@ function makeCard(run) {
     slider.addEventListener("pointerdown", () => { state.dragging = knob.name; });
     slider.addEventListener("input", () => { shown.textContent = knobFmt(+slider.value); });
     slider.addEventListener("change", () => { state.dragging = null; change(knob.name, +slider.value); });
-    box.append(row);
+    groupOf(knob.name).append(row);
   }
   const changeRule = (name, value) => {
     state.pending[name] = { value, until: Date.now() + PENDING_FOR };
@@ -531,7 +552,7 @@ function makeCard(run) {
     slider.addEventListener("pointerdown", () => { state.dragging = name; });
     slider.addEventListener("input", () => { shown.textContent = numberText(+slider.value); });
     slider.addEventListener("change", () => { state.dragging = null; changeRule(name, +slider.value); });
-    box.append(row);
+    groupOf(name).append(row);
   }
   fetch(`/rules?run=${encodeURIComponent(run.name)}`, { cache: "no-store" }).then((r) => r.json()).then((answer) => {
     for (const row of box.querySelectorAll(".sense-cost")) {  // each slider's range is its rule's allowed range
@@ -567,8 +588,8 @@ function updateCard(state) {
     if (now > pending.until || close(fromRow, pending.value)) { delete state.pending[name]; return fromRow; }
     return pending.value;
   };
-  card.querySelectorAll(".knob:not(.sense-cost)").forEach((row, index) => {
-    const knob = KNOBS[index], slider = row.querySelector("input");
+  card.querySelectorAll(".knob[data-knob]").forEach((row) => {
+    const knob = KNOBS.find((k) => k.name === row.dataset.knob), slider = row.querySelector("input");
     slider.disabled = !manual;
     if (state.dragging === knob.name) return;
     const value = shownValue(knob.name, last ? last[knob.name] : knob.start, (a, b) => Math.abs(a - b) <= knob.step);

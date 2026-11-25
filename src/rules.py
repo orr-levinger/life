@@ -121,6 +121,7 @@ RULES = (
   + _gene("layers", "Layers", 1.0, 3.0, (1.0, 3.0), new=(1.0, 3.0))
 
 RULES += (
+    Rule("gene_min_change", "genes", "A changed gene moves by at least up to this share of its range", 0.01, 0.0, 0.2),
     Rule("gene.weights.share", "genes", "Brain weights: the share that changes when they are a baby's changed gene", 0.02,
          0.0, 1.0),
     Rule("gene.weights.size", "genes", "Brain weights: how much a changed weight moves", 0.02, 0.0, 1.0),
@@ -212,6 +213,8 @@ MEANS = {
     "gene.weights.share": "When the gene a baby changes is its brain weights, this share of the weights changes "
                           "(0.02 = 2 %).",
     "gene.weights.size": "How much each changed weight moves, up or down.",
+    "gene_min_change": "A baby's changed gene moves by up to its parent's 'how much each changes' share of the gene's "
+                       "range (lowest to highest), and never by less than this share of it (0.01 = 1 %).",
 }
 
 # What each gene is, in plain words (the gene table's "What it means" column).
@@ -226,7 +229,8 @@ GENE_MEANS = {
     "learns": "How much it learns from what it sees others go through (1 = as much as from its own life).",
     "learning_speed": "How fast its brain changes when it learns.",
     "mutations": "How many of its genes each of its babies changes (the rest are copied exactly). This one moves by one.",
-    "mutation_size": "How much each changed gene of its babies changes: up to this share either way (0.05 = 5 %).",
+    "mutation_size": "How much each changed gene of its babies changes: up to this share of the gene's range, either "
+                     "way (0.05 = 5 %).",
     "neurons": "How many neurons each brain layer has. Each neuron costs energy every step.",
     "layers": "How many layers its brain has.",
 }

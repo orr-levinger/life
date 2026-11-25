@@ -300,9 +300,9 @@ class World:
         if parent.policy == "learner":
             if not self.learner.has_room():
                 return
-            lr_factor = 1.0 + self.rng.uniform(-change, change) if "learning_speed" in picked else 1.0
+            lr = self._inherited(self.learner.lr(parent.slot), "learning_speed", picked, change)
             brain_genes = [g for g in ("layers", "neurons", "weights") if g in picked]
-            slot = self.learner.baby(parent.slot, self.np_rng, lr_factor, self.inherit, brain_genes, self.rng, self.rules)
+            slot = self.learner.baby(parent.slot, self.np_rng, lr, self.inherit, brain_genes, self.rng, self.rules)
         gift = self.rules["baby_share"] * parent.energy
         size = self._inherited(parent.size, "size", picked, change)
         x = min(max(parent.x + self.rng.uniform(-1.0, 1.0), 0.0), self.width)
@@ -344,11 +344,13 @@ class World:
             self._brain_size(creature)
 
     def _inherited(self, value: float, gene: str, picked: Set[str], change: float) -> float:
-        """A parent's gene for its baby: a picked gene × (1 ± up to `change`, the parent's mutation size), any other
-        copied; kept in the gene's limits (which may have changed since the parent was born)."""
+        """A parent's gene for its baby: a picked gene ± up to `change` (the parent's mutation size) of the gene's whole
+        range, never less than the smallest change's share of it; any other copied; kept in the gene's limits (which
+        may have changed since the parent was born)."""
         low, high = gene_limits(self.rules, gene)
         if gene in picked:
-            value *= 1.0 + self.rng.uniform(-change, change)
+            step = max(change, self.rules["gene_min_change"]) * (high - low)
+            value += self.rng.uniform(-step, step)
         return min(max(value, low), high)
 
     def _decay_food(self) -> None:

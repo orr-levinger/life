@@ -289,10 +289,10 @@ class Learner:
         size[1:1 + len(neurons)] = neurons
         return self.allocate(weights._with(size=size), lr)
 
-    def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str, genes_changed: List[str],
+    def baby(self, parent_slot: int, np_rng: np.random.Generator, lr: float, inherit: str, genes_changed: List[str],
              rng, rules: Dict[str, float]) -> int:
         """A baby's network: the parent's brain as it is now ("learned") or as the parent was born ("inborn"), with the
-        parent's learning speed × `lr_factor`; each of its brain genes among the baby's changed genes changes:
+        learning speed `lr`; each of its brain genes among the baby's changed genes changes:
         "layers" a layer more or fewer, "neurons" a neuron more or fewer, "weights" a few weights a little. Otherwise
         the brain is an exact copy. Returns the baby's slot."""
         genes = self.current(parent_slot) if inherit == "learned" else self.inborn(parent_slot)
@@ -303,7 +303,7 @@ class Learner:
             genes = genes.grown(rng, 0.0, *limits)
         if "weights" in genes_changed:
             genes = genes.mutate(np_rng, rules["gene.weights.share"], rules["gene.weights.size"])
-        return self.allocate(genes, self.lr(parent_slot) * lr_factor)
+        return self.allocate(genes, lr)
 
     def reshape(self, slot: int, layers: int, neurons: List[int]) -> None:
         """The owner's change to a living brain's size: `layers` layers of `neurons` each, its weights kept where they

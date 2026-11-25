@@ -10,7 +10,7 @@ from src.creature import Creature
 from src.food import Food
 from src.policies import decide_all
 from src.learner import LEARNING_RATE, Learner, NetWeights
-from src.rules import ROOM_SLOTS as MAX_CREATURES, rule
+from src.rules import ROOM_SLOTS as MAX_CREATURES, gene_limits, rule, starting_rules
 from src.settings import START
 BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, rule("eat_miss").start
 from tests.helpers import LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
@@ -180,8 +180,11 @@ class TestSenseGenes(unittest.TestCase):
             for g in changed:
                 if g == "mutations":  # a count: one more or one fewer
                     self.assertEqual(abs(baby.mutations - parent.mutations), 1)
-                else:
-                    self.assertLessEqual(abs(getattr(baby, g) / getattr(parent, g) - 1.0), parent.mutation_size + 1e-9)
+                else:  # by up to its parent's share of the gene's range
+                    low, high = gene_limits(w.rules, {"fear_of_death": "fear", "love_of_babies": "love",
+                                                      "learns_from_others": "learns"}.get(g, g))
+                    step = max(parent.mutation_size, w.rules["gene_min_change"]) * (high - low)
+                    self.assertLessEqual(abs(getattr(baby, g) - getattr(parent, g)), step + 1e-9)
             picked.update(changed)
         self.assertEqual(picked, set(genes))  # every gene is picked sometime
 
@@ -205,8 +208,30 @@ class TestSenseGenes(unittest.TestCase):
                 w.step()
             baby = next(c for c in w.creatures if c.parent_id == parent.id)
             moves.append(abs(baby.size - 1.0))
-        self.assertLessEqual(max(moves), 0.4 + 1e-9)
-        self.assertGreater(max(moves), 0.1)  # far more than the old 5 %
+        self.assertLessEqual(max(moves), 0.4 * 1.5 + 1e-9)  # 40 % of its range, 0.5-2
+        self.assertGreater(max(moves), 0.1)
+
+    def test_a_gene_changes_by_a_share_of_its_range_never_of_itself(self):
+        def moves(hearing, mutation_size):
+            out = []
+            for seed in range(30):
+                w = make_world(seed=seed)
+                crowd(w)
+                parent = add(w, 10, 10, size=1.0, energy=80.0, policy="brain", brain=fixed_brain(STAY))
+                parent.hearing, parent.mutation_size = hearing, mutation_size
+                with mock.patch.object(w.rng, "sample", lambda genes, k: ["hearing"]):
+                    w.step()
+                out.append(next(c for c in w.creatures if c.parent_id == parent.id).hearing - hearing)
+            return out
+        low, high = gene_limits(starting_rules(), "hearing")  # 0-4
+        for hearing in (3.0, 0.5):  # 5 % of the range, 0.2, whatever the hearing is now
+            changed = moves(hearing, 0.05)
+            self.assertTrue(all(abs(m) <= 0.05 * (high - low) + 1e-9 for m in changed))
+            self.assertGreater(max(map(abs, changed)), 0.1)
+        changed = moves(0.5, 0.001)  # below the smallest change: 1 % of the range, 0.04
+        self.assertEqual(starting_rules()["gene_min_change"], 0.01)
+        self.assertTrue(all(abs(m) <= 0.01 * (high - low) + 1e-9 for m in changed))
+        self.assertGreater(max(map(abs, changed)), 0.02)
 
     def test_bigger_brain_costs_more_energy(self):
         learner = Learner(MAX_CREATURES, 0)

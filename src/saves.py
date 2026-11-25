@@ -29,13 +29,14 @@ from .terrain import Terrain, make_terrain
 from .settings import START, TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 14  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 15  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
 # a rule, the three brain genes (2026-11-24); 10: no rule decides who counts as bigger (2026-11-25); 11: one reach for eating and attacking; 12: how
 # many genes a baby changes and by how much are genes; 13: a newcomer draws every gene from a range; 14: terrain
-# (obstacles and trees), fruit, the senses of an obstacle in view and of being under a tree (25 inputs)
+# (obstacles and trees), fruit, the senses of an obstacle in view and of being under a tree (25 inputs); 15: a gene
+# changes by a share of its range, at least the smallest change
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -150,6 +151,8 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
     if about.get("format") == 13:
         about = _from_format_13(about)
         _widen_inputs(arrays, INPUTS_TERRAIN)
+    if about.get("format") == 14:
+        about = {**about, "format": 15, "rules": {**about["rules"], "gene_min_change": rule("gene_min_change").start}}
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 
 import numpy as np
 
-from .creature import Creature, is_family
+from .creature import Creature
 
 if TYPE_CHECKING:
     from .food import Food
@@ -26,16 +26,6 @@ class Senses:
     heard: Optional[Creature] = None  # nearest non-family creature it hears but does not see
 
 
-def in_cone(creature: Creature, dx, dy, distance):
-    """Whether what lies (dx, dy) away, at `distance`, is inside the creature's vision cone (arrays work too)."""
-    if creature.vision_width >= 360.0:
-        return np.ones(np.shape(distance), dtype=bool) if np.ndim(distance) else True
-    fx, fy = creature.facing
-    cosine = (np.asarray(dx) * fx + np.asarray(dy) * fy) / np.maximum(distance, 1e-12)
-    inside = (cosine >= math.cos(math.radians(creature.vision_width / 2.0))) | (np.asarray(distance) == 0)
-    return inside if np.ndim(distance) else bool(inside)
-
-
 def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> List[Senses]:
     """What each of `creatures` (default: everyone in the world) senses. All distances are computed at once.
     Inputs 1-3: energy, size, on food. 4-7: nearest food it sees. 8-12: nearest stranger it sees (with its size). 13-16:
@@ -45,44 +35,63 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
     creatures = list(world.creatures) if creatures is None else creatures
     if not creatures:
         return []
-    cx = np.array([c.x for c in creatures])
-    cy = np.array([c.y for c in creatures])
+    me = _Eyes(creatures)
     foods, everyone = world.foods, world.creatures
     if foods:
         food_x, food_y = np.array([f.x for f in foods]), np.array([f.y for f in foods])
-        food_dx, food_dy = food_x[None, :] - cx[:, None], food_y[None, :] - cy[:, None]
+        food_dx, food_dy = food_x[None, :] - me.x[:, None], food_y[None, :] - me.y[:, None]
         food_d = np.hypot(food_dx, food_dy)
         food_edge = food_d - np.array([f.radius for f in foods])[None, :]  # distance to each food's edge
-    other_x, other_y = np.array([c.x for c in everyone]), np.array([c.y for c in everyone])
-    other_d = np.hypot(other_x[None, :] - cx[:, None], other_y[None, :] - cy[:, None])
+        food_seen = (food_d <= me.reach[:, None]) & me.cone(food_dx, food_dy, food_d)
+        nearest_food = np.argmin(np.where(food_seen, food_d, np.inf), axis=1)
+        touching = np.argmin(food_edge, axis=1)
+    ids = np.array([c.id for c in everyone])
+    parents = np.array([c.parent_id for c in everyone])
+    moved = np.array([c.moved for c in everyone], dtype=bool)
+    other_dx = np.array([c.x for c in everyone])[None, :] - me.x[:, None]
+    other_dy = np.array([c.y for c in everyone])[None, :] - me.y[:, None]
+    other_d = np.hypot(other_dx, other_dy)
+    family = ((me.ids[:, None] == parents[None, :]) | (ids[None, :] == me.parents[:, None])
+              | ((me.parents[:, None] != 0) & (me.parents[:, None] == parents[None, :])))
+    stranger = (me.ids[:, None] != ids[None, :]) & ~family  # never itself or its family
+    seen = stranger & (other_d <= me.reach[:, None]) & me.cone(other_dx, other_dy, other_d)
+    heard = stranger & ~seen & moved[None, :] & (other_d <= me.hearing[:, None])  # only movers sound
+    nearest_seen = np.argmin(np.where(seen, other_d, np.inf), axis=1)
+    nearest_heard = np.argmin(np.where(heard, other_d, np.inf), axis=1)
 
     sensed = []
     for i, creature in enumerate(creatures):
-        food = on_food = other = heard = None
+        food = on_food = None
         if foods:
-            seen = (food_d[i] <= creature.vision_reach) & in_cone(creature, food_dx[i], food_dy[i], food_d[i])
-            if seen.any():
-                food = foods[int(np.argmin(np.where(seen, food_d[i], np.inf)))]
-            touching = int(np.argmin(food_edge[i]))
-            if food_edge[i, touching] <= creature.radius:
-                on_food = foods[touching]
-        farthest = max(creature.vision_reach, creature.hearing)
-        for j in np.argsort(other_d[i], kind="stable"):
-            distance = other_d[i, j]
-            if distance > farthest or (other is not None and heard is not None):
-                break
-            them = everyone[j]
-            if them is creature or is_family(creature, them):
-                continue
-            sees = distance <= creature.vision_reach and in_cone(creature, them.x - creature.x, them.y - creature.y,
-                                                                  distance)
-            if sees and other is None:
-                other = them
-            elif not sees and them.moved and distance <= creature.hearing and heard is None:  # only movers sound
-                heard = them
-        sensed.append(Senses(vector=_vector(creature, food, other, on_food, heard), food=food, other=other,
-                             on_food=on_food, heard=heard))
+            food = foods[nearest_food[i]] if food_seen[i].any() else None
+            on_food = foods[touching[i]] if food_edge[i, touching[i]] <= creature.radius else None
+        other = everyone[nearest_seen[i]] if seen[i].any() else None
+        sound = everyone[nearest_heard[i]] if heard[i].any() else None
+        sensed.append(Senses(vector=_vector(creature, food, other, on_food, sound), food=food, other=other,
+                             on_food=on_food, heard=sound))
     return sensed
+
+
+class _Eyes:
+    """The senses of a group of creatures as arrays, for deciding every pair at once."""
+
+    def __init__(self, creatures: Sequence[Creature]) -> None:
+        self.x = np.array([c.x for c in creatures])
+        self.y = np.array([c.y for c in creatures])
+        self.ids = np.array([c.id for c in creatures])
+        self.parents = np.array([c.parent_id for c in creatures])
+        self.reach = np.array([c.vision_reach for c in creatures])
+        self.hearing = np.array([c.hearing for c in creatures])
+        width = np.array([c.vision_width for c in creatures])
+        self.all_around = width >= 360.0
+        self.half = np.cos(np.radians(width / 2.0))
+        self.fx = np.array([c.facing[0] for c in creatures])
+        self.fy = np.array([c.facing[1] for c in creatures])
+
+    def cone(self, dx: np.ndarray, dy: np.ndarray, distance: np.ndarray) -> np.ndarray:
+        """[creature, thing]: whether each thing lies inside each creature's vision cone (at distance 0: inside)."""
+        cosine = (dx * self.fx[:, None] + dy * self.fy[:, None]) / np.maximum(distance, 1e-12)
+        return self.all_around[:, None] | (cosine >= self.half[:, None]) | (distance == 0)
 
 
 def sense(creature: Creature, world: Any) -> Senses:
@@ -91,15 +100,14 @@ def sense(creature: Creature, world: Any) -> Senses:
 
 def perceived(watchers: Sequence[Creature], actors: Sequence[Creature]) -> np.ndarray:
     """[actor, watcher]: whether the watcher sees the actor or hears it move (family included)."""
-    ax, ay = np.array([c.x for c in actors]), np.array([c.y for c in actors])
+    me = _Eyes(watchers)
     moved = np.array([c.moved for c in actors], dtype=bool)
-    out = np.zeros((len(actors), len(watchers)), dtype=bool)
-    for j, watcher in enumerate(watchers):
-        dx, dy = ax - watcher.x, ay - watcher.y
-        distance = np.hypot(dx, dy)
-        out[:, j] = ((distance <= watcher.hearing) & moved) | ((distance <= watcher.vision_reach) &
-                                                     in_cone(watcher, dx, dy, distance))
-    return out
+    dx = np.array([c.x for c in actors])[None, :] - me.x[:, None]
+    dy = np.array([c.y for c in actors])[None, :] - me.y[:, None]
+    distance = np.hypot(dx, dy)
+    hears = (distance <= me.hearing[:, None]) & moved[None, :]
+    sees = (distance <= me.reach[:, None]) & me.cone(dx, dy, distance)
+    return (hears | sees).T
 
 
 def _sighting(creature: Creature, target: Any, reach: float) -> tuple:

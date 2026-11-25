@@ -213,6 +213,9 @@ class Learner:
         self._size = np.zeros((slots, 1 + MAX_LAYERS))  # each slot's brain genes: layers, neurons of each
         self._lessons: List[List[dict]] = [[] for _ in range(slots)]  # steps of others each slot saw: {step, next_obs}
         self._last: Dict[int, dict] = {}  # each slot's last recorded step, which a watcher may take as a lesson
+        self._act_graph = tf.function(self._act_math, reduce_retracing=True, jit_compile=True)  # the brain math as compiled graphs
+        self._values_graph = tf.function(self._values_math, reduce_retracing=True)
+        self._pass_graph = tf.function(self._pass_math, reduce_retracing=True)
         self._awaiting: Dict[int, List[dict]] = {}  # lessons of a slot's last step, waiting for what it senses next
 
     def allocate(self, weights: NetWeights, lr: float) -> int:
@@ -356,15 +359,9 @@ class Learner:
             learning: bool = True) -> List[Tuple[int, Tuple[float, float]]]:
         """One call for all `slots`: each rolls its own dice for a choice and a move (each axis in -1..1)."""
         idx = tf.constant(list(slots), dtype=tf.int32)
-        p = {name: tf.gather(var, idx) for name, var in self._params.items()}
         x = tf.constant(senses[:, None, :], dtype=tf.float32)
         attacks = tf.fill([len(slots), 1], 1.0 if attacks_on else 0.0)
-        logits, mean, log_std, value = _heads(p, x, attacks, tf.constant(self._size[list(slots)], tf.float32))
-        gumbel = -tf.math.log(-tf.math.log(self._gen.uniform(tf.shape(logits), 1e-12, 1.0)))
-        choice = tf.argmax(logits + gumbel, axis=-1, output_type=tf.int32)
-        move = mean + tf.exp(log_std) * self._gen.normal(tf.shape(mean))
-        logp = _log_prob(logits, mean, log_std, choice, move)
-
+        choice, move, logp, value = self._act_graph(idx, x, attacks, tf.constant(self._size[list(slots)], tf.float32))
         choice_np, move_np = choice.numpy()[:, 0], move.numpy()[:, 0, :]
         if learning:
             logp_np, value_np = logp.numpy()[:, 0], value.numpy()[:, 0]
@@ -420,10 +417,9 @@ class Learner:
                 if lesson["next_obs"] is not None:
                     next_obs[k, t] = lesson["next_obs"]
                 mask[k, t] = 1.0
-        p = {name: tf.gather(var, tf.constant(slots, dtype=tf.int32)) for name, var in self._params.items()}
         both = tf.constant(np.concatenate([obs, next_obs], axis=1), tf.float32)
         size = tf.constant(self._size[slots], tf.float32)
-        value = _heads(p, both, tf.ones(both.shape[:2]), size)[3].numpy()
+        value = self._values_graph(tf.constant(slots, dtype=tf.int32), both, size).numpy()
         target = reward + self.rules["learn_discount"] * value[:, length:] * (1.0 - done)
         adv = target - value[:, :length]
         for k in range(len(slots)):
@@ -435,6 +431,20 @@ class Learner:
                   "target": target, "mask": mask, "weight": weight}
         batch = {key: tf.constant(value, dtype=tf.int32 if key == "choice" else tf.float32) for key, value in arrays.items()}
         return {**batch, "size": size}
+
+    def _act_math(self, idx, x, attacks, size):
+        """Choices and moves of the slots `idx` (each its own dice), with their log odds and values: one graph."""
+        p = {name: tf.gather(var, idx) for name, var in self._params.items()}
+        logits, mean, log_std, value = _heads(p, x, attacks, size)
+        gumbel = -tf.math.log(-tf.math.log(self._gen.uniform(tf.shape(logits), 1e-12, 1.0)))
+        choice = tf.argmax(logits + gumbel, axis=-1, output_type=tf.int32)
+        move = mean + tf.exp(log_std) * self._gen.normal(tf.shape(mean))
+        return choice, move, _log_prob(logits, mean, log_std, choice, move), value
+
+    def _values_math(self, idx, obs, size):
+        """The critic's values of the slots `idx` for `obs`: one graph."""
+        p = {name: tf.gather(var, idx) for name, var in self._params.items()}
+        return _heads(p, obs, tf.ones(tf.shape(obs)[:2]), size)[3]
 
     def update(self) -> int:
         """One PPO update for every slot with a full rollout (64 steps plus the one that bootstraps them)."""
@@ -463,36 +473,39 @@ class Learner:
 
     def _ppo_step(self, slots: List[int], b: Dict[str, tf.Tensor], lessons: Optional[Dict[str, tf.Tensor]],
                   size: tf.Tensor) -> None:
-        idx = tf.constant(slots, dtype=tf.int32)
+        """One PPO pass with its Adam step for `slots`, run as one compiled graph (the rules' numbers go in as values,
+        so changing them on the page never recompiles it)."""
+        beta1, beta2 = ADAM_BETAS
+        self._t[slots] += 1
+        t = self._t[slots]
+        f32 = lambda v: tf.constant(v, tf.float32)  # noqa: E731
+        hyper = {"clip": f32(self.rules["learn_clip"]), "guess": f32(self.rules["learn_guess"]),
+                 "explore": f32(self.rules["learn_explore"]), "rollout": f32(self.rules["learn_rollout"])}
+        self._pass_graph(tf.constant(slots, dtype=tf.int32), b, lessons, size, hyper, f32(self._lr[slots]),
+                         f32(1.0 - beta1 ** t), f32(1.0 - beta2 ** t))
+
+    def _pass_math(self, idx, b, lessons, size, hyper, lr, bias1, bias2) -> None:
         p = {name: tf.gather(var, idx) for name, var in self._params.items()}
         with tf.GradientTape() as tape:
             tape.watch(list(p.values()))
             logits, mean, log_std, value = _heads(p, b["obs"], b["attacks"], size)
             ratio = tf.exp(_log_prob(logits, mean, log_std, b["choice"], b["move"]) - b["logp"])
-            clip = self.rules["learn_clip"]
-            clipped = tf.clip_by_value(ratio, 1.0 - clip, 1.0 + clip)
+            clipped = tf.clip_by_value(ratio, 1.0 - hyper["clip"], 1.0 + hyper["clip"])
             policy_loss = -tf.reduce_mean(tf.minimum(ratio * b["adv"], clipped * b["adv"]), axis=1)
             value_loss = tf.reduce_mean(tf.square(value - b["ret"]), axis=1)
             entropy = tf.reduce_mean(_entropy(logits, log_std), axis=1)
-            guess, explore = self.rules["learn_guess"], self.rules["learn_explore"]
-            loss = tf.reduce_sum(policy_loss + guess * value_loss - explore * entropy)
+            loss = tf.reduce_sum(policy_loss + hyper["guess"] * value_loss - hyper["explore"] * entropy)
             if lessons is not None:
-                loss += tf.reduce_sum(lesson_loss(p, lessons, guess, self.rules["learn_rollout"]))
+                loss += tf.reduce_sum(lesson_loss(p, lessons, hyper["guess"], hyper["rollout"]))
         grads = tape.gradient(loss, list(p.values()))
-        self._adam(slots, idx, p, dict(zip(p.keys(), grads)))
-
-    def _adam(self, slots: List[int], idx: tf.Tensor, p: Dict[str, tf.Tensor], grads: Dict[str, tf.Tensor]) -> None:
         beta1, beta2 = ADAM_BETAS
-        self._t[slots] += 1
-        t = self._t[slots]
         scatter_at = idx[:, None]
-        for name, grad in grads.items():
-            per_slot = (len(slots),) + (1,) * len(SHAPES[name])
+        for name, grad in zip(p.keys(), grads):
+            per_slot = tf.concat([[-1], tf.ones(len(SHAPES[name]), tf.int32)], axis=0)
             m = beta1 * tf.gather(self._m[name], idx) + (1.0 - beta1) * grad
             v = beta2 * tf.gather(self._v[name], idx) + (1.0 - beta2) * tf.square(grad)
-            m_hat = m / tf.constant((1.0 - beta1 ** t).reshape(per_slot), tf.float32)
-            v_hat = v / tf.constant((1.0 - beta2 ** t).reshape(per_slot), tf.float32)
-            lr = tf.constant(self._lr[slots].reshape(per_slot), tf.float32)
-            self._params[name].scatter_nd_update(scatter_at, p[name] - lr * m_hat / (tf.sqrt(v_hat) + ADAM_EPS))
+            m_hat, v_hat = m / tf.reshape(bias1, per_slot), v / tf.reshape(bias2, per_slot)
+            self._params[name].scatter_nd_update(
+                scatter_at, p[name] - tf.reshape(lr, per_slot) * m_hat / (tf.sqrt(v_hat) + ADAM_EPS))
             self._m[name].scatter_nd_update(scatter_at, m)
             self._v[name].scatter_nd_update(scatter_at, v)

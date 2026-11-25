@@ -116,7 +116,7 @@ class TestScoreboard(unittest.TestCase):
             "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers",
             "deaths_hunger", "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost",
             "step_cost", "lifespan", "hunters", "manual", "chase", "attacks", "vision_width", "vision_reach", "hearing",
-            "fear_of_death", "love_of_babies", "learns_from_others", "neurons", "layers",
+            "fear_of_death", "love_of_babies", "learns_from_others", "neurons", "layers", "fruit_rate",
         ))
         w, me = food_world()
         me.generation = 4

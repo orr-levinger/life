@@ -20,13 +20,14 @@ ROW_KEYS = (
     "toward_food", "flee", "direction_concentration", "efficiency", "intelligence", "wanderers", "deaths_hunger",
     "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost", "step_cost", "lifespan",
     "hunters", "manual", "chase", "attacks", "vision_width", "vision_reach", "hearing", "fear_of_death",
-    "love_of_babies", "learns_from_others", "neurons", "layers",
+    "love_of_babies", "learns_from_others", "neurons", "layers", "fruit_rate",
 )
-BEFORE_BRAIN = ROW_KEYS[:-2]  # the columns of scoreboards written before the brain's size was a gene (2026-11-24)
+BEFORE_FRUIT = ROW_KEYS[:-1]  # the columns of scoreboards written before trees dropped fruit (2026-11-25)
+BEFORE_BRAIN = BEFORE_FRUIT[:-2]  # the columns of scoreboards written before the brain's size was a gene (2026-11-24)
 BEFORE_VALUES = BEFORE_BRAIN[:-3]  # the columns of scoreboards written before values were genes (2026-11-24)
 BEFORE_SENSES = BEFORE_VALUES[:-3]  # the columns of scoreboards written before senses were genes (2026-11-24)
 BEFORE_HUNTING = BEFORE_SENSES[:-2]  # the columns of scoreboards written before the chase and attacks columns
-OLDER_LAYOUTS = (BEFORE_BRAIN, BEFORE_VALUES, BEFORE_SENSES, BEFORE_HUNTING)  # read with the columns they lack empty
+OLDER_LAYOUTS = (BEFORE_FRUIT, BEFORE_BRAIN, BEFORE_VALUES, BEFORE_SENSES, BEFORE_HUNTING)  # read with the columns they lack empty
 DEATH_CAUSES = ("hunger", "attack", "age")
 Value = Union[int, float, None]
 
@@ -170,6 +171,7 @@ class Scoreboard:
             "learns_from_others": _mean([c.learns_from_others for c in world.creatures]),
             "neurons": _mean([c.neurons for c in world.creatures if c.layers]),  # learners: the ones whose brains grow
             "layers": _mean([c.layers for c in world.creatures if c.layers]),
+            "fruit_rate": settings.fruit_rate,
         }
         self._clear_samples()
         self._seen = now

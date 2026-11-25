@@ -16,6 +16,7 @@ from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, perceived, sense_all
 from .rules import EDITABLE_GENES, Rules, gene_limits, starting_rules
+from .terrain import Terrain
 from .settings import Settings
 
 if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to it
@@ -23,6 +24,7 @@ if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to 
 
 Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
+FREE_SPOT_TRIES = 1000  # tries to find a newcomer a spot that no obstacle covers
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
          "layers", "neurons", "weights", "mutations", "mutation_size")  # a baby changes its parent's `mutations` of them
 
@@ -59,6 +61,7 @@ class World:
         self._had_baby = set()  # id() of each learner that had a baby last step: its love of babies joins this step's reward
         self.creatures: List[Creature] = []
         self.foods: List[Food] = []
+        self.terrain = Terrain.empty()  # its obstacles and trees (a new world's are made by the runner)
         self.step_count = 0
         self.foods_created_this_step: Set[int] = set()
         self.deaths: Counter = Counter()
@@ -128,8 +131,8 @@ class World:
     def add_newcomer(self) -> Creature:
         """A creature of this world's species with a random brain, at a random spot: the first creatures, and the
         primordial soup."""
-        x, y = self.rng.uniform(1.0, self.width - 1.0), self.rng.uniform(1.0, self.height - 1.0)
         r = self.rules
+        x, y = self._free_spot(r["gene.size.new_high"] * r["body_radius"])
         size = self.rng.uniform(r["gene.size.new_low"], r["gene.size.new_high"])
         brain = Brain.random(self.np_rng) if self.species == "brain" else None
         drawn = lambda gene: self.rng.uniform(r[f"gene.{gene}.new_low"], r[f"gene.{gene}.new_high"])  # noqa: E731
@@ -152,6 +155,14 @@ class World:
         self.newcomers += 1
         return newcomer
 
+    def _free_spot(self, radius: float) -> tuple:
+        """A random spot where a body of `radius` touches no obstacle."""
+        for _ in range(FREE_SPOT_TRIES):
+            x, y = self.rng.uniform(1.0, self.width - 1.0), self.rng.uniform(1.0, self.height - 1.0)
+            if not self.terrain.blocked(x, y, radius):
+                return x, y
+        raise RuntimeError("the obstacles leave no room for a newcomer")
+
     def spawn_food(self) -> None:
         """The same number of candidates every step, so two worlds with the same food seed draw the same food."""
         margin = self.FOOD_RADIUS_MARGIN
@@ -167,12 +178,24 @@ class World:
             if self._fits(food):
                 self.foods.append(food)
                 self.foods_created_this_step.add(id(food))
-
+        for tree in self.terrain.trees:  # each tree drops a fruit now and then, near its trunk
+            if self.food_rng.random() >= self.settings.fruit_rate:
+                continue
+            angle, away = self.food_rng.uniform(0.0, 2.0 * math.pi), self.food_rng.uniform(0.0, self.rules["fruit_spread"])
+            x, y = tree.x + away * math.cos(angle), tree.y + away * math.sin(angle)
+            fruit = Food(x, y, remaining_duration=-1, energy=self.food_rng.uniform(*self.settings.food_energy), fruit=True)
+            inside = fruit.radius <= x <= self.width - fruit.radius and fruit.radius <= y <= self.height - fruit.radius
+            if inside and len(self.foods) < int(self.settings.max_food) and self._fits(fruit):
+                self.foods.append(fruit)
+                self.foods_created_this_step.add(id(fruit))
     def prefill_food(self) -> None:
         for _ in range(self.PREFILL_STEPS):
             self.spawn_food()
 
     def _fits(self, food: Food) -> bool:
+        """Food fits where nothing else is and no obstacle stands."""
+        if self.terrain.blocked(food.x, food.y, food.radius):
+            return False
         neighbours = list(self.foods) + (list(self.creatures) if self.evolving else [])
         return all(
             math.hypot(food.x - other.x, food.y - other.y) >= food.radius + other.radius + self.MIN_SPAWN_DISTANCE
@@ -253,7 +276,7 @@ class World:
         watchers = [c for c in self.creatures if c.policy == "learner"]
         if not actors or not watchers:
             return
-        seen = perceived(watchers, actors)
+        seen = perceived(watchers, actors, self)
         for i, j in zip(*np.nonzero(seen)):
             watcher, actor = watchers[j], actors[i]
             if watcher is not actor:
@@ -284,6 +307,8 @@ class World:
         size = self._inherited(parent.size, "size", picked, change)
         x = min(max(parent.x + self.rng.uniform(-1.0, 1.0), 0.0), self.width)
         y = min(max(parent.y + self.rng.uniform(-1.0, 1.0), 0.0), self.height)
+        if self.terrain.blocked(x, y, size * self.rules["body_radius"]):  # never born inside an obstacle
+            x, y = parent.x, parent.y
         brain = parent.brain
         if brain is not None and "weights" in picked:  # an instinct brain changes only when its weights are the gene
             brain = brain.mutate(self.np_rng, self.rules["gene.weights.share"], self.rules["gene.weights.size"])

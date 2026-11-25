@@ -19,9 +19,17 @@ from src.rules import ROOM_SLOTS as MAX_CREATURES
 from src.settings import START
 from tests.helpers import make_world, populate
 from tests.test_learner import live
+from src.brain import N_SENSES
 from src.rules import rule
 
 TARGET_ALIVE = rule("auto_target").start
+
+
+def before_terrain(arrays):
+    """A save from before format 14: brains of 20 inputs (no obstacle in view, no tree overhead)."""
+    for name in list(arrays):
+        if name == "brain.w1" or (name.startswith("learner.") and name.split(".")[-1] in ("w1", "wh")):
+            arrays[name] = arrays[name][..., :20, :]
 
 
 def before_rules(about):
@@ -153,6 +161,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 1
+            before_terrain(arrays)
             about = before_rules(about)
             del about["dial"]["hunters"]  # what a format 1 save held
             arrays["about"] = np.array(json.dumps(about))
@@ -172,6 +181,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 2
+            before_terrain(arrays)
             about = before_rules(about)
             for creature in about["creatures"]:  # what a format 2 save held
                 for key in ("earned", "spent", "vision_width", "vision_reach", "hearing", "facing", "fear_of_death",
@@ -196,6 +206,7 @@ class TestSaves(unittest.TestCase):
                     arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
                 about = json.loads(str(arrays["about"]))
                 about["format"] = 3
+                before_terrain(arrays)
                 about = before_rules(about)
                 for creature in about["creatures"]:  # what a format 3 save held
                     for key in ("vision_width", "vision_reach", "hearing", "facing", "fear_of_death", "love_of_babies",
@@ -214,7 +225,7 @@ class TestSaves(unittest.TestCase):
             if species == "learner":
                 for part in ("w1", "wh"):
                     weights = loaded.learner.state()[f"params.{part}"]
-                    self.assertEqual(weights.shape[-2], 20)
+                    self.assertEqual(weights.shape[-2], N_SENSES)
                     self.assertTrue(np.allclose(weights[..., 12:, :], 0.0))
                     self.assertTrue(np.allclose(weights[..., :12, :], old[f"learner.params.{part}"]))
 
@@ -228,6 +239,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 4
+            before_terrain(arrays)
             about = before_rules(about)
             for creature in about["creatures"]:  # what a format 4 save held
                 for key in ("fear_of_death", "love_of_babies", "learns_from_others", "hurt"):
@@ -249,6 +261,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 6  # what a format 6 save held: cones to 360, one sense price, 21 inputs with a heard size
+            before_terrain(arrays)
             rules = about["rules"]
             sense = rules.pop("vision_cost")
             del rules["hearing_cost"], rules["sprint_power"]
@@ -266,8 +279,9 @@ class TestSaves(unittest.TestCase):
         self.assertEqual(first.vision_width, 120.0)
         self.assertAlmostEqual(first.vision_reach, 3.0 * math.sqrt(3.0))  # narrowed, it sees as much ground as before
         self.assertEqual((second.vision_width, second.vision_reach), (100.0, 4.0))  # within 120: untouched
-        self.assertEqual(first.brain.w1.shape, (20, 16))
-        self.assertTrue(np.allclose(first.brain.w1, w1[0]))  # the heard size's weights gone, the rest kept
+        self.assertEqual(first.brain.w1.shape, (N_SENSES, 16))
+        self.assertTrue(np.allclose(first.brain.w1[:20], w1[0]))  # the heard size's weights gone, the rest kept
+        self.assertTrue(np.allclose(first.brain.w1[20:], 0.0))  # the terrain's, silent
         self.assertEqual((loaded.rules["vision_cost"], loaded.rules["hearing_cost"]), (sense, sense))
         self.assertEqual((loaded.rules["gene.vision_width.high"], loaded.rules["sprint_power"]), (120.0, 2.0))
 
@@ -281,6 +295,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"], about["rules"]["threat_ratio"] = 9, 1.5
+            before_terrain(arrays)
             arrays["about"] = np.array(json.dumps(about))
             np.savez(path, **arrays)
             loaded, _, _ = load_world(path, learner_seed=0)
@@ -297,6 +312,7 @@ class TestSaves(unittest.TestCase):
             about = json.loads(str(arrays["about"]))
             del about["rules"]["reach"]
             about["format"], about["rules"]["eat_range"], about["rules"]["attack_range"] = 10, 2.5, 2.5
+            before_terrain(arrays)
             arrays["about"] = np.array(json.dumps(about))
             np.savez(path, **arrays)
             loaded, _, _ = load_world(path, learner_seed=0)
@@ -313,6 +329,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 11
+            before_terrain(arrays)
             for c in about["creatures"]:
                 del c["mutations"], c["mutation_size"]
             about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith(("gene.mutations", "gene.mutation_size"))}
@@ -334,6 +351,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 12
+            before_terrain(arrays)
             about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith("gene.fear.new_")}
             about["rules"]["gene.fear.start"] = 10.0
             arrays["about"] = np.array(json.dumps(about))
@@ -353,6 +371,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 7  # a format 7 brain: 1 layer of 32, no room to grow, no brain genes
+            before_terrain(arrays)
             about["rules"] = {k: v for k, v in about["rules"].items()
                               if not k.startswith(("gene.neurons", "gene.layers", "neuron_cost", "brain_layer_share"))}
             arrays["about"] = np.array(json.dumps(about))
@@ -370,8 +389,8 @@ class TestSaves(unittest.TestCase):
         for c in loaded.creatures:
             brain = loaded.learner.current(c.slot)
             self.assertEqual(list(brain.size), [1, 32, 0, 0])
-            self.assertEqual(brain.w1.shape, (20, 64))
-            self.assertTrue(np.allclose(brain.w1[:, :32], old_w1[c.slot]))  # the old brain, room to grow beside it
+            self.assertEqual(brain.w1.shape, (N_SENSES, 64))
+            self.assertTrue(np.allclose(brain.w1[:20, :32], old_w1[c.slot]))  # the old brain, room to grow beside it
             self.assertTrue(np.allclose(brain.w1[:, 32:], 0.0))
             self.assertEqual(c.neurons, 32)
         self.assertEqual(loaded.rules["neuron_cost"], 0.0005)
@@ -399,6 +418,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 5
+            before_terrain(arrays)
             about = before_rules(about)
             arrays["about"] = np.array(json.dumps(about))
             arrays["brain.w1"] = np.insert(arrays["brain.w1"], 16, 0.0, axis=1)  # 21 inputs then: a heard size
@@ -416,6 +436,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 4
+            before_terrain(arrays)
             about = before_rules(about)
             for creature in about["creatures"]:  # what a format 4 save held
                 for key in ("fear_of_death", "love_of_babies", "learns_from_others", "hurt"):
@@ -425,8 +446,8 @@ class TestSaves(unittest.TestCase):
             np.savez(path, **arrays)
             loaded, _, _ = load_world(path, learner_seed=0)
         for i, creature in enumerate(loaded.creatures):
-            self.assertEqual(creature.brain.w1.shape, (20, 16))
-            self.assertTrue(np.allclose(creature.brain.w1[16:], 0.0))  # pain, silent
+            self.assertEqual(creature.brain.w1.shape, (N_SENSES, 16))
+            self.assertTrue(np.allclose(creature.brain.w1[16:], 0.0))  # pain and the terrain, silent
             self.assertTrue(np.allclose(creature.brain.w1[:16], arrays["brain.w1"][i][:16]))  # the heard size left later
             self.assertIsNone(creature.hurt)
 
@@ -440,6 +461,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 3
+            before_terrain(arrays)
             about = before_rules(about)
             for creature in about["creatures"]:
                 for key in ("vision_width", "vision_reach", "hearing", "facing", "fear_of_death", "love_of_babies",
@@ -454,7 +476,7 @@ class TestSaves(unittest.TestCase):
             x12 = rng.uniform(-1, 1, 12)
             w1, b1, w2, b2 = (arrays[f"brain.{part}"][i] for part in ("w1", "b1", "w2", "b2"))
             before = np.tanh(np.tanh(x12 @ w1 + b1) @ w2 + b2)
-            now = creature.brain.forward(np.concatenate([x12, rng.uniform(-1, 1, 8)]))  # heard or felt: no effect yet
+            now = creature.brain.forward(np.concatenate([x12, rng.uniform(-1, 1, N_SENSES - 12)]))  # newer senses: no effect yet
             self.assertTrue(np.allclose(before, now))
 
 

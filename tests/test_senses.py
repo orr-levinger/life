@@ -6,7 +6,10 @@ import numpy as np
 
 from src.creature import Creature, is_family
 from src.food import Food
+from src.brain import N_SENSES
+from src.rules import starting_rules
 from src.senses import display_intent, perceived, sense
+from src.terrain import Terrain
 
 
 def creature(x: float, y: float, size: float = 1.25, id_: int = 1, parent_id: int = 0) -> Creature:
@@ -18,17 +21,17 @@ def food(x: float, y: float) -> Food:
 
 
 def world(creatures=(), foods=()):
-    return SimpleNamespace(creatures=list(creatures), foods=list(foods))
+    return SimpleNamespace(creatures=list(creatures), foods=list(foods), terrain=Terrain.empty(), rules=starting_rules())
 
 
 class TestSenses(unittest.TestCase):
     def test_nothing_seen(self):
         me = creature(10, 10)
         s = sense(me, world([me]))
-        self.assertEqual(s.vector.shape, (20,))
+        self.assertEqual(s.vector.shape, (N_SENSES,))
         self.assertAlmostEqual(s.vector[0], 0.5)
         self.assertAlmostEqual(s.vector[1], 0.0)
-        np.testing.assert_array_equal(s.vector[2:], np.zeros(18))
+        np.testing.assert_array_equal(s.vector[2:], np.zeros(N_SENSES - 2))
         self.assertIsNone(s.food)
         self.assertIsNone(s.other)
         self.assertIsNone(s.on_food)
@@ -116,7 +119,7 @@ class TestSenses(unittest.TestCase):
         other = creature(9, 10, size=2.5, id_=2)
         other.moved = True  # it moved last step, so it makes a sound
         v = sense(me, world([me, other])).vector
-        self.assertEqual(v.shape, (20,))
+        self.assertEqual(v.shape, (N_SENSES,))
         self.assertEqual(v[7], 0.0)  # not seen
         self.assertEqual(v[12], 1.0)  # heard
         self.assertAlmostEqual(v[13], 0.5)  # distance ÷ its hearing radius
@@ -132,7 +135,7 @@ class TestSenses(unittest.TestCase):
         small.moved = big.moved = True
         heard_small = sense(me, world([me, small])).vector
         heard_big = sense(me, world([me, big])).vector
-        self.assertEqual(heard_small.shape, (20,))
+        self.assertEqual(heard_small.shape, (N_SENSES,))
         self.assertEqual(list(heard_small[12:16]), list(heard_big[12:16]))  # where and how far: nothing of its size
         self.assertEqual(heard_small[12], 1.0)
 
@@ -140,10 +143,10 @@ class TestSenses(unittest.TestCase):
         me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)
         still = creature(9, 10, id_=2)  # behind it, within hearing, but it did not move
         self.assertEqual(sense(me, world([me, still])).vector[12], 0.0)
-        self.assertFalse(perceived([me], [still])[0, 0])  # nor is it learned from by sound
+        self.assertFalse(perceived([me], [still], world([me, still]))[0, 0])  # nor is it learned from by sound
         still.moved = True
         self.assertEqual(sense(me, world([me, still])).vector[12], 1.0)
-        self.assertTrue(perceived([me], [still])[0, 0])
+        self.assertTrue(perceived([me], [still], world([me, still]))[0, 0])
 
     def test_food_is_not_heard(self):
         me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)

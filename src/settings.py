@@ -17,10 +17,11 @@ class Settings:
     step_cost: float  # energy every step, whatever the creature does
     lifespan: tuple[float, float]  # a creature's own lifespan in steps is drawn from this range when it is born
     attacks: bool  # whether creatures can hunt each other
+    fruit_rate: float  # fruit each tree drops per step, on average
 
 
 # Starting values from the design; the plan tunes them by measurement.
 START = Settings(max_food=200, food_energy=(20, 40), food_per_step=3.0, move_cost=0.5, step_cost=0.05,
-                 lifespan=(4000, 6000), attacks=False)
+                 lifespan=(4000, 6000), attacks=False, fruit_rate=0.02)
 
 TODAY_SENSES = (360.0, 3.0, 1.5)  # width, reach, hearing of a creature no world gave senses to (the exam's; older saves)

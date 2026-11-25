@@ -5,6 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
+N_SENSES = 25  # the numbers the senses hand a brain each step (src/senses.py)
+
 
 def jitter(values: np.ndarray, rng: np.random.Generator, rate: float, scale: float) -> np.ndarray:
     """The one mutation rule for any brain's weights: each, with probability `rate`, gets normal noise of std `scale`."""
@@ -13,7 +15,7 @@ def jitter(values: np.ndarray, rng: np.random.Generator, rate: float, scale: flo
 
 
 class Brain:
-    N_IN = 20
+    N_IN = N_SENSES
     N_HIDDEN = 16
     N_OUT = 4  # move x, move y, eat, attack
 
@@ -43,7 +45,7 @@ class Brain:
         )
 
     def forward(self, x: np.ndarray) -> np.ndarray:
-        """The 20 senses in, 4 outputs in -1..1 out."""
+        """The senses in, 4 outputs in -1..1 out."""
         if x.shape != (self.N_IN,):
             raise ValueError(f"the brain takes {self.N_IN} inputs, got shape {x.shape}")
         hidden = np.tanh(x @ self.w1 + self.b1)

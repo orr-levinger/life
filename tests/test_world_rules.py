@@ -5,6 +5,7 @@ from unittest import mock
 
 import numpy as np
 
+from src.brain import N_SENSES
 from src.creature import Creature
 from src.food import Food
 from src.policies import decide_all
@@ -346,7 +347,7 @@ class TestHunting(unittest.TestCase):
         self.assertTrue(all(sense(prey, w).vector[16:20] == 0.0))  # nothing felt yet
         hunter.apply_action(("ATTACK", prey), w)
         v = sense(prey, w).vector
-        self.assertEqual(v.shape, (20,))
+        self.assertEqual(v.shape, (N_SENSES,))
         self.assertEqual(v[16], 1.0)  # hit
         self.assertAlmostEqual(v[17], 0.1)  # 10 of its 100 taken
         self.assertAlmostEqual(v[18], 1.0)  # from the east, where the hunter is

@@ -35,6 +35,7 @@ from .exam import ExamResult, run_exam
 from .hall_of_fame import HallOfFame
 from .saves import (SaveError, load_world, random_state, save_header, save_path, save_world,
                     set_random_state)
+from .terrain import make_terrain
 from .scoreboard import ROW_KEYS, Scoreboard, Value, migrate_scoreboard, read_rows
 from .rules import ROOM_SLOTS
 from .world import INHERIT, World
@@ -111,11 +112,13 @@ def world_view(world: World) -> Dict[str, Any]:
                        "vision_reach": round(c.vision_reach, 2), "hearing": round(c.hearing, 2),
                        "fear_of_death": round(c.fear_of_death, 2), "love_of_babies": round(c.love_of_babies, 2),
                        "learns_from_others": round(c.learns_from_others, 3), "neurons": c.neurons,
-                       "layers": c.layers, "moved": c.moved, "mutations": c.mutations,
+                       "layers": c.layers, "moved": c.moved, "bumped": c.bumped, "mutations": c.mutations,
                        "mutation_size": round(c.mutation_size, 4),
                        "brain": world.learner.brain_size(c.slot) if c.policy == "learner" else None,
                        "learning_speed": world.learner.lr(c.slot) if c.policy == "learner" else None} for c in world.creatures],
-        "foods": [{"x": round(f.x, 3), "y": round(f.y, 3), "radius": round(f.radius, 3)} for f in world.foods],
+        "foods": [{"x": round(f.x, 3), "y": round(f.y, 3), "radius": round(f.radius, 3), "fruit": f.fruit}
+                  for f in world.foods],
+        "terrain": world.terrain.state(),
     }
 
 
@@ -347,6 +350,7 @@ def _new_world(args: argparse.Namespace, rules: Dict[str, float]) -> Tuple[World
                   np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
                   inherit=args.inherit)
     world.change_rules(rules)
+    world.terrain = make_terrain(world.rules, world.rng, world.width, world.height)  # its rocks, ponds and trees
     for _ in range(round(world.rules["first_creatures"])):
         world.add_newcomer()
     return world, dial

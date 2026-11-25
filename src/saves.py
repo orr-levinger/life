@@ -25,20 +25,23 @@ from .creature import Creature
 from .dial import Dial, settings_from_state, settings_state
 from .food import Food
 from .rules import HAND_MADE, ROOM_SLOTS, RULES, rule, starting_rules
-from .settings import TODAY_SENSES
+from .terrain import Terrain, make_terrain
+from .settings import START, TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 13  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 14  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
 # a rule, the three brain genes (2026-11-24); 10: no rule decides who counts as bigger (2026-11-25); 11: one reach for eating and attacking; 12: how
-# many genes a baby changes and by how much are genes; 13: a newcomer draws every gene from a range
+# many genes a baby changes and by how much are genes; 13: a newcomer draws every gene from a range; 14: terrain
+# (obstacles and trees), fruit, the senses of an obstacle in view and of being under a tree (25 inputs)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
 INPUTS_HEARD = 5  # format 4: the brain hears (inputs 13-17)
 INPUTS_PAIN = 4  # format 5: the brain feels pain (inputs 18-21)
+INPUTS_TERRAIN = 5  # format 14: an obstacle in view (4 inputs) and being under a tree (1)
 HEARD_SIZE = 16  # format 7: the heard size (input 17, from 0: 16) leaves the brain
 
 
@@ -74,6 +77,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
     about = {
         "format": SAVE_FORMAT, "step": world.step_count, "species": world.species, "inherit": world.inherit,
         "rules": dict(world.rules), "settings": settings_state(world.settings), "level": world.level,
+        "terrain": world.terrain.state(),
         "dial": dial.state(),
         "counters": {"births": world.births, "newcomers": world.newcomers, "deaths": dict(world.deaths),
                      "total_bites": world.total_bites, "energy_earned": world.energy_earned,
@@ -92,7 +96,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                        "mutation_size": c.mutation_size,
                        "hurt": None if c.hurt is None else list(c.hurt)}
                       for c, brain in zip(world.creatures, brain_of)],
-        "foods": [{"x": f.x, "y": f.y, "energy": f.energy, "remaining_duration": f.remaining_duration,
+        "foods": [{"x": f.x, "y": f.y, "energy": f.energy, "remaining_duration": f.remaining_duration, "fruit": f.fruit,
                    "radius": f.radius} for f in world.foods],  # a food keeps the radius it was made with as it is eaten
         "extra": extra,
     }
@@ -143,6 +147,9 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         about = _from_format_11(about)
     if about.get("format") == 12:
         about = _from_format_12(about)
+    if about.get("format") == 13:
+        about = _from_format_13(about)
+        _widen_inputs(arrays, INPUTS_TERRAIN)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -150,7 +157,7 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
 
 
 def _food(saved: Dict[str, Any]) -> Food:
-    food = Food(saved["x"], saved["y"], saved["remaining_duration"], saved["energy"])
+    food = Food(saved["x"], saved["y"], saved["remaining_duration"], saved["energy"], fruit=saved["fruit"])
     food.radius = saved["radius"]
     return food
 
@@ -263,6 +270,19 @@ def _from_format_12(about: Dict[str, Any]) -> Dict[str, Any]:
     return {**about, "format": 13, "rules": rules}
 
 
+def _from_format_13(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 13 save had no terrain: it gets the starting terrain rules and its own terrain, made around where its
+    creatures stand; its food is not fruit; its settings (and Auto's) get the starting fruit rate."""
+    rules = {**about["rules"], **{r.name: r.start for r in RULES if r.name not in about["rules"]}}
+    clear = [(c["x"], c["y"], c["size"] * rules["body_radius"] * 2) for c in about["creatures"]]
+    terrain = make_terrain(rules, random.Random(about["step"]), rules["world_width"], rules["world_height"], clear)
+    fruit = {"fruit_rate": START.fruit_rate}
+    dial = {**about["dial"], "settings": {**about["dial"]["settings"], **fruit},
+            "taken": [{**s, **fruit} for s in about["dial"]["taken"]]}
+    return {**about, "format": 14, "rules": rules, "terrain": terrain.state(), "settings": {**about["settings"], **fruit},
+            "dial": dial, "foods": [{**f, "fruit": False} for f in about["foods"]]}
+
+
 def _room_to_grow(arrays: Dict[str, np.ndarray]) -> None:
     """A format 7 learner's brain was 1 layer of 32 with no room: it keeps those 32, with room for 64 beside them and
     for 2 more layers (all 0, unused), and its size genes say [1, 32, 0, 0]."""
@@ -350,5 +370,6 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])
         world.add_creature(creature)
     world.foods = [_food(f) for f in about["foods"]]
+    world.terrain = Terrain.from_state(about["terrain"])
     world.count_neurons()
     return world, Dial.from_state(about["dial"]), about["extra"]

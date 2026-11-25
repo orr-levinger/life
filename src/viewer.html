@@ -457,7 +457,7 @@ const SENSE_COSTS = [
 
 // The world card's sliders in groups: each of Auto's knobs and each senses price named in exactly one.
 const KNOB_GROUPS = [
-  ["Food", ["max_food", "food_energy", "food_per_step"]],
+  ["Food", ["max_food", "food_energy", "food_per_step", "fruit_rate"]],
   ["Costs", ["move_cost", "step_cost", "vision_cost", "hearing_cost"]],
   ["Life", ["lifespan"]],
 ];
@@ -1174,6 +1174,54 @@ function showGenes(open) {
   if (c) drawGenes(c);
 }
 
+// The ground: grass as a fixed scatter of blades (drawn once into a pattern), rocks and ponds as their blobs, trees
+// as a trunk under a translucent crown (the crowns are drawn over the creatures: they hide under them).
+const GROUND = { grass: "#1f3a22", blade: "#2c5230", rock: "#6d6a63", rockEdge: "#8b877d", pond: "#2a5d8a",
+                 pondEdge: "#4d86b5", crown: "rgba(34, 92, 40, 0.55)", crownEdge: "rgba(70, 140, 70, 0.7)",
+                 trunk: "#5b3d22", fruit: "#e0483b" };
+let grassPattern = null;
+function grass(g) {
+  if (!grassPattern) {
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = 64;
+    const t = tile.getContext("2d");
+    t.fillStyle = GROUND.grass; t.fillRect(0, 0, 64, 64);
+    t.strokeStyle = GROUND.blade; t.lineWidth = 1;
+    let seed = 7;  // the same blades every time
+    const next = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 70; i++) {
+      const x = next() * 64, y = next() * 64, lean = (next() - 0.5) * 3;
+      t.beginPath(); t.moveTo(x, y); t.lineTo(x + lean, y - 2 - next() * 3); t.stroke();
+    }
+    grassPattern = g.createPattern(tile, "repeat");
+  }
+  return grassPattern;
+}
+
+function drawObstacles(g, terrain, unit, line) {
+  for (const o of terrain.obstacles) {
+    const pond = o.kind === "pond";
+    for (const pass of ["edge", "fill"]) {  // the blob's outline first, its body over it: one shape
+      g.fillStyle = pass === "edge" ? (pond ? GROUND.pondEdge : GROUND.rockEdge) : (pond ? GROUND.pond : GROUND.rock);
+      for (const [x, y, r] of o.circles) {
+        g.beginPath(); g.arc(x * unit, y * unit, r * unit + (pass === "edge" ? line : 0), 0, 2 * Math.PI); g.fill();
+      }
+    }
+  }
+}
+
+function drawTrunks(g, terrain, unit) {
+  g.fillStyle = GROUND.trunk;
+  for (const t of terrain.trees) { g.beginPath(); g.arc(t.x * unit, t.y * unit, Math.max(unit * 0.18, 2), 0, 2 * Math.PI); g.fill(); }
+}
+
+function drawCrowns(g, terrain, unit, line) {
+  for (const t of terrain.trees) {
+    g.fillStyle = GROUND.crown; g.strokeStyle = GROUND.crownEdge; g.lineWidth = line;
+    g.beginPath(); g.arc(t.x * unit, t.y * unit, t.canopy * unit, 0, 2 * Math.PI); g.fill(); g.stroke();
+  }
+}
+
 function paint() {
   if (!watching) return;
   requestAnimationFrame(paint);
@@ -1205,6 +1253,10 @@ function paint() {
                                   ((sy * devicePixelRatio - canvas.height / 2) / camera.zoom + camera.y * unit) / unit];
   g.setTransform(camera.zoom, 0, 0, camera.zoom, canvas.width / 2 - camera.x * unit * camera.zoom,
                  canvas.height / 2 - camera.y * unit * camera.zoom);
+  const terrain = picture.terrain || { obstacles: [], trees: [] };
+  g.fillStyle = grass(g); g.fillRect(0, 0, worldW * unit, worldH * unit);  // the ground under everything
+  drawObstacles(g, terrain, unit, line);
+  drawTrunks(g, terrain, unit);
   const sensed = followed && camera.pov ? sensedBy(followed.c, picture) : null;  // its point of view, when on
   const shown = sensed ? placed.filter((p) => p === followed || sensed.sees.has(p.c.id)) : placed;
   if (sensed) {  // what it cannot sense is not drawn; the world around is dimmed
@@ -1213,9 +1265,13 @@ function paint() {
   } else {
     for (const { c, x, y } of placed) drawSenses(g, x, y, c, unit, c.id === watching.hover, color);  // under everything
   }
-  g.fillStyle = FOOD_COLOUR;  // food: small tan diamonds
   for (const food of sensed ? picture.foods.filter((f, i) => sensed.foods.has(i)) : picture.foods) {
     const x = food.x * unit, y = food.y * unit, d = Math.max(food.radius * unit, 2.5);
+    if (food.fruit) {  // fruit: a small red berry
+      g.fillStyle = GROUND.fruit; g.beginPath(); g.arc(x, y, d * 0.8, 0, 2 * Math.PI); g.fill();
+      continue;
+    }
+    g.fillStyle = FOOD_COLOUR;  // food: small tan diamonds
     g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill();
   }
   watching.drawn = [];
@@ -1231,6 +1287,16 @@ function paint() {
     if (c.target === null || c.target === undefined || !where.has(c.target)) continue;
     const to = placed.find((p) => p.c.id === c.target), r = Math.max(c.radius * unit, 4), tr = Math.max(to.c.radius * unit, 4);
     drawStrike(g, { x, y, r }, { x: to.x, y: to.y, r: tr }, line, c.did === "ATTACK");
+  }
+  drawCrowns(g, terrain, unit, line);  // over the creatures: under a crown one is hard to see
+  for (const { c, x, y } of shown) {  // ran into an obstacle: a small burst
+    if (!c.bumped) continue;
+    const r = Math.max(c.radius * unit, 4) * 1.5;
+    g.strokeStyle = color("--warn"); g.lineWidth = line;
+    for (let k = 0; k < 6; k++) {
+      const a = k * Math.PI / 3;
+      g.beginPath(); g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r); g.lineTo(x + Math.cos(a) * r * 1.4, y + Math.sin(a) * r * 1.4); g.stroke();
+    }
   }
   if (followed) {  // the one it follows: a ring
     g.strokeStyle = color("--ink"); g.lineWidth = line;

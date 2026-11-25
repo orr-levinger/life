@@ -43,6 +43,7 @@ KNOB_LABELS = {  # what the page calls each knob, and how far one notch of its s
     "max_food": ("Food pieces at most", 1.0),
     "food_energy": ("Energy per food", 0.5),
     "food_per_step": ("New food per step", 0.05),
+    "fruit_rate": ("Fruit a tree drops per step", 0.002),
     "move_cost": ("Cost of moving (per unit)", 0.01),
     "step_cost": ("Cost of living (per step)", 0.005),
     "lifespan": ("Lifespan (steps)", 50.0),
@@ -338,8 +339,9 @@ class Controls:
         """The world's settings as its last row shows them (the start, before its first row)."""
         if not run["rows"]:
             return START
-        last = run["rows"][-1]
-        return settings_from({**{k.name: last[k.name] for k in KNOBS}, HUNTERS: bool(last["hunters"])}, START)
+        last = run["rows"][-1]  # a knob a row from before it has no number for keeps its start
+        known = {k.name: last[k.name] for k in KNOBS if last.get(k.name) is not None}
+        return settings_from({**known, HUNTERS: bool(last["hunters"])}, START)
 
 
 def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingHTTPServer:

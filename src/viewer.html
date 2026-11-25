@@ -94,6 +94,7 @@
   .rules-table input { width: 84px; background: var(--page); color: var(--ink); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
   .rules-table .auto { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--muted); color: var(--muted); margin-left: 6px; }
   .rules-table .error { display: block; }
+  .next-world { border: 1px solid var(--grid); border-radius: 8px; padding: 10px 14px; background: var(--surface); }
   .rules-table td.name { width: 22%; font-weight: 600; } .rules-table td.means { width: 44%; line-height: 1.35; }
   .rules-table .meaning { display: block; color: var(--accent, #7fb3ff); font-size: 12px; margin-top: 2px; }
   .rules-table .meaning:empty { display: none; } .rules-table td { vertical-align: top; padding: 7px 6px; }
@@ -1525,6 +1526,7 @@ const AUTO_COSTS = [
   ["step_cost", "Being alive, each step, × size", "Energy it pays every step just for being alive. A bigger creature pays more."],
   ["move_cost", "Moving, per unit of distance, × size", "Energy it pays for each unit it moves. A bigger creature pays more."],
 ];
+const NEXT_WORLD = "(the next new world)";  // what the Rules page shows while nothing runs
 const numberText = (v) => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : String(Number(v.toPrecision(4)));
 
 function ruleInput(rule) {  // one number box: a rule of the world, or one of Auto's two cost knobs
@@ -1584,20 +1586,20 @@ function geneRows(rules, means) {  // one row a gene: what it is, lowest – hig
 
 async function drawRules() {
   const page = document.getElementById("rules-page"), run = data.find((r) => r.status === "running");
-  if (!run) { page.dataset.run = ""; page.innerHTML = '<div class="nothing"><b>Nothing is running</b>Start a world to see and change its rules.</div>'; return; }
-  const answer = await (await fetch(`/rules?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })).json();
-  const now = await (await fetch(`/now?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })).json().catch(() => null);
+  const which = run ? run.name : NEXT_WORLD;  // nothing running: the rules the next new world starts on
+  const answer = await (await fetch(run ? `/rules?run=${encodeURIComponent(run.name)}` : "/rules", { cache: "no-store" })).json();
+  const now = run ? await (await fetch(`/now?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })).json().catch(() => null) : null;
   const genes = now && now.genes;
   ruleNow = { sizes: genes && genes.size ? [genes.size[0], genes.size[2]] : null, genes,
               values: Object.fromEntries(answer.rules.map((r) => [r.name, r.value])) };
-  const last = lastRow(run) || {};
-  const autoCosts = AUTO_COSTS.map(([name, words, means]) => {
+  const last = (run && lastRow(run)) || {};
+  const autoCosts = !run ? [] : AUTO_COSTS.map(([name, words, means]) => {  // Auto's knobs belong to a running world
     const knob = KNOBS.find((k) => k.name === name);
     return { name, words, means, knob: true, value: last[name] ?? knob.start, start: knob.start,
              low: Math.min(knob.easiest, knob.hardest), high: Math.max(knob.easiest, knob.hardest) };
   });
   const rules = [...autoCosts, ...answer.rules];
-  if (page.dataset.run === run.name) {  // already drawn: only the values and the examples move, never the box being typed in
+  if (page.dataset.run === which) {  // already drawn: only the values and the examples move, never the box being typed in
     for (const rule of rules) {
       const input = page.querySelector(`input[data-rule="${rule.name}"]`);
       if (input && input !== document.activeElement) input.value = numberText(rule.value);
@@ -1607,8 +1609,10 @@ async function drawRules() {
     page.querySelectorAll('[data-example^="gene."]').forEach((line) => { line.textContent = geneExample(line.dataset.example.slice(5)); });
     return;
   }
-  page.dataset.run = run.name;
-  page.innerHTML = answer.groups.map(({ name, title }) => {
+  page.dataset.run = which;
+  const banner = run ? "" : '<div class="next-world"><b>Nothing is running.</b> These are the rules the next new world starts on: ' +
+    "a change is kept and used when you press Start.</div>";
+  page.innerHTML = banner + answer.groups.map(({ name, title }) => {
     const mine = rules.filter((r) => (r.knob ? "costs" : r.group) === name);
     const genes = name === "genes", geneRules = mine.filter((r) => r.name.split(".").length === 3 && !r.name.startsWith("gene.weights"));
     const head = genes ? "<tr><th>Gene</th><th>What it means</th><th>Lowest – highest</th><th>Newcomer gets</th></tr>"
@@ -1620,7 +1624,8 @@ async function drawRules() {
   const change = async (name, value, knob, where) => {
     const error = where.closest("td").querySelector(".error");
     try {
-      await send("/control", knob ? { run: run.name, settings: { [name]: value } } : { run: run.name, rules: { [name]: value } });
+      if (!run) await send("/next-rules", { rules: { [name]: value } });
+      else await send("/control", knob ? { run: run.name, settings: { [name]: value } } : { run: run.name, rules: { [name]: value } });
       say(error, "", "");
     } catch (problem) {
       say(error, problem.message, "refused");

@@ -247,6 +247,24 @@ class TestControlRoom(unittest.TestCase):
                          ("Energy per food", 60.0, 3.0, 30.0))
         self.assertIs(answer["hunters"], False)
 
+    def test_the_next_worlds_rules_are_changed_with_nothing_running(self):
+        answer = self.server.get("/rules")
+        first = next(r for r in answer["rules"] if r["name"] == "first_creatures")
+        self.assertEqual((answer["next"], first["value"]), (True, first["start"]))
+        status, _ = self.server.post("/next-rules", {"rules": {"first_creatures": 12, "world_width": 40}})
+        self.assertEqual(status, 200)
+        values = {r["name"]: r["value"] for r in self.server.get("/rules")["rules"]}
+        self.assertEqual((values["first_creatures"], values["world_width"]), (12.0, 40.0))  # kept on disk
+        status, answer = self.server.post("/next-rules", {"rules": {"first_creatures": 999}})
+        self.assertEqual(status, 400)
+        self.assertIn("at most", answer["error"])
+
+    def test_a_new_world_starts_on_the_next_worlds_rules(self):
+        self.server.post("/next-rules", {"rules": {"first_creatures": 12}})
+        status, answer = self.server.post("/start", {"species": "learning", "seed": 3, "mode": "auto"})
+        self.assertEqual(status, 200)
+        self.assertEqual(read_control(self.root / answer["name"]).rules, {"first_creatures": 12.0})
+
     def test_start_launches_a_world(self):
         status, answer = self.server.post("/start", {"species": "learning", "seed": 3, "mode": "manual",
                                                       "settings": {"lifespan": 8000}})
@@ -507,6 +525,12 @@ class TestControlRoom(unittest.TestCase):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
         for words in ('id="follow-genes"', "function drawGenes(", "edit: {"):
+            self.assertIn(words, page)
+
+    def test_page_edits_the_next_worlds_rules_with_nothing_running(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('send("/next-rules"', "the rules the next new world starts on"):
             self.assertIn(words, page)
 
     def test_page_explains_the_creature_look(self):

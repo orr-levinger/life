@@ -220,7 +220,7 @@ def run(args: argparse.Namespace) -> Path:
         write_control(out, control)
     exam_rng = random.Random(args.seed + 2)  # who takes the exam: its own stream, so an exam never changes the world
     if source is None:
-        world, dial = _new_world(args)
+        world, dial = _new_world(args, control.rules or {})
         first_creatures = world.newcomers  # the soup's newcomers are counted from here
     else:
         world, dial, extra = load_world(Path(args.resume), learner_seed=args.seed)
@@ -333,7 +333,8 @@ def run(args: argparse.Namespace) -> Path:
     return csv_path
 
 
-def _new_world(args: argparse.Namespace) -> Tuple[World, Dial]:
+def _new_world(args: argparse.Namespace, rules: Dict[str, float]) -> Tuple[World, Dial]:
+    """A new world on the starting rules with the owner's changes (from the Rules page), then its first creatures."""
     policy = SPECIES[args.species] if args.species else args.policy
     learner = None
     if policy == "learner":
@@ -345,6 +346,7 @@ def _new_world(args: argparse.Namespace) -> Tuple[World, Dial]:
     world = World(WIDTH, HEIGHT, dial.settings, policy, random.Random(args.seed),
                   np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
                   inherit=args.inherit)
+    world.change_rules(rules)
     for _ in range(round(world.rules["first_creatures"])):
         world.add_newcomer()
     return world, dial

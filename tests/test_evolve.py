@@ -11,7 +11,7 @@ from unittest import mock
 from src import control as control_module
 from src.control import Control, read_control, write_control
 from src.dial import Dial, rates, value, with_value
-from src.evolve import _Knobs, parse_args, run
+from src.evolve import _Knobs, _new_world, parse_args, run
 from src.scoreboard import ROW_KEYS
 from src.settings import START
 from src.rules import rule, starting_rules
@@ -448,3 +448,11 @@ class TestGeneChanges(unittest.TestCase):
         world.edit_genes.assert_called_once_with(9, {"size": 1.1})
         knobs.take(Control("auto", None, False, edit={**change, "seq": 4}), dial, world)
         self.assertEqual(world.edit_genes.call_count, 2)  # a new change, even of the same genes
+
+
+class TestNextWorldRules(unittest.TestCase):
+    def test_a_new_world_is_made_on_the_owners_rules(self):
+        args = parse_args(["--seed", "1", "--species", "instinct", "--steps", "10"])
+        world, _ = _new_world(args, {"first_creatures": 5.0, "world_width": 30.0})
+        self.assertEqual((len(world.creatures), world.width), (5, 30.0))
+        self.assertTrue(all(c.x <= 30.0 for c in world.creatures))

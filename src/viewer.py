@@ -23,7 +23,7 @@ from typing import Callable, Dict, List, Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 
 from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run_folder, read_control,
-                      settings_from, watch_speed_from, write_control)
+                      settings_from, watch_speed_from, write_control, write_json)
 from .dial import KNOBS, value
 from .evolve import SPECIES
 from .saves import save_header, save_path, saves_of
@@ -36,6 +36,7 @@ REPO = Path(__file__).resolve().parent.parent
 RUNNING_WITHIN = 180.0  # seconds: a run with no end that wrote its scoreboard this recently is still running
 MAX_RUNNING = 2  # the box has 4 cores
 MAX_BODY = 10_000  # bytes a request may send
+NEXT_WORLD = "next_world.json"  # in the runs folder: the owner's changes to the rules the next new world starts on
 HANDOVER_WAIT = 300.0  # seconds Update code waits for a world to save and end before giving up
 HANDOVER_LOOK = 0.2
 KNOB_LABELS = {  # what the page calls each knob, and how far one notch of its slider moves it
@@ -155,7 +156,8 @@ class Controls:
             raise Refused(409, f"{MAX_RUNNING} worlds are running already: stop one first")
         folder = new_run_folder(self.folder, seed, kind)
         folder.mkdir(parents=True)
-        write_control(folder, Control(mode, settings, False))
+        rules = None if body.get("from") is not None else (self._next_rules() or None)  # a new world: the owner's rules
+        write_control(folder, Control(mode, settings, False, rules=rules))
         command = [sys.executable, "-m", "src.evolve", *how, "--forever", "--mode", mode, "--out", str(folder.resolve())]
         self.started[folder.name] = self.launch(command, folder)
         return {"name": folder.name}
@@ -182,11 +184,32 @@ class Controls:
         numbers = self._run_folder(name) / "now.json"
         return numbers.read_bytes() if numbers.exists() else b"null"
 
+    def _next_rules(self) -> Dict[str, float]:
+        """The owner's changes to the rules of the next new world (kept in the runs folder)."""
+        path = self.folder / NEXT_WORLD
+        return json.loads(path.read_text())["rules"] if path.exists() else {}
+
+    def next_rules(self, body: Dict) -> Dict:
+        """Changes the rules the next new world starts on, each checked like a running world's."""
+        given = body.get("rules")
+        if not isinstance(given, dict):
+            raise Refused(400, "rules must map each rule to its new value")
+        values, changes = {**starting_rules(), **self._next_rules()}, self._next_rules()
+        for name, value in given.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise Refused(400, f"{name} must be a number, not {value!r}")
+            problem = check(values, name, float(value))
+            if problem:
+                raise Refused(400, problem)
+            values[name] = changes[name] = float(value)
+        write_json(self.folder / NEXT_WORLD, {"rules": changes})
+        return {"rules": changes}
+
     def rules(self, name: Optional[str]) -> Dict:
-        """Every rule with its value in the world now (its owner's change waiting for the world counts already)."""
-        folder = self._run_folder(name)
-        values = self._world_rules(folder)
-        return {"groups": [{"name": name, "title": title} for name, title in GROUPS], "genes": GENE_MEANS,
+        """Every rule with its value in the world now (its owner's change waiting for the world counts already); with
+        no world named, the rules the next new world starts on."""
+        values = self._world_rules(self._run_folder(name)) if name else {**starting_rules(), **self._next_rules()}
+        return {"groups": [{"name": name, "title": title} for name, title in GROUPS], "genes": GENE_MEANS, "next": not name,
                 "rules": [{"name": r.name, "group": r.group, "words": r.words, "means": means(r.name), "start": r.start,
                            "low": r.low, "high": r.high, "value": values.get(r.name, r.start)} for r in RULES]}
 
@@ -346,7 +369,7 @@ def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingH
                 self._raw(200, body, "text/html; charset=utf-8")
 
         def do_POST(self) -> None:
-            actions = {"/start": controls.start, "/control": controls.control}
+            actions = {"/start": controls.start, "/control": controls.control, "/next-rules": controls.next_rules}
             try:
                 if self.path not in actions:
                     raise Refused(404, f"no such request: {self.path}")

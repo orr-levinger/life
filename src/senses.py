@@ -39,7 +39,8 @@ def in_cone(creature: Creature, dx, dy, distance):
 def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> List[Senses]:
     """What each of `creatures` (default: everyone in the world) senses. All distances are computed at once.
     Inputs 1-3: energy, size, on food. 4-7: nearest food it sees. 8-12: nearest stranger it sees (with its size). 13-16:
-    nearest stranger it hears but does not see (where and how far only: a sound tells no size). 17-20: pain, for one step
+    nearest stranger it hears but does not see, of those that moved last step (where and how far only: a sound tells
+    no size). 17-20: pain, for one step
     after a hit: hit, share taken, direction to the hitter."""
     creatures = list(world.creatures) if creatures is None else creatures
     if not creatures:
@@ -77,7 +78,7 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
                                                                   distance)
             if sees and other is None:
                 other = them
-            elif not sees and distance <= creature.hearing and heard is None:
+            elif not sees and them.moved and distance <= creature.hearing and heard is None:  # only movers sound
                 heard = them
         sensed.append(Senses(vector=_vector(creature, food, other, on_food, heard), food=food, other=other,
                              on_food=on_food, heard=heard))
@@ -89,13 +90,14 @@ def sense(creature: Creature, world: Any) -> Senses:
 
 
 def perceived(watchers: Sequence[Creature], actors: Sequence[Creature]) -> np.ndarray:
-    """[actor, watcher]: whether the watcher sees or hears the actor (family included)."""
+    """[actor, watcher]: whether the watcher sees the actor or hears it move (family included)."""
     ax, ay = np.array([c.x for c in actors]), np.array([c.y for c in actors])
+    moved = np.array([c.moved for c in actors], dtype=bool)
     out = np.zeros((len(actors), len(watchers)), dtype=bool)
     for j, watcher in enumerate(watchers):
         dx, dy = ax - watcher.x, ay - watcher.y
         distance = np.hypot(dx, dy)
-        out[:, j] = (distance <= watcher.hearing) | ((distance <= watcher.vision_reach) &
+        out[:, j] = ((distance <= watcher.hearing) & moved) | ((distance <= watcher.vision_reach) &
                                                      in_cone(watcher, dx, dy, distance))
     return out
 

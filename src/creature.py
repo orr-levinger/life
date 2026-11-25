@@ -62,6 +62,7 @@ class Creature:
         self.had_baby_at: Optional[int] = None  # the step it last had a baby (display only)
         self.neurons = 0  # the neurons its brain uses (a learner's, which the world sets); each costs energy
         self.layers = 0
+        self.moved = False  # it moved in its last step: only then can it be heard
         self.hurt: Optional[Tuple[float, float, float]] = None  # one step after a hit: share taken, direction to the hitter
 
         self.age = 0
@@ -117,6 +118,7 @@ class Creature:
     def apply_action(self, action: Tuple[str, Any], world: World) -> None:
         kind, param = action
         self.target = param.id if kind == "ATTACK" and param is not None else None  # whom it went for (display only)
+        self.moved = False
         if kind == "MOVE":
             self._move(param, world)
         elif kind == "EAT":
@@ -156,8 +158,10 @@ class Creature:
             distance = self.top_speed
         if distance > 0:
             self.facing = (dx / distance, dy / distance)
+        x, y = self.x, self.y
         self.x = min(max(self.x + dx, self.radius), world.width - self.radius)
         self.y = min(max(self.y + dy, self.radius), world.height - self.radius)
+        self.moved = (self.x, self.y) != (x, y)  # a step that went somewhere makes a sound
         sprint = max(1.0, distance / self.velocity) ** self.rules["sprint_power"]  # faster than cruising costs more
         cost = distance * world.settings.move_cost * self.size * sprint  # a bigger body pays more to move
         self.energy -= cost

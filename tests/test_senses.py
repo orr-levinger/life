@@ -6,7 +6,7 @@ import numpy as np
 
 from src.creature import Creature, is_family
 from src.food import Food
-from src.senses import display_intent, sense
+from src.senses import display_intent, perceived, sense
 
 
 def creature(x: float, y: float, size: float = 1.25, id_: int = 1, parent_id: int = 0) -> Creature:
@@ -114,6 +114,7 @@ class TestSenses(unittest.TestCase):
     def test_a_creature_behind_is_heard(self):
         me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)
         other = creature(9, 10, size=2.5, id_=2)
+        other.moved = True  # it moved last step, so it makes a sound
         v = sense(me, world([me, other])).vector
         self.assertEqual(v.shape, (20,))
         self.assertEqual(v[7], 0.0)  # not seen
@@ -122,16 +123,27 @@ class TestSenses(unittest.TestCase):
         self.assertAlmostEqual(v[14], -1.0)  # behind it: west
         self.assertAlmostEqual(v[15], 0.0, places=6)
         far = creature(7.5, 10, id_=3)
+        far.moved = True
         self.assertEqual(sense(me, world([me, far])).vector[12], 0.0)  # 2.5 away: past its hearing
 
     def test_hearing_gives_no_size(self):
         me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)
         small, big = creature(9, 10, size=0.6, id_=2), creature(9, 10, size=2.5, id_=3)
+        small.moved = big.moved = True
         heard_small = sense(me, world([me, small])).vector
         heard_big = sense(me, world([me, big])).vector
         self.assertEqual(heard_small.shape, (20,))
         self.assertEqual(list(heard_small[12:16]), list(heard_big[12:16]))  # where and how far: nothing of its size
         self.assertEqual(heard_small[12], 1.0)
+
+    def test_a_still_creature_is_not_heard(self):
+        me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)
+        still = creature(9, 10, id_=2)  # behind it, within hearing, but it did not move
+        self.assertEqual(sense(me, world([me, still])).vector[12], 0.0)
+        self.assertFalse(perceived([me], [still])[0, 0])  # nor is it learned from by sound
+        still.moved = True
+        self.assertEqual(sense(me, world([me, still])).vector[12], 1.0)
+        self.assertTrue(perceived([me], [still])[0, 0])
 
     def test_food_is_not_heard(self):
         me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)

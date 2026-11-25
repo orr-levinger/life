@@ -160,7 +160,7 @@
     <b id="watch-title"></b><span id="watch-where">waiting for the first picture…</span>
     <label>steps a second <input id="watch-speed" type="range" min="1" max="30" step="1" value="10"><output id="watch-speed-shown">10</output></label>
     <span class="zoom"><button id="zoom-out" class="act" type="button" aria-label="Zoom out">−</button><output id="zoom-shown">1×</output><button id="zoom-in" class="act" type="button" aria-label="Zoom in">+</button></span>
-    <span id="follow-note" hidden>following <b id="follow-who"></b> <button id="follow-stop" class="act" type="button">Stop following</button></span>
+    <span id="follow-note" hidden>following <b id="follow-who"></b> <button id="follow-pov" class="act" type="button" aria-pressed="false" data-tip="See only what it sees; what it hears shows as a blur with its distance">POV</button> <button id="follow-stop" class="act" type="button">Stop following</button></span>
     <button id="watch-out" class="act" type="button">Jump out</button>
   </div>
   <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
@@ -1018,15 +1018,53 @@ function drawSenses(g, x, y, c, unit, strong, color) {
 
 // The camera: how far it is zoomed, which point of the world is in the middle, and the creature it follows (if any).
 const ZOOMS = { least: 1, most: 12, follow: 4, step: 1.25 };
-const camera = { zoom: 1, x: null, y: null, follow: null };
+const camera = { zoom: 1, x: null, y: null, follow: null, pov: false };
 function zoomBy(factor) {
   camera.zoom = Math.max(ZOOMS.least, Math.min(ZOOMS.most, camera.zoom * factor));
   document.getElementById("zoom-shown").textContent = `${camera.zoom < 10 ? camera.zoom.toFixed(1) : Math.round(camera.zoom)}×`;
 }
 function follow(id, name) {
   camera.follow = id;
+  if (id === null) pov(false);
   document.getElementById("follow-note").hidden = id === null;
   if (id !== null) { document.getElementById("follow-who").textContent = name; if (camera.zoom < ZOOMS.follow) zoomBy(ZOOMS.follow / camera.zoom); }
+}
+
+function pov(on) {  // the followed creature's point of view: only what it senses is drawn
+  camera.pov = on;
+  const button = document.getElementById("follow-pov");
+  button.setAttribute("aria-pressed", String(on));
+  button.textContent = on ? "POV: on" : "POV";
+}
+
+// What `me` senses in `picture`, as the world decides it (src/senses.py): seen when within its vision reach and inside
+// its cone; heard when not seen, within its hearing, and it moved in its last step. Food is never heard.
+function sensedBy(me, picture) {
+  const half = Math.cos(me.vision_width / 2 * Math.PI / 180), [fx, fy] = me.facing;
+  const away = (x, y) => Math.hypot(x - me.x, y - me.y);
+  const seen = (x, y) => {
+    const d = away(x, y);
+    return d === 0 || (d <= me.vision_reach && (me.vision_width >= 360 || ((x - me.x) * fx + (y - me.y) * fy) / d >= half));
+  };
+  const sees = new Set(), hears = new Map(), foods = new Set();
+  for (const c of picture.creatures) {
+    if (c.id === me.id) continue;
+    if (seen(c.x, c.y)) sees.add(c.id);
+    else if (c.moved && away(c.x, c.y) <= me.hearing) hears.set(c.id, away(c.x, c.y));
+  }
+  picture.foods.forEach((f, i) => { if (seen(f.x, f.y)) foods.add(i); });
+  return { sees, hears, foods };
+}
+
+function drawHeard(g, x, y, unit, distance, color) {  // a sound: a blur where it came from and how far, never its size
+  const r = unit * 0.5, blur = g.createRadialGradient(x, y, 0, x, y, r);
+  blur.addColorStop(0, "rgba(150, 160, 180, 0.6)");
+  blur.addColorStop(1, "rgba(150, 160, 180, 0)");
+  g.fillStyle = blur;
+  g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
+  g.fillStyle = color("--muted"); g.textAlign = "center";
+  g.font = `${12 * devicePixelRatio / camera.zoom}px system-ui, sans-serif`;
+  g.fillText(distance.toFixed(1), x, y - r - 2 * devicePixelRatio / camera.zoom);
 }
 
 function paint() {
@@ -1060,21 +1098,29 @@ function paint() {
                                   ((sy * devicePixelRatio - canvas.height / 2) / camera.zoom + camera.y * unit) / unit];
   g.setTransform(camera.zoom, 0, 0, camera.zoom, canvas.width / 2 - camera.x * unit * camera.zoom,
                  canvas.height / 2 - camera.y * unit * camera.zoom);
-  for (const { c, x, y } of placed) drawSenses(g, x, y, c, unit, c.id === watching.hover, color);  // under everything
+  const sensed = followed && camera.pov ? sensedBy(followed.c, picture) : null;  // its point of view, when on
+  const shown = sensed ? placed.filter((p) => p === followed || sensed.sees.has(p.c.id)) : placed;
+  if (sensed) {  // what it cannot sense is not drawn; the world around is dimmed
+    g.fillStyle = "rgba(0, 0, 0, 0.35)"; g.fillRect(0, 0, worldW * unit, worldH * unit);
+    drawSenses(g, followed.x, followed.y, followed.c, unit, true, color);
+  } else {
+    for (const { c, x, y } of placed) drawSenses(g, x, y, c, unit, c.id === watching.hover, color);  // under everything
+  }
   g.fillStyle = FOOD_COLOUR;  // food: small tan diamonds
-  for (const food of picture.foods) {
+  for (const food of sensed ? picture.foods.filter((f, i) => sensed.foods.has(i)) : picture.foods) {
     const x = food.x * unit, y = food.y * unit, d = Math.max(food.radius * unit, 2.5);
     g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill();
   }
   watching.drawn = [];
-  for (const { c, x, y } of placed) {
+  if (sensed) for (const p of placed) if (sensed.hears.has(p.c.id)) drawHeard(g, p.x, p.y, unit, sensed.hears.get(p.c.id), color);
+  for (const { c, x, y } of shown) {
     const r = Math.max(c.radius * unit, 4);  // size: its genes, never changes
     const smart = drawCreature(g, x, y, r, c, wanderers, line, color);
     const [sx, sy] = toScreen(x, y);
     watching.drawn.push({ c, x: sx / devicePixelRatio, y: sy / devicePixelRatio, r: r * camera.zoom / devicePixelRatio, smart });
   }
   const where = new Map(watching.drawn.map((d) => [d.c.id, d]));
-  for (const { c, x, y } of placed) {  // attacking: strike lines, over the creatures
+  for (const { c, x, y } of shown) {  // attacking: strike lines, over the creatures
     if (c.target === null || c.target === undefined || !where.has(c.target)) continue;
     const to = placed.find((p) => p.c.id === c.target), r = Math.max(c.radius * unit, 4), tr = Math.max(to.c.radius * unit, 4);
     drawStrike(g, { x, y, r }, { x: to.x, y: to.y, r: tr }, line, c.did === "ATTACK");
@@ -1133,6 +1179,7 @@ watchCanvas.addEventListener("click", (event) => {  // a creature: follow it; em
 document.getElementById("zoom-in").addEventListener("click", () => zoomBy(ZOOMS.step));
 document.getElementById("zoom-out").addEventListener("click", () => zoomBy(1 / ZOOMS.step));
 document.getElementById("follow-stop").addEventListener("click", () => follow(null));
+document.getElementById("follow-pov").addEventListener("click", () => pov(!camera.pov));
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && camera.follow !== null) follow(null); });
 
 document.getElementById("watch-canvas").addEventListener("mousemove", (event) => {  // point at a creature: its numbers

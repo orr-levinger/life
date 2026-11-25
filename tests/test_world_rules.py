@@ -63,6 +63,17 @@ class TestCosts(unittest.TestCase):
         me.apply_action(("ATTACK", other), w)
         self.assertEqual((me.last_action, other.energy), ("ATTACK_MISS", before))
 
+    def test_moving_makes_a_sound_and_anything_else_does_not(self):
+        w = make_world()
+        c = add(w, 10, 10, size=1.0)
+        self.assertFalse(c.moved)  # a newborn has made no sound yet
+        c.apply_action(("MOVE", (0.1, 0.0)), w)
+        self.assertTrue(c.moved)
+        c.apply_action(("EAT", None), w)
+        self.assertFalse(c.moved)
+        c.apply_action(("MOVE", (0.0, 0.0)), w)  # standing still
+        self.assertFalse(c.moved)
+
     def test_top_speed_grows_with_size(self):
         w = make_world()
         tops = [add(w, 5 + 10 * i, 10, size=size).top_speed for i, size in enumerate((0.5, 1.0, 2.0))]
@@ -688,7 +699,13 @@ class TestLearnersInWorld(unittest.TestCase):
         hearer.facing, hearer.hearing = (1.0, 0.0), 3.0  # the actor behind it: unseen, heard
         deaf.facing, deaf.hearing = (0.0, 1.0), 0.0  # the actor behind it: unseen, unheard
         actor.facing, actor.hearing = (0.0, -1.0), 0.0
-        with mock.patch.object(Creature, "_move", lambda self, vector, world: None):  # nobody turns
+        act = Creature.apply_action
+
+        def acts_and_sounds(self, action, world):  # whatever the actor does, it makes a sound this step
+            act(self, action, world)
+            self.moved = self.moved or self is actor
+        with mock.patch.object(Creature, "_move", lambda self, vector, world: None), \
+                mock.patch.object(Creature, "apply_action", acts_and_sounds):  # nobody turns
             self.rewards(w, learner)
         self.assertEqual(len(learner._lessons[hearer.slot]), 1)
         self.assertEqual(learner._lessons[deaf.slot], [])

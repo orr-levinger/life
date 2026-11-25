@@ -471,6 +471,12 @@ class TestControlRoom(unittest.TestCase):
         for words in ("Update code", "Fleeing and chasing"):
             self.assertIn(words, page)
 
+    def test_page_has_a_point_of_view_button(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('id="follow-pov"', "function sensedBy(", "function drawHeard(", "c.moved"):
+            self.assertIn(words, page)
+
     def test_page_explains_the_creature_look(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

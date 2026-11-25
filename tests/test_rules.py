@@ -46,6 +46,11 @@ class TestRules(unittest.TestCase):
     def test_no_rule_decides_who_is_a_threat(self):
         self.assertNotIn("threat_ratio", {r.name for r in RULES})  # the creatures learn whom to flee or chase
 
+    def test_one_reach_for_eating_and_attacking(self):
+        names = {r.name for r in RULES}
+        self.assertIn("reach", names)
+        self.assertFalse({"eat_range", "attack_range"} & names)
+
     def test_every_rule_has_a_group(self):
         from src.rules import GROUPS
         self.assertEqual([g for g, _ in GROUPS], ["costs", "world", "body", "senses", "birth", "genes", "learning", "auto", "exam", "runner"])

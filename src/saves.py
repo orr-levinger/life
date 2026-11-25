@@ -28,11 +28,11 @@ from .rules import ROOM_SLOTS, RULES, rule, starting_rules
 from .settings import TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 10  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 11  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
-# a rule, the three brain genes (2026-11-24); 10: no rule decides who counts as bigger (2026-11-25)
+# a rule, the three brain genes (2026-11-24); 10: no rule decides who counts as bigger (2026-11-25); 11: one reach for eating and attacking
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -135,6 +135,8 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         about = _from_format_8(about)
     if about.get("format") == 9:
         about = _from_format_9(about)
+    if about.get("format") == 10:
+        about = _from_format_10(about)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -227,6 +229,14 @@ def _from_format_8(about: Dict[str, Any]) -> Dict[str, Any]:
 def _from_format_9(about: Dict[str, Any]) -> Dict[str, Any]:
     """A format 9 save had a rule for who counts as bigger: it leaves (the creatures learn whom to flee or chase)."""
     return {**about, "format": 10, "rules": {k: v for k, v in about["rules"].items() if k != "threat_ratio"}}
+
+
+def _from_format_10(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 10 save had an eating reach and an attack reach: one reach, the eating one's value. (An older save
+    converted on the way here already has today's rules, its reach among them.)"""
+    old = about["rules"]
+    rules = {k: v for k, v in old.items() if k not in ("eat_range", "attack_range")}
+    return {**about, "format": 11, "rules": {**rules, "reach": old["eat_range"] if "eat_range" in old else old["reach"]}}
 
 
 def _room_to_grow(arrays: Dict[str, np.ndarray]) -> None:

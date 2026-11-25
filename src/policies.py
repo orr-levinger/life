@@ -89,8 +89,8 @@ def rules_action(creature: Creature, world: World, rng: random.Random) -> Action
         other, dist, angle = others[0]
         if other.size >= creature.size * YARDSTICK_BIGGER:
             return ("MOVE", (math.cos(angle + math.pi) * v, math.sin(angle + math.pi) * v))
-        attack_range = (creature.radius + other.radius) * creature.rules["attack_range"]
-        if creature.size >= other.size * YARDSTICK_BIGGER and dist <= attack_range:
+        reach = (creature.radius + other.radius) * creature.rules["reach"]
+        if creature.size >= other.size * YARDSTICK_BIGGER and dist <= reach:
             return ("ATTACK", other)
         return ("MOVE", (math.cos(angle) * v, math.sin(angle) * v))
 

@@ -93,7 +93,7 @@ class Creature:
 
     def can_reach(self, food: Food) -> bool:
         """The one eat-range rule: close enough to take a bite."""
-        reach = (self.radius + food.radius) * self.rules["eat_range"]
+        reach = (self.radius + food.radius) * self.rules["reach"]
         return math.hypot(food.x - self.x, food.y - self.y) <= reach
 
     def vision_area(self) -> float:
@@ -170,9 +170,9 @@ class Creature:
             return
         self.energy -= self.attack_cost
         self._spend(self.attack_cost, world)
-        attack_range = (self.radius + target.radius) * self.rules["attack_range"]
+        reach = (self.radius + target.radius) * self.rules["reach"]
         if (target not in world.creatures or target.energy <= 0 or is_family(self, target)
-                or math.hypot(target.x - self.x, target.y - self.y) > attack_range):
+                or math.hypot(target.x - self.x, target.y - self.y) > reach):
             self.last_action = "ATTACK_MISS"
             return
         taken = min(target.energy, self.attack_damage)

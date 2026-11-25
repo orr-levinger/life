@@ -51,6 +51,18 @@ class TestCosts(unittest.TestCase):
             c = add(w, 5 + 8 * i, 10, size=size)
             self.assertGreater(c.top_speed, 1.1 * c.velocity, size)  # a burst is clearly faster than its normal speed
 
+    def test_one_reach_rules_eating_and_attacking(self):
+        w = make_world(NO_FOOD_ATTACKS)
+        me = add(w, 10, 10, size=1.0)
+        other = add(w, 10.5, 10, size=1.0)  # 0.5 apart: within 3 × (0.2 + 0.2), not within 1 × it
+        piece = food(10, 10.5)
+        self.assertTrue(me.can_reach(piece))
+        w.rules["reach"] = 1.0
+        self.assertFalse(me.can_reach(piece))
+        before = other.energy
+        me.apply_action(("ATTACK", other), w)
+        self.assertEqual((me.last_action, other.energy), ("ATTACK_MISS", before))
+
     def test_top_speed_grows_with_size(self):
         w = make_world()
         tops = [add(w, 5 + 10 * i, 10, size=size).top_speed for i, size in enumerate((0.5, 1.0, 2.0))]

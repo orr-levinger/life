@@ -286,6 +286,23 @@ class TestSaves(unittest.TestCase):
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertNotIn("threat_ratio", loaded.rules)
 
+    def test_a_format_10_save_gets_one_reach(self):
+        world = make_world(seed=3)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            del about["rules"]["reach"]
+            about["format"], about["rules"]["eat_range"], about["rules"]["attack_range"] = 10, 2.5, 2.5
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual(loaded.rules["reach"], 2.5)
+        self.assertFalse({"eat_range", "attack_range"} & set(loaded.rules))
+
     def test_a_format_7_save_gets_room_to_grow(self):
         learner = Learner(MAX_CREATURES, 0)
         world = make_world(seed=11, learner=learner, species="learner")

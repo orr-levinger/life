@@ -111,7 +111,8 @@ def world_view(world: World) -> Dict[str, Any]:
                        "vision_reach": round(c.vision_reach, 2), "hearing": round(c.hearing, 2),
                        "fear_of_death": round(c.fear_of_death, 2), "love_of_babies": round(c.love_of_babies, 2),
                        "learns_from_others": round(c.learns_from_others, 3), "neurons": c.neurons,
-                       "layers": c.layers, "moved": c.moved,
+                       "layers": c.layers, "moved": c.moved, "mutations": c.mutations,
+                       "mutation_size": round(c.mutation_size, 4),
                        "brain": world.learner.brain_size(c.slot) if c.policy == "learner" else None,
                        "learning_speed": world.learner.lr(c.slot) if c.policy == "learner" else None} for c in world.creatures],
         "foods": [{"x": round(f.x, 3), "y": round(f.y, 3), "radius": round(f.radius, 3)} for f in world.foods],
@@ -131,7 +132,7 @@ def world_now(world: World) -> Dict[str, Any]:
 
 
 GENE_TILES = ("size", "neurons", "vision_width", "vision_reach", "hearing", "fear_of_death", "love_of_babies",
-              "learns_from_others")
+              "learns_from_others", "mutations", "mutation_size")
 
 
 def _spread(values: List[float]) -> Optional[List[float]]:

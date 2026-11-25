@@ -164,9 +164,10 @@ class TestSenseGenes(unittest.TestCase):
         self.assertAlmostEqual(before - c.energy, NO_FOOD.step_cost + sprint + w.rules["vision_cost"] * c.sense_area())
 
     def test_a_baby_changes_one_gene(self):
-        genes = ("size", "vision_width", "vision_reach", "hearing", "fear_of_death", "love_of_babies", "learns_from_others")
+        genes = ("size", "vision_width", "vision_reach", "hearing", "fear_of_death", "love_of_babies", "learns_from_others",
+                 "mutation_size", "mutations")
         picked = set()
-        for seed in range(60):
+        for seed in range(120):
             w = make_world(seed=seed)
             crowd(w)
             parent = add(w, 10, 10, energy=80.0, policy="brain", brain=fixed_brain(STAY))
@@ -176,9 +177,35 @@ class TestSenseGenes(unittest.TestCase):
             changed = [g for g in genes if getattr(baby, g) != getattr(parent, g)]
             self.assertLessEqual(len(changed), 1, changed)  # one gene at most (none when learning speed was picked)
             for g in changed:
-                self.assertLessEqual(abs(getattr(baby, g) / getattr(parent, g) - 1.0), 0.05 + 1e-9)
+                if g == "mutations":  # a count: one more or one fewer
+                    self.assertEqual(abs(baby.mutations - parent.mutations), 1)
+                else:
+                    self.assertLessEqual(abs(getattr(baby, g) / getattr(parent, g) - 1.0), parent.mutation_size + 1e-9)
             picked.update(changed)
         self.assertEqual(picked, set(genes))  # every gene is picked sometime
+
+    def test_a_baby_changes_as_many_genes_as_its_parents_gene_says(self):
+        w = make_world(seed=2)
+        crowd(w)
+        parent = add(w, 10, 10, energy=80.0, policy="brain", brain=fixed_brain(STAY))
+        parent.mutations = 3
+        with mock.patch.object(w.rng, "sample", wraps=w.rng.sample) as sample:
+            w.step()
+        self.assertEqual(sample.call_args.args[1], 3)
+
+    def test_a_changed_gene_moves_by_up_to_its_parents_mutation_size(self):
+        moves = []
+        for seed in range(30):
+            w = make_world(seed=seed)
+            crowd(w)
+            parent = add(w, 10, 10, size=1.0, energy=80.0, policy="brain", brain=fixed_brain(STAY))
+            parent.mutation_size = 0.4
+            with mock.patch.object(w.rng, "sample", lambda genes, k: ["size"]):
+                w.step()
+            baby = next(c for c in w.creatures if c.parent_id == parent.id)
+            moves.append(abs(baby.size - 1.0))
+        self.assertLessEqual(max(moves), 0.4 + 1e-9)
+        self.assertGreater(max(moves), 0.1)  # far more than the old 5 %
 
     def test_bigger_brain_costs_more_energy(self):
         learner = Learner(MAX_CREATURES, 0)
@@ -538,6 +565,8 @@ class TestLearnersInWorld(unittest.TestCase):
         self.assertEqual((learner.layers(c.slot), learner.active_neurons(c.slot)), (2, 15))
         self.assertEqual((c.layers, c.neurons), (2, 15))  # what it pays for each step
         self.assertEqual(list(learner.inborn(c.slot).size), [2, 10, 5, 0])  # its babies inherit the change
+        w.edit_genes(c.id, {"mutations": 3, "mutation_size": 0.1})
+        self.assertEqual((c.mutations, c.mutation_size), (3, 0.1))
 
     def test_a_smaller_tank_keeps_its_energy_inside(self):
         w, learner = self.world()

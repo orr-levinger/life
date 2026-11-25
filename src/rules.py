@@ -23,10 +23,10 @@ class Rule:
     high: float
 
 
-def _gene(name: str, words: str, low: float, high: float, limits: tuple, change: float, start: Optional[float] = None,
+def _gene(name: str, words: str, low: float, high: float, limits: tuple, start: Optional[float] = None,
           new: Optional[tuple] = None) -> tuple:
-    """A gene's rules: its lowest and highest (each changeable within `limits`), what a newcomer gets (a start, or a
-    range it draws from) and how much a baby's copy may change (× (1 ± up to this))."""
+    """A gene's rules: its lowest and highest (each changeable within `limits`) and what a newcomer gets (a start, or
+    a range it draws from). How much a baby's copy changes is the parent's own gene, `mutation_size`."""
     rules = [Rule(f"gene.{name}.low", "genes", f"{words}: lowest", low, *limits),
              Rule(f"gene.{name}.high", "genes", f"{words}: highest", high, *limits)]
     if start is not None:
@@ -34,7 +34,6 @@ def _gene(name: str, words: str, low: float, high: float, limits: tuple, change:
     if new is not None:
         rules += [Rule(f"gene.{name}.new_low", "genes", f"{words}: a newcomer gets at least", new[0], *limits),
                   Rule(f"gene.{name}.new_high", "genes", f"{words}: a newcomer gets at most", new[1], *limits)]
-    rules.append(Rule(f"gene.{name}.change", "genes", f"{words}: a baby's copy changes by up to (share)", change, 0.0, 1.0))
     return tuple(rules)
 
 
@@ -99,14 +98,16 @@ RULES = (
     Rule("auto_target", "auto", "Auto aims at this many alive", 64.0, 10.0, 80.0),
     Rule("auto_hunters_at", "auto", "Auto switches hunters on at this difficulty", 24.0, 0.0, 200.0),
     Rule("auto_every", "auto", "Auto looks every this many steps", 500.0, 100.0, 5000.0),
-) + _gene("size", "Size", 0.5, 2.0, (0.1, 5.0), 0.05, new=(0.5, 2.0)) \
-  + _gene("vision_width", "Vision width (degrees)", 30.0, 120.0, (1.0, 120.0), 0.05, new=(30.0, 120.0)) \
-  + _gene("vision_reach", "Vision reach", 1.0, 10.0, (0.1, 20.0), 0.05, new=(1.0, 10.0)) \
-  + _gene("hearing", "Hearing", 0.0, 4.0, (0.0, 20.0), 0.05, new=(0.0, 4.0)) \
-  + _gene("fear", "Fear of death", 0.1, 100.0, (0.0, 1000.0), 0.05, start=10.0) \
-  + _gene("love", "Love of babies", 0.1, 100.0, (0.0, 1000.0), 0.05, start=10.0) \
-  + _gene("learns", "Learning from others", 0.01, 1.0, (0.0, 1.0), 0.05, start=0.5) \
-  + _gene("learning_speed", "Learning speed", 1e-5, 1e-2, (1e-6, 0.1), 0.05, start=3e-4)
+) + _gene("size", "Size", 0.5, 2.0, (0.1, 5.0), new=(0.5, 2.0)) \
+  + _gene("vision_width", "Vision width (degrees)", 30.0, 120.0, (1.0, 120.0), new=(30.0, 120.0)) \
+  + _gene("vision_reach", "Vision reach", 1.0, 10.0, (0.1, 20.0), new=(1.0, 10.0)) \
+  + _gene("hearing", "Hearing", 0.0, 4.0, (0.0, 20.0), new=(0.0, 4.0)) \
+  + _gene("fear", "Fear of death", 0.1, 100.0, (0.0, 1000.0), start=10.0) \
+  + _gene("love", "Love of babies", 0.1, 100.0, (0.0, 1000.0), start=10.0) \
+  + _gene("learns", "Learning from others", 0.01, 1.0, (0.0, 1.0), start=0.5) \
+  + _gene("learning_speed", "Learning speed", 1e-5, 1e-2, (1e-6, 0.1), start=3e-4) \
+  + _gene("mutations", "Genes a baby changes", 1.0, 13.0, (1.0, 13.0), start=1.0) \
+  + _gene("mutation_size", "How much a changed gene changes (share)", 0.01, 0.2, (0.0, 1.0), start=0.05)
 
 RULES += (
     Rule("gene.weights.share", "genes", "Brain weights: the share that changes when they are a baby's changed gene", 0.02,
@@ -210,14 +211,15 @@ GENE_MEANS = {
     "love": "How much having a baby counts as a reward when it learns.",
     "learns": "How much it learns from what it sees others go through (1 = as much as from its own life).",
     "learning_speed": "How fast its brain changes when it learns.",
+    "mutations": "How many of its genes each of its babies changes (the rest are copied exactly). This one moves by one.",
+    "mutation_size": "How much each changed gene of its babies changes: up to this share either way (0.05 = 5 %).",
     "neurons": "How many neurons each brain layer has. Each neuron costs energy every step.",
     "layers": "How many layers its brain has.",
 }
 
 _PART_MEANS = {"low": "No creature's {g} goes below this.", "high": "No creature's {g} goes above this.",
                "start": "A random newcomer starts with this.", "new_low": "A random newcomer gets at least this.",
-               "new_high": "A random newcomer gets at most this.",
-               "change": "When this is the gene a baby changes, it changes by up to this share (0.05 = 5 %)."}
+               "new_high": "A random newcomer gets at most this."}
 
 
 def means(name: str) -> str:
@@ -259,7 +261,7 @@ def check(rules: Rules, name: str, value: float) -> Optional[str]:
 # The genes the owner may change on a picked creature: its attribute and the rules' gene name (its limits).
 EDITABLE_GENES = {"size": "size", "vision_width": "vision_width", "vision_reach": "vision_reach", "hearing": "hearing",
                   "fear_of_death": "fear", "love_of_babies": "love", "learns_from_others": "learns",
-                  "learning_speed": "learning_speed"}
+                  "learning_speed": "learning_speed", "mutations": "mutations", "mutation_size": "mutation_size"}
 
 
 def check_genes(rules: Rules, genes: object) -> Optional[str]:
@@ -274,6 +276,8 @@ def check_genes(rules: Rules, genes: object) -> Optional[str]:
             return f"{name} is not a gene that can be changed"
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             return f"{name} must be a number, not {value!r}"
+        if name == "mutations" and value != int(value):
+            return "mutations must be a whole number"
         low, high = gene_limits(rules, EDITABLE_GENES[name])
         if not low <= value <= high:
             return f"{_BY_NAME[f'gene.{EDITABLE_GENES[name]}.low'].words.split(':')[0]} must be between {low:g} and {high:g}"

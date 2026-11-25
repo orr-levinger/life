@@ -31,10 +31,13 @@ class TestRules(unittest.TestCase):
         w = make_world(seed=2)
         self.assertTrue(all(w.add_newcomer().vision_width <= 120.0 for _ in range(40)))
 
-    def test_a_baby_gene_changes_by_at_most_5_percent(self):
-        changes = {r.name: r.start for r in RULES if r.name.startswith("gene.") and r.name.endswith(".change")}
-        self.assertEqual(set(changes.values()), {0.05})
-        self.assertGreaterEqual(len(changes), 8)
+    def test_how_a_baby_changes_is_in_its_genes(self):
+        names = {r.name: r for r in RULES}
+        self.assertFalse([n for n in names if n.startswith("gene.") and n.endswith(".change")])  # no fixed share left
+        self.assertEqual(names["gene.mutations.start"].start, 1.0)  # one gene a baby, to begin with
+        self.assertEqual(names["gene.mutation_size.start"].start, 0.05)  # by up to 5 %, to begin with
+        self.assertIn("gene.mutations.high", names)
+        self.assertIn("gene.mutation_size.high", names)
 
     def test_every_rule_and_gene_says_what_it_means(self):
         from src.rules import GENE_MEANS, means

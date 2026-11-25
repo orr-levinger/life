@@ -283,21 +283,20 @@ class Learner:
         """A newcomer of the primordial soup: a random network of `layers` layers of `neurons`, learning at `lr`."""
         return self.allocate(NetWeights.random(np_rng, layers, neurons, spread), lr)
 
-    def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str, gene: Optional[str],
+    def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str, genes_changed: List[str],
              rng, rules: Dict[str, float]) -> int:
         """A baby's network: the parent's brain as it is now ("learned") or as the parent was born ("inborn"), with the
-        parent's learning speed × `lr_factor`; when one of its brain genes is the baby's changed gene, that one changes:
+        parent's learning speed × `lr_factor`; each of its brain genes among the baby's changed genes changes:
         "layers" a layer more or fewer, "neurons" a neuron more or fewer, "weights" a few weights a little. Otherwise
         the brain is an exact copy. Returns the baby's slot."""
         genes = self.current(parent_slot) if inherit == "learned" else self.inborn(parent_slot)
-        if gene == "weights":
+        limits = ((rules["gene.neurons.low"], rules["gene.neurons.high"]), (rules["gene.layers.low"], rules["gene.layers.high"]))
+        if "layers" in genes_changed:
+            genes = genes.grown(rng, 1.0, *limits)
+        if "neurons" in genes_changed:
+            genes = genes.grown(rng, 0.0, *limits)
+        if "weights" in genes_changed:
             genes = genes.mutate(np_rng, rules["gene.weights.share"], rules["gene.weights.size"])
-        elif gene == "layers":
-            genes = genes.grown(rng, 1.0, (rules["gene.neurons.low"], rules["gene.neurons.high"]),
-                                (rules["gene.layers.low"], rules["gene.layers.high"]))
-        elif gene == "neurons":
-            genes = genes.grown(rng, 0.0, (rules["gene.neurons.low"], rules["gene.neurons.high"]),
-                                (rules["gene.layers.low"], rules["gene.layers.high"]))
         return self.allocate(genes, self.lr(parent_slot) * lr_factor)
 
     def reshape(self, slot: int, layers: int, neurons: List[int]) -> None:

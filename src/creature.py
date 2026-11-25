@@ -58,6 +58,8 @@ class Creature:
         self.fear_of_death = fear_of_death  # how bad dying feels to its learning: a gene
         self.love_of_babies = love_of_babies  # how good a baby feels to its learning: a gene
         self.learns_from_others = learns_from_others  # how much a lesson from another counts: a gene
+        self.mutations = round(rule("gene.mutations.start").start)  # how many genes each of its babies changes: a gene
+        self.mutation_size = rule("gene.mutation_size.start").start  # how much each of those changes: a gene
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
         self.had_baby_at: Optional[int] = None  # the step it last had a baby (display only)
         self.neurons = 0  # the neurons its brain uses (a learner's, which the world sets); each costs energy

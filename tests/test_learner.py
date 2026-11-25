@@ -105,7 +105,7 @@ class TestBrainGenes(unittest.TestCase):
         for kind in (None, "layers", "neurons", "weights"):
             learner = Learner(2, 0)
             parent = learner.allocate(NetWeights.random(np.random.default_rng(8)), LEARNING_RATE)
-            baby = learner.baby(parent, np.random.default_rng(9), 1.0, "learned", kind, random.Random(3), rules)
+            baby = learner.baby(parent, np.random.default_rng(9), 1.0, "learned", [kind] if kind else [], random.Random(3), rules)
             before, after = learner.current(parent), learner.current(baby)
             sizes = (list(before.size), list(after.size))
             moved = sum(int((a != b).sum()) for a, b in zip(before.arrays()[:-1], after.arrays()[:-1]))

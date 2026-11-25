@@ -641,7 +641,8 @@ const TILES = [
   ["hardest", "Difficulty"], ["steer", "Steers to food"], ["born", "Born"], ["died", "Died"], ["generation", "Generation"],
   ["flee", "Flees bigger"], ["chase", "Chases smaller"], ["size", "Size"], ["brain", "Brain (neurons)"],
   ["vision", "Sees (degrees)"], ["reach", "Sees how far"], ["hearing", "Hears how far"], ["fear", "Fear of death"],
-  ["love", "Love of babies"], ["learns", "Learns from others"],
+  ["love", "Love of babies"], ["learns", "Learns from others"], ["mutations", "Genes a baby changes"],
+  ["mutation_size", "How much each changes"],
 ];
 
 function makeTiles(state) {
@@ -754,6 +755,8 @@ function updateTiles(state) {
   geneTile("fear", "fear_of_death", 1, "", "Fear of death (a bite = 1)");
   geneTile("love", "love_of_babies", 1, "", "Love of babies (a bite = 1)");
   geneTile("learns", "learns_from_others", 2, "", "Learning from others (1 = as much as from its own step)");
+  geneTile("mutations", "mutations", 1, "", "How many genes each baby changes (the rest are copied exactly)");
+  geneTile("mutation_size", "mutation_size", 3, "", "How much each changed gene of a baby changes, either way (0.05 = 5 %)");
   const points = state.samples.filter((x) => x.energy !== null);
   const svg = state.tiles.querySelector("svg");
   if (points.length > 1) {
@@ -1143,7 +1146,8 @@ function drawHeard(g, x, y, unit, distance, color) {  // a sound: a blur where i
 // The genes the owner may change on the followed creature (as the world names them), with how many digits to show.
 const GENE_BOXES = [["size", "Size", 2], ["vision_width", "Vision width (degrees)", 0], ["vision_reach", "Sees how far", 2],
   ["hearing", "Hears how far", 2], ["fear_of_death", "Fear of death", 2], ["love_of_babies", "Love of babies", 2],
-  ["learns_from_others", "Learns from others", 2], ["learning_speed", "Learning speed", 6]];
+  ["learns_from_others", "Learns from others", 2], ["learning_speed", "Learning speed", 6],
+  ["mutations", "Genes a baby changes", 0], ["mutation_size", "How much each changes (share)", 3]];
 
 function drawGenes(c) {  // the followed creature's genes as boxes, filled once when the panel opens
   const box = document.querySelector("#genes-panel .gene-boxes");
@@ -1542,7 +1546,8 @@ const WORKS_OUT = {
   move_cost: (v, s) => `pays ${(v * s).toFixed(3)} a unit moved`,
 };
 const GENE_NOW = { size: "size", vision_width: "vision_width", vision_reach: "vision_reach", hearing: "hearing",
-                   fear: "fear_of_death", love: "love_of_babies", learns: "learns_from_others", neurons: "neurons" };
+                   fear: "fear_of_death", love: "love_of_babies", learns: "learns_from_others", neurons: "neurons",
+                   mutations: "mutations", mutation_size: "mutation_size" };
 let ruleNow = { sizes: null, genes: null, values: {} };  // the creatures alive now and the rules' values, for the examples
 
 function example(rule) {  // the line under a rule's meaning: what it is for the smallest and the biggest creature now
@@ -1566,14 +1571,14 @@ function ruleRow(rule) {
     <td>${numberText(rule.start)}</td><td><button class="act" type="button" data-reset="${rule.name}">Reset</button></td></tr>`;
 }
 
-function geneRows(rules, means) {  // one row a gene: what it is, lowest – highest, what a newcomer gets, a baby's change
+function geneRows(rules, means) {  // one row a gene: what it is, lowest – highest, what a newcomer gets
   const genes = [...new Set(rules.map((r) => r.name.split(".")[1]))];
   return genes.map((gene) => {
     const own = (part) => rules.find((r) => r.name === `gene.${gene}.${part}`);
     const box = (part) => own(part) ? `${ruleInput(own(part))}` : "";
     const newcomer = own("start") ? box("start") : `${box("new_low")} – ${box("new_high")}`;
     return `<tr><td class="name">${own("low").words.split(":")[0]}</td>${meaningCell(means[gene] || "", `gene.${gene}`, geneExample(gene))}
-      <td>${box("low")} – ${box("high")}</td><td>${newcomer}</td><td>${box("change")}<span class="error"></span></td></tr>`;
+      <td>${box("low")} – ${box("high")}</td><td>${newcomer}<span class="error"></span></td></tr>`;
   }).join("");
 }
 
@@ -1606,7 +1611,7 @@ async function drawRules() {
   page.innerHTML = answer.groups.map(({ name, title }) => {
     const mine = rules.filter((r) => (r.knob ? "costs" : r.group) === name);
     const genes = name === "genes", geneRules = mine.filter((r) => r.name.split(".").length === 3 && !r.name.startsWith("gene.weights"));
-    const head = genes ? "<tr><th>Gene</th><th>What it means</th><th>Lowest – highest</th><th>Newcomer gets</th><th>Baby change (share)</th></tr>"
+    const head = genes ? "<tr><th>Gene</th><th>What it means</th><th>Lowest – highest</th><th>Newcomer gets</th></tr>"
                        : `<tr><th>${name === "costs" ? "Cost" : "Rule"}</th><th>What it means</th><th>Value</th><th>Allowed</th><th>Start</th><th></th></tr>`;
     const body = genes ? geneRows(geneRules, answer.genes) + mine.filter((r) => r.name.startsWith("gene.weights")).map(ruleRow).join("")
                        : mine.map(ruleRow).join("");

@@ -28,11 +28,12 @@ from .rules import ROOM_SLOTS, RULES, rule, starting_rules
 from .settings import TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 11  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 12  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
-# a rule, the three brain genes (2026-11-24); 10: no rule decides who counts as bigger (2026-11-25); 11: one reach for eating and attacking
+# a rule, the three brain genes (2026-11-24); 10: no rule decides who counts as bigger (2026-11-25); 11: one reach for eating and attacking; 12: how
+# many genes a baby changes and by how much are genes
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -87,7 +88,8 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                        "earned": c.earned, "spent": c.spent, "vision_width": c.vision_width,
                        "vision_reach": c.vision_reach, "hearing": c.hearing, "facing": list(c.facing),
                        "fear_of_death": c.fear_of_death, "love_of_babies": c.love_of_babies,
-                       "learns_from_others": c.learns_from_others,
+                       "learns_from_others": c.learns_from_others, "mutations": c.mutations,
+                       "mutation_size": c.mutation_size,
                        "hurt": None if c.hurt is None else list(c.hurt)}
                       for c, brain in zip(world.creatures, brain_of)],
         "foods": [{"x": f.x, "y": f.y, "energy": f.energy, "remaining_duration": f.remaining_duration,
@@ -137,6 +139,8 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         about = _from_format_9(about)
     if about.get("format") == 10:
         about = _from_format_10(about)
+    if about.get("format") == 11:
+        about = _from_format_11(about)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -239,6 +243,17 @@ def _from_format_10(about: Dict[str, Any]) -> Dict[str, Any]:
     return {**about, "format": 11, "rules": {**rules, "reach": old["eat_range"] if "eat_range" in old else old["reach"]}}
 
 
+def _from_format_11(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 11 save changed one gene a baby by up to a fixed share: every creature gets the starting mutation genes
+    (one gene, 5 %), the rules gain their limits and the fixed shares leave."""
+    new = [r.name for r in RULES if r.name.startswith(("gene.mutations.", "gene.mutation_size."))]
+    rules = {k: v for k, v in about["rules"].items() if not (k.startswith("gene.") and k.endswith(".change"))}
+    rules.update({name: rule(name).start for name in new})
+    count, size = round(rule("gene.mutations.start").start), rule("gene.mutation_size.start").start
+    creatures = [{**c, "mutations": count, "mutation_size": size} for c in about["creatures"]]
+    return {**about, "format": 12, "rules": rules, "creatures": creatures}
+
+
 def _room_to_grow(arrays: Dict[str, np.ndarray]) -> None:
     """A format 7 learner's brain was 1 layer of 32 with no room: it keeps those 32, with room for 64 beside them and
     for 2 more layers (all 0, unused), and its size genes say [1, 32, 0, 0]."""
@@ -322,6 +337,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.hearing, creature.facing = saved["hearing"], tuple(saved["facing"])
         creature.fear_of_death, creature.love_of_babies = saved["fear_of_death"], saved["love_of_babies"]
         creature.learns_from_others = saved["learns_from_others"]
+        creature.mutations, creature.mutation_size = saved["mutations"], saved["mutation_size"]
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])
         world.add_creature(creature)
     world.foods = [_food(f) for f in about["foods"]]

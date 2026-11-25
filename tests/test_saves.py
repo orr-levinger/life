@@ -303,6 +303,27 @@ class TestSaves(unittest.TestCase):
         self.assertEqual(loaded.rules["reach"], 2.5)
         self.assertFalse({"eat_range", "attack_range"} & set(loaded.rules))
 
+    def test_a_format_11_save_gets_the_mutation_genes(self):
+        world = make_world(seed=3)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 11
+            for c in about["creatures"]:
+                del c["mutations"], c["mutation_size"]
+            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith(("gene.mutations", "gene.mutation_size"))}
+            about["rules"]["gene.size.change"] = 0.05
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({(c.mutations, c.mutation_size) for c in loaded.creatures}, {(1, 0.05)})
+        self.assertNotIn("gene.size.change", loaded.rules)
+        self.assertEqual(loaded.rules["gene.mutations.start"], 1.0)
+
     def test_a_format_7_save_gets_room_to_grow(self):
         learner = Learner(MAX_CREATURES, 0)
         world = make_world(seed=11, learner=learner, species="learner")

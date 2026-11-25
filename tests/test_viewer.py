@@ -533,6 +533,12 @@ class TestControlRoom(unittest.TestCase):
         for words in ('send("/next-rules"', "the rules the next new world starts on"):
             self.assertIn(words, page)
 
+    def test_page_can_hide_the_vision_cones(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('id="show-cones"', "camera.cones"):
+            self.assertIn(words, page)
+
     def test_page_explains_the_creature_look(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

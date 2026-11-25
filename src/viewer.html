@@ -165,6 +165,7 @@
   <div class="top">
     <b id="watch-title"></b><span id="watch-where">waiting for the first picture…</span>
     <label>steps a second <input id="watch-speed" type="range" min="1" max="30" step="1" value="10"><output id="watch-speed-shown">10</output></label>
+    <button id="show-cones" class="act" type="button" aria-pressed="true">Vision cones: on</button>
     <span class="zoom"><button id="zoom-out" class="act" type="button" aria-label="Zoom out">−</button><output id="zoom-shown">1×</output><button id="zoom-in" class="act" type="button" aria-label="Zoom in">+</button></span>
     <span id="follow-note" hidden>following <b id="follow-who"></b> <button id="follow-pov" class="act" type="button" aria-pressed="false" data-tip="See only what it sees; what it hears shows as a blur with its distance">POV</button> <button id="follow-genes" class="act" type="button" aria-expanded="false">Genes</button> <button id="follow-stop" class="act" type="button">Stop following</button></span>
     <button id="watch-out" class="act" type="button">Jump out</button>
@@ -1072,16 +1073,18 @@ function drawCreature(g, x, y, r, c, wanderers, line, color) {
 
 // What a creature senses: its vision cone, a faint wedge of its body colour where it faces, and its hearing, a faint
 // dotted circle all around. `strong` for the creature pointed at (and the legend).
-function drawSenses(g, x, y, c, unit, strong, color) {
+function drawSenses(g, x, y, c, unit, strong, color, cone = camera.cones) {
   if (c.vision_width === undefined) return;  // a picture from a world still on code from before senses were genes
   const [fx, fy] = c.facing, mid = Math.atan2(fy, fx), half = c.vision_width / 360 * Math.PI;
   g.save();
   g.globalAlpha = strong ? 0.16 : 0.06;
   g.fillStyle = hungerColour(c.energy);
-  g.beginPath();
-  if (c.vision_width >= 360) g.arc(x, y, c.vision_reach * unit, 0, 2 * Math.PI);
-  else { g.moveTo(x, y); g.arc(x, y, c.vision_reach * unit, mid - half, mid + half); g.closePath(); }
-  g.fill();
+  if (cone) {  // the cone can be hidden with the live view's button
+    g.beginPath();
+    if (c.vision_width >= 360) g.arc(x, y, c.vision_reach * unit, 0, 2 * Math.PI);
+    else { g.moveTo(x, y); g.arc(x, y, c.vision_reach * unit, mid - half, mid + half); g.closePath(); }
+    g.fill();
+  }
   if (c.hearing > 0) {
     g.globalAlpha = strong ? 0.6 : 0.22;
     g.strokeStyle = color("--muted");
@@ -1094,7 +1097,8 @@ function drawSenses(g, x, y, c, unit, strong, color) {
 
 // The camera: how far it is zoomed, which point of the world is in the middle, and the creature it follows (if any).
 const ZOOMS = { least: 1, most: 12, follow: 4, step: 1.25 };
-const camera = { zoom: 1, x: null, y: null, follow: null, pov: false };
+const camera = { zoom: 1, x: null, y: null, follow: null, pov: false, cones: true };
+try { camera.cones = localStorage.getItem("life.cones") !== "off"; } catch (error) { /* no storage: shown */ }
 function zoomBy(factor) {
   camera.zoom = Math.max(ZOOMS.least, Math.min(ZOOMS.most, camera.zoom * factor));
   document.getElementById("zoom-shown").textContent = `${camera.zoom < 10 ? camera.zoom.toFixed(1) : Math.round(camera.zoom)}×`;
@@ -1261,7 +1265,7 @@ function paint() {
   const shown = sensed ? placed.filter((p) => p === followed || sensed.sees.has(p.c.id)) : placed;
   if (sensed) {  // what it cannot sense is not drawn; the world around is dimmed
     g.fillStyle = "rgba(0, 0, 0, 0.35)"; g.fillRect(0, 0, worldW * unit, worldH * unit);
-    drawSenses(g, followed.x, followed.y, followed.c, unit, true, color);
+    drawSenses(g, followed.x, followed.y, followed.c, unit, true, color, true);  // its own cone always shows in POV
   } else {
     for (const { c, x, y } of placed) drawSenses(g, x, y, c, unit, c.id === watching.hover, color);  // under everything
   }
@@ -1352,6 +1356,15 @@ watchCanvas.addEventListener("click", (event) => {  // a creature: follow it; em
 document.getElementById("zoom-in").addEventListener("click", () => zoomBy(ZOOMS.step));
 document.getElementById("zoom-out").addEventListener("click", () => zoomBy(1 / ZOOMS.step));
 document.getElementById("follow-stop").addEventListener("click", () => follow(null));
+function showCones(on) {
+  camera.cones = on;
+  const button = document.getElementById("show-cones");
+  button.setAttribute("aria-pressed", String(on));
+  button.textContent = on ? "Vision cones: on" : "Vision cones: off";
+  try { localStorage.setItem("life.cones", on ? "on" : "off"); } catch (error) { /* no storage: not remembered */ }
+}
+showCones(camera.cones);
+document.getElementById("show-cones").addEventListener("click", () => showCones(!camera.cones));
 document.getElementById("follow-pov").addEventListener("click", () => pov(!camera.pov));
 document.getElementById("follow-genes").addEventListener("click", () => showGenes(document.getElementById("genes-panel").hidden));
 document.getElementById("genes-panel").addEventListener("submit", (event) => {  // the boxes, sent as the creature's genes

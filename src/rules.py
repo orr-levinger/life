@@ -256,5 +256,41 @@ def check(rules: Rules, name: str, value: float) -> Optional[str]:
     return None
 
 
+# The genes the owner may change on a picked creature: its attribute and the rules' gene name (its limits).
+EDITABLE_GENES = {"size": "size", "vision_width": "vision_width", "vision_reach": "vision_reach", "hearing": "hearing",
+                  "fear_of_death": "fear", "love_of_babies": "love", "learns_from_others": "learns",
+                  "learning_speed": "learning_speed"}
+
+
+def check_genes(rules: Rules, genes: object) -> Optional[str]:
+    """Why `genes` cannot be given to a creature (an unknown gene, not a number, outside its limits, a brain whose
+    neuron counts are not one for each of its layers), in plain words; None when they can."""
+    if not isinstance(genes, dict) or not genes:
+        return "genes must name at least one gene and its new value"
+    for name, value in genes.items():
+        if name in ("layers", "neurons"):
+            continue
+        if name not in EDITABLE_GENES:
+            return f"{name} is not a gene that can be changed"
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            return f"{name} must be a number, not {value!r}"
+        low, high = gene_limits(rules, EDITABLE_GENES[name])
+        if not low <= value <= high:
+            return f"{_BY_NAME[f'gene.{EDITABLE_GENES[name]}.low'].words.split(':')[0]} must be between {low:g} and {high:g}"
+    if ("layers" in genes) != ("neurons" in genes):
+        return "a brain change names both its layers and its neurons in each layer"
+    if "layers" in genes:
+        layers, neurons = genes["layers"], genes["neurons"]
+        low, high = gene_limits(rules, "layers")
+        if isinstance(layers, bool) or not isinstance(layers, int) or not low <= layers <= high:
+            return f"layers must be a whole number between {low:g} and {high:g}"
+        if not isinstance(neurons, list) or len(neurons) != layers:
+            return "neurons must give one neuron count for each layer"
+        low, high = gene_limits(rules, "neurons")
+        if any(isinstance(n, bool) or not isinstance(n, int) or not low <= n <= high for n in neurons):
+            return f"each layer's neurons must be a whole number between {low:g} and {high:g}"
+    return None
+
+
 def gene_limits(rules: Rules, gene: str) -> tuple:
     return rules[f"gene.{gene}.low"], rules[f"gene.{gene}.high"]

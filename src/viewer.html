@@ -58,6 +58,9 @@
   .knob label { font-size: 12px; }
   .knob output { font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
   .knob input[type=range] { grid-column: 1 / -1; width: 100%; margin: 2px 0 0; accent-color: var(--ink); }
+  #genes-panel { display: grid; gap: 8px; margin: 8px 0; } #genes-panel .gene-boxes { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+  #genes-panel label { display: grid; font-size: 12px; color: var(--muted); }
+  #genes-panel input { width: 110px; background: var(--page); color: var(--ink); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
   .knob-group { border-top: 1px solid var(--grid); margin-top: 8px; padding-top: 4px; }
   .knob-group h4 { margin: 2px 0 0; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   .knob small { grid-column: 1 / -1; color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; }
@@ -162,9 +165,13 @@
     <b id="watch-title"></b><span id="watch-where">waiting for the first picture…</span>
     <label>steps a second <input id="watch-speed" type="range" min="1" max="30" step="1" value="10"><output id="watch-speed-shown">10</output></label>
     <span class="zoom"><button id="zoom-out" class="act" type="button" aria-label="Zoom out">−</button><output id="zoom-shown">1×</output><button id="zoom-in" class="act" type="button" aria-label="Zoom in">+</button></span>
-    <span id="follow-note" hidden>following <b id="follow-who"></b> <button id="follow-pov" class="act" type="button" aria-pressed="false" data-tip="See only what it sees; what it hears shows as a blur with its distance">POV</button> <button id="follow-stop" class="act" type="button">Stop following</button></span>
+    <span id="follow-note" hidden>following <b id="follow-who"></b> <button id="follow-pov" class="act" type="button" aria-pressed="false" data-tip="See only what it sees; what it hears shows as a blur with its distance">POV</button> <button id="follow-genes" class="act" type="button" aria-expanded="false">Genes</button> <button id="follow-stop" class="act" type="button">Stop following</button></span>
     <button id="watch-out" class="act" type="button">Jump out</button>
   </div>
+  <form id="genes-panel" hidden>
+    <div class="gene-boxes"></div>
+    <button class="act" type="submit">Apply to this creature</button> <span class="error" id="genes-said"></span>
+  </form>
   <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
   <canvas id="watch-legend" height="120" aria-label="What a creature's look means: point at a creature in the world to see its numbers"></canvas>
 </section>
@@ -1091,6 +1098,7 @@ function zoomBy(factor) {
 function follow(id, name) {
   camera.follow = id;
   if (id === null) pov(false);
+  showGenes(false);
   document.getElementById("follow-note").hidden = id === null;
   if (id !== null) { document.getElementById("follow-who").textContent = name; if (camera.zoom < ZOOMS.follow) zoomBy(ZOOMS.follow / camera.zoom); }
 }
@@ -1130,6 +1138,35 @@ function drawHeard(g, x, y, unit, distance, color) {  // a sound: a blur where i
   g.fillStyle = color("--muted"); g.textAlign = "center";
   g.font = `${12 * devicePixelRatio / camera.zoom}px system-ui, sans-serif`;
   g.fillText(distance.toFixed(1), x, y - r - 2 * devicePixelRatio / camera.zoom);
+}
+
+// The genes the owner may change on the followed creature (as the world names them), with how many digits to show.
+const GENE_BOXES = [["size", "Size", 2], ["vision_width", "Vision width (degrees)", 0], ["vision_reach", "Sees how far", 2],
+  ["hearing", "Hears how far", 2], ["fear_of_death", "Fear of death", 2], ["love_of_babies", "Love of babies", 2],
+  ["learns_from_others", "Learns from others", 2], ["learning_speed", "Learning speed", 6]];
+
+function drawGenes(c) {  // the followed creature's genes as boxes, filled once when the panel opens
+  const box = document.querySelector("#genes-panel .gene-boxes");
+  const input = (name, label, value) => `<label>${label}<input type="number" step="any" name="${name}" value="${value}"></label>`;
+  let html = GENE_BOXES.map(([name, label, digits]) => input(name, label, Number(c[name]).toFixed(digits))).join("");
+  if (c.brain) {
+    html += input("layers", "Brain layers", c.brain.length);
+    html += [0, 1, 2].map((i) => `<label data-layer="${i}"${i < c.brain.length ? "" : " hidden"}>Neurons in layer ${i + 1}
+      <input type="number" step="1" name="neurons${i}" value="${c.brain[i] ?? c.brain[0]}"></label>`).join("");
+  }
+  box.innerHTML = html;
+  const layers = box.querySelector('[name="layers"]');
+  if (layers) layers.addEventListener("input", () =>
+    box.querySelectorAll("[data-layer]").forEach((l) => { l.hidden = +l.dataset.layer >= +layers.value; }));
+  document.getElementById("genes-said").textContent = "";
+}
+
+function showGenes(open) {
+  const panel = document.getElementById("genes-panel"), button = document.getElementById("follow-genes");
+  const c = open && watching && watching.cur ? watching.cur.creatures.find((x) => x.id === camera.follow) : null;
+  panel.hidden = !c;
+  button.setAttribute("aria-expanded", String(!!c));
+  if (c) drawGenes(c);
 }
 
 function paint() {
@@ -1245,6 +1282,18 @@ document.getElementById("zoom-in").addEventListener("click", () => zoomBy(ZOOMS.
 document.getElementById("zoom-out").addEventListener("click", () => zoomBy(1 / ZOOMS.step));
 document.getElementById("follow-stop").addEventListener("click", () => follow(null));
 document.getElementById("follow-pov").addEventListener("click", () => pov(!camera.pov));
+document.getElementById("follow-genes").addEventListener("click", () => showGenes(document.getElementById("genes-panel").hidden));
+document.getElementById("genes-panel").addEventListener("submit", (event) => {  // the boxes, sent as the creature's genes
+  event.preventDefault();
+  const form = event.target, said = document.getElementById("genes-said"), genes = {};
+  for (const [name] of GENE_BOXES) genes[name] = Number(form.elements[name].value);
+  if (form.elements.layers) {
+    genes.layers = Number(form.elements.layers.value);
+    genes.neurons = [...Array(genes.layers).keys()].map((i) => Number(form.elements[`neurons${i}`].value));
+  }
+  send("/control", { run: watching.name, edit: { id: camera.follow, genes } })
+    .then(() => say(said, "Sent: it changes within a moment.", ""), (problem) => say(said, problem.message, "refused"));
+});
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && camera.follow !== null) follow(null); });
 
 document.getElementById("watch-canvas").addEventListener("mousemove", (event) => {  // point at a creature: its numbers

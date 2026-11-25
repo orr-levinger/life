@@ -24,6 +24,12 @@ class TestControl(unittest.TestCase):
         self.assertEqual(stopped, Control("auto", None, True))
         self.assertEqual(leftovers, ["control.json"])  # the temporary file was renamed into place
 
+    def test_a_gene_change_round_trips(self):
+        change = {"seq": 7, "id": 42, "genes": {"size": 1.2, "layers": 2, "neurons": [8, 4]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            write_control(Path(tmp), Control("auto", None, False, edit=change))
+            self.assertEqual(read_control(Path(tmp)).edit, change)
+
     def test_rule_changes_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:
             write_control(Path(tmp), Control("auto", None, False, rules={"eat_miss": 0.5, "tank": 120.0}))

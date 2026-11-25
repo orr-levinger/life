@@ -163,6 +163,25 @@ class TestControlRoom(unittest.TestCase):
         write_control(self.root / name, Control("auto", None, False))
         return name
 
+    def test_a_gene_change_is_written_for_the_world(self):
+        name = self.running_world()
+        genes = {"size": 1.2, "vision_width": 90.0, "layers": 2, "neurons": [8, 4], "learning_speed": 0.001}
+        status, _ = self.server.post("/control", {"run": name, "edit": {"id": 42, "genes": genes}})
+        self.assertEqual(status, 200)
+        change = read_control(self.root / name).edit
+        self.assertEqual((change["id"], change["genes"]), (42, genes))
+        self.assertIsInstance(change["seq"], int)
+        self.assertEqual(self.server.post("/control", {"run": name, "paused": True})[0], 200)
+        self.assertEqual(read_control(self.root / name).edit, change)  # another change keeps it
+
+    def test_a_gene_change_outside_its_limits_is_refused(self):
+        name = self.running_world()
+        for genes, words in (({"size": 9.0}, "Size"), ({"layers": 2, "neurons": [8]}, "one neuron count for each layer"),
+                             ({"neurons": [8]}, "layers"), ({"wings": 2.0}, "wings")):
+            status, answer = self.server.post("/control", {"run": name, "edit": {"id": 42, "genes": genes}})
+            self.assertEqual(status, 400, genes)
+            self.assertIn(words, answer["error"])
+
     def test_rules_endpoint_lists_every_rule(self):
         from src.rules import RULES
         name = self.running_world()
@@ -482,6 +501,12 @@ class TestControlRoom(unittest.TestCase):
             page = response.read().decode("utf-8")
         for words in ("Cost of seeing", "Cost of hearing", '"vision_cost"', '"hearing_cost"', "sense-cost",
                       '["Costs", ["move_cost", "step_cost", "vision_cost", "hearing_cost"]]'):
+            self.assertIn(words, page)
+
+    def test_page_lets_the_owner_change_a_creatures_genes(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('id="follow-genes"', "function drawGenes(", "edit: {"):
             self.assertIn(words, page)
 
     def test_page_explains_the_creature_look(self):

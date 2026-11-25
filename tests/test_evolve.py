@@ -11,7 +11,7 @@ from unittest import mock
 from src import control as control_module
 from src.control import Control, read_control, write_control
 from src.dial import Dial, rates, value, with_value
-from src.evolve import parse_args, run
+from src.evolve import _Knobs, parse_args, run
 from src.scoreboard import ROW_KEYS
 from src.settings import START
 from src.rules import rule, starting_rules
@@ -288,7 +288,7 @@ class TestEvolve(unittest.TestCase):
         self.assertEqual(set(creature), {"id", "x", "y", "radius", "energy", "heading", "did", "generation", "age",
                                          "lifespan", "earned", "spent", "size", "facing", "vision_width",
                                          "vision_reach", "hearing", "fear_of_death", "love_of_babies",
-                                         "learns_from_others", "neurons", "layers", "moved",
+                                         "learns_from_others", "neurons", "layers", "moved", "brain",
                                          "learning_speed", "intent", "target", "baby"})
         self.assertTrue(0.0 <= creature["energy"] <= 1.0)
         self.assertTrue(0.0 <= creature["x"] <= 50 and 0.0 <= creature["y"] <= 30)
@@ -436,3 +436,15 @@ class TestEvolve(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestGeneChanges(unittest.TestCase):
+    def test_a_gene_change_reaches_the_world_once(self):
+        world, dial = mock.Mock(), mock.Mock()
+        change = {"seq": 3, "id": 9, "genes": {"size": 1.1}}
+        knobs = _Knobs(Control("auto", None, False))
+        for _ in range(3):  # the control file is read again and again
+            knobs.take(Control("auto", None, False, edit=change), dial, world)
+        world.edit_genes.assert_called_once_with(9, {"size": 1.1})
+        knobs.take(Control("auto", None, False, edit={**change, "seq": 4}), dial, world)
+        self.assertEqual(world.edit_genes.call_count, 2)  # a new change, even of the same genes

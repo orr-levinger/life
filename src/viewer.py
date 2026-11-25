@@ -27,7 +27,7 @@ from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run
 from .dial import KNOBS, value
 from .evolve import SPECIES
 from .saves import save_header, save_path, saves_of
-from .rules import GENE_MEANS, GROUPS, RULES, check, means, starting_rules
+from .rules import GENE_MEANS, GROUPS, RULES, check, check_genes, means, starting_rules
 from .scoreboard import OLDER_LAYOUTS, ROW_KEYS, read_rows
 from .settings import START, Settings
 
@@ -251,12 +251,21 @@ class Controls:
         rules = current.rules
         if "rules" in body:
             rules = self._rule_changes(folder, body["rules"], current.rules)
+        edit = current.edit
+        if "edit" in body:
+            given = body["edit"]
+            if not isinstance(given, dict) or isinstance(given.get("id"), bool) or not isinstance(given.get("id"), int):
+                raise Refused(400, "edit must name a creature's id and its genes")
+            problem = check_genes(self._world_rules(folder), given.get("genes"))
+            if problem:
+                raise Refused(400, problem)
+            edit = {"seq": time.time_ns(), "id": given["id"], "genes": given["genes"]}
         update = body.get("update", False)
         if not isinstance(update, bool):
             raise Refused(400, "update must be true or false")
         if update:  # the world saves and ends; then it goes on from that save with today's code, in the same run
             stop, paused = True, False
-        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused, hunters, rules))
+        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused, hunters, rules, edit))
         if update:
             threading.Thread(target=self._hand_over, args=(folder,), daemon=True).start()
         return {"mode": mode, "settings": None if settings is None else knob_values(settings), "stop": stop,

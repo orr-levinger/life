@@ -300,10 +300,40 @@ class Learner:
                                 (rules["gene.layers.low"], rules["gene.layers.high"]))
         return self.allocate(genes, self.lr(parent_slot) * lr_factor)
 
+    def reshape(self, slot: int, layers: int, neurons: List[int]) -> None:
+        """The owner's change to a living brain's size: `layers` layers of `neurons` each, its weights kept where they
+        stay (a new neuron or layer says nothing at first); its inborn genes change the same way, so its babies inherit
+        it."""
+        def resized(weights: NetWeights) -> NetWeights:
+            while int(weights.size[0]) < layers:
+                weights = weights.with_layer(True)
+            while int(weights.size[0]) > layers:
+                weights = weights.with_layer(False)
+            for layer, count in enumerate(neurons):
+                while int(weights.size[1 + layer]) < count:
+                    weights = weights.with_neuron(layer, True)
+                while int(weights.size[1 + layer]) > count:
+                    weights = weights.with_neuron(layer, False)
+            return weights
+        weights = resized(self.current(slot))
+        for name in SHAPES:
+            self._params[name][slot].assign(tf.cast(getattr(weights, name), tf.float32))
+        self._size[slot] = weights.size
+        self._inborn[slot] = resized(self.inborn(slot))
+
+    def set_lr(self, slot: int, lr: float) -> None:
+        """The owner's change to a living creature's learning speed."""
+        self._lr[slot] = lr
+
     def active_neurons(self, slot: int) -> int:
         """How many neurons a slot's brain uses: the neurons of each layer it has."""
         layers = int(self._size[slot][0])
         return int(self._size[slot][1:1 + layers].sum())
+
+    def brain_size(self, slot: int) -> List[int]:
+        """Its neurons in each layer it has."""
+        layers = int(self._size[slot][0])
+        return [int(n) for n in self._size[slot][1:1 + layers]]
 
     def layers(self, slot: int) -> int:
         return int(self._size[slot][0])

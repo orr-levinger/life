@@ -523,6 +523,36 @@ class TestLearnersInWorld(unittest.TestCase):
         slot = learner.allocate(NetWeights.random(w.np_rng), LEARNING_RATE)
         return add(w, x, y, energy=energy, policy="learner", slot=slot)
 
+    def test_the_owner_changes_a_creatures_genes(self):
+        w, learner = self.world()
+        c = self.born(w, learner, 10, 10)
+        w.count_neurons()
+        w.edit_genes(c.id, {"size": 1.5, "vision_width": 60.0, "vision_reach": 4.0, "hearing": 2.0, "fear_of_death": 3.0,
+                            "love_of_babies": 4.0, "learns_from_others": 0.2, "learning_speed": 0.001, "layers": 2,
+                            "neurons": [10, 5]})
+        self.assertEqual((c.size, c.vision_width, c.vision_reach, c.hearing), (1.5, 60.0, 4.0, 2.0))
+        self.assertEqual((c.fear_of_death, c.love_of_babies, c.learns_from_others), (3.0, 4.0, 0.2))
+        self.assertAlmostEqual(c.radius, 1.5 * w.rules["body_radius"])  # its body follows its size
+        self.assertAlmostEqual(c.max_energy, 1.5 * w.rules["tank"])
+        self.assertAlmostEqual(learner.lr(c.slot), 0.001)
+        self.assertEqual((learner.layers(c.slot), learner.active_neurons(c.slot)), (2, 15))
+        self.assertEqual((c.layers, c.neurons), (2, 15))  # what it pays for each step
+        self.assertEqual(list(learner.inborn(c.slot).size), [2, 10, 5, 0])  # its babies inherit the change
+
+    def test_a_smaller_tank_keeps_its_energy_inside(self):
+        w, learner = self.world()
+        c = self.born(w, learner, 10, 10, energy=90.0)
+        c.size, c.max_energy = 1.0, w.rules["tank"]
+        c.energy = 90.0
+        w.edit_genes(c.id, {"size": 0.5})
+        self.assertAlmostEqual(c.energy, 0.5 * w.rules["tank"])
+
+    def test_a_gene_change_for_a_creature_gone_changes_nothing(self):
+        w, learner = self.world()
+        c = self.born(w, learner, 10, 10)
+        w.edit_genes(c.id + 1000, {"size": 1.9})
+        self.assertNotEqual(c.size, 1.9)
+
     def test_newcomer_gets_a_slot_and_a_random_network(self):
         w, learner = self.world()
         first, second = w.add_newcomer(), w.add_newcomer()

@@ -112,6 +112,7 @@ def world_view(world: World) -> Dict[str, Any]:
                        "fear_of_death": round(c.fear_of_death, 2), "love_of_babies": round(c.love_of_babies, 2),
                        "learns_from_others": round(c.learns_from_others, 3), "neurons": c.neurons,
                        "layers": c.layers, "moved": c.moved,
+                       "brain": world.learner.brain_size(c.slot) if c.policy == "learner" else None,
                        "learning_speed": world.learner.lr(c.slot) if c.policy == "learner" else None} for c in world.creatures],
         "foods": [{"x": round(f.x, 3), "y": round(f.y, 3), "radius": round(f.radius, 3)} for f in world.foods],
     }
@@ -152,6 +153,7 @@ class _Knobs:
         self._applied = None
         self._applied_hunters = None
         self._applied_rules = None
+        self._applied_edit = None
 
     def take(self, control: Control, dial: Dial, world: World) -> bool:
         """Takes the newest control: the owner's rule changes reach the world at once (in either mode); returns whether
@@ -160,6 +162,9 @@ class _Knobs:
         if control.rules is not None and control.rules != self._applied_rules:
             self._applied_rules = dict(control.rules)
             world.change_rules(control.rules)
+        if control.edit is not None and control.edit["seq"] != self._applied_edit:
+            self._applied_edit = control.edit["seq"]  # each change once (applying it again would change nothing)
+            world.edit_genes(control.edit["id"], control.edit["genes"])
         if control.mode != "manual" or control.settings is None:
             self._applied = None  # back in Auto: the same settings sent again later are a new choice
             if control.mode == "auto" and control.hunters is not None and control.hunters != self._applied_hunters:

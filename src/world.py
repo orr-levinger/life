@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 import random
 from collections import Counter
-from typing import TYPE_CHECKING, Callable, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
 
 import numpy as np
 
@@ -15,7 +15,7 @@ from .creature import Creature
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, perceived, sense_all
-from .rules import Rules, gene_limits, starting_rules
+from .rules import EDITABLE_GENES, Rules, gene_limits, starting_rules
 from .settings import Settings
 
 if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to it
@@ -89,6 +89,26 @@ class World:
         self.rules.update(changes)
         for thing in list(self.creatures) + list(self.foods):
             thing.x, thing.y = min(thing.x, self.width), min(thing.y, self.height)
+
+    def edit_genes(self, creature_id: int, genes: Dict[str, Any]) -> None:
+        """The owner's change to a living creature's genes (checked by rules.check_genes); a creature gone is left be.
+        Its body follows a new size; a new brain size is its learner's."""
+        creature = next((c for c in self.creatures if c.id == creature_id), None)
+        if creature is None:
+            return
+        for name, value in genes.items():
+            if name == "learning_speed":
+                if creature.policy == "learner":
+                    self.learner.set_lr(creature.slot, float(value))
+            elif name in EDITABLE_GENES:
+                setattr(creature, name, float(value))
+        if "size" in genes:
+            creature.max_energy = creature.size * self.rules["tank"]
+            creature.radius = creature.size * self.rules["body_radius"]
+            creature.energy = min(creature.energy, creature.max_energy)
+        if "layers" in genes and creature.policy == "learner":
+            self.learner.reshape(creature.slot, int(genes["layers"]), [int(n) for n in genes["neurons"]])
+            self._brain_size(creature)
 
     def add_creature(self, creature: Creature) -> None:
         creature.rules = self.rules

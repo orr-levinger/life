@@ -37,6 +37,7 @@ class Control:
     paused: bool = False  # paused: the world takes no steps until it is continued
     hunters: Optional[bool] = None  # the owner's hunters switch while in Auto (in Manual it is part of `settings`)
     rules: Optional[Dict[str, float]] = None  # the owner's rule changes (only the changed rules); None: none
+    edit: Optional[Dict] = None  # the owner's latest change to a creature's genes: {seq, id, genes}; None: none
 
     def watched(self, now: float) -> bool:
         return self.watch_until is not None and now < self.watch_until
@@ -93,8 +94,12 @@ def read_control(folder: Path) -> Optional[Control]:
     if rules is not None and not (isinstance(rules, dict) and all(isinstance(v, (int, float)) and not isinstance(v, bool)
                                                                   for v in rules.values())):
         raise ValueError(f"{path}: rules must map each rule to a number, not {rules!r}")
+    edit = raw.get("edit")  # optional: a control file without it holds no gene change
+    if edit is not None and not (isinstance(edit, dict) and set(edit) == {"seq", "id", "genes"}):
+        raise ValueError(f"{path}: edit must be {{seq, id, genes}}, not {edit!r}")
     return Control(raw["mode"], settings, bool(raw["stop"]), raw["watch_until"], watch_speed_from(raw["watch_speed"]),
-                   bool(raw["paused"]), raw["hunters"], None if rules is None else {k: float(v) for k, v in rules.items()})
+                   bool(raw["paused"]), raw["hunters"], None if rules is None else {k: float(v) for k, v in rules.items()},
+                   edit)
 
 
 def write_control(folder: Path, control: Control) -> None:
@@ -104,7 +109,8 @@ def write_control(folder: Path, control: Control) -> None:
     settings = None if control.settings is None else knob_values(control.settings)
     write_json(folder / CONTROL_FILE, {"mode": control.mode, "settings": settings, "stop": control.stop,
                                        "watch_until": control.watch_until, "watch_speed": control.watch_speed,
-                                       "paused": control.paused, "hunters": control.hunters, "rules": control.rules})
+                                       "paused": control.paused, "hunters": control.hunters, "rules": control.rules,
+                                       "edit": control.edit})
 
 
 def write_json(path: Path, data: object) -> None:

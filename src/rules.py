@@ -67,7 +67,6 @@ RULES = (
     Rule("corpse_steps", "senses", "A corpse lasts this many steps", 5.0, 1.0, 100.0),
     Rule("first_creatures", "world", "A new world starts with this many creatures", 30.0, 1.0, 80.0),
     Rule("bite", "body", "A bite of food: the most it eats in one step", 1.0, 0.1, 20.0),
-    Rule("threat_ratio", "senses", "Bigger means at least this many times its size (for fleeing and chasing)", 1.5, 1.05, 5.0),
     Rule("learn_rollout", "learning", "Steps of its own life between two learning rounds", 64.0, 8.0, 1024.0),
     Rule("learn_passes", "learning", "Passes over those steps in a round", 4.0, 1.0, 20.0),
     Rule("learn_clip", "learning", "How far one round may move its choices (share)", 0.2, 0.01, 1.0),
@@ -161,8 +160,6 @@ MEANS = {
     "corpse_steps": "How many steps a dead creature's food stays before it is gone.",
     "first_creatures": "How many creatures a brand-new world starts with.",
     "bite": "The most food energy it can eat in one step.",
-    "threat_ratio": "Another creature counts as bigger (a threat to flee) or smaller (prey to chase) when it is this "
-                    "many times its size.",
     "learn_rollout": "It learns from its own life every this many steps.",
     "learn_passes": "How many times it goes over those steps when it learns.",
     "learn_clip": "The most one learning round may change how it behaves (0.2 = 20 %).",

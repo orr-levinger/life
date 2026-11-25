@@ -143,11 +143,10 @@ def display_intent(creature: Creature, action: tuple[str, Any], senses: Senses) 
     if kind != "MOVE" or math.hypot(*param) == 0:
         return "REST"
     dx, dy = param
-    other = senses.other
-    bigger = creature.rules["threat_ratio"]  # at least this many times its size
-    if other is not None and other.size >= bigger * creature.size and _toward(creature, other, dx, dy) < 0:
+    other = senses.other  # any bigger one is run away from, any smaller one chased: no threshold, the brain decides
+    if other is not None and other.size > creature.size and _toward(creature, other, dx, dy) < 0:
         return "RUN_AWAY"
-    if other is not None and other.size * bigger <= creature.size and _toward(creature, other, dx, dy) > 0:
+    if other is not None and other.size < creature.size and _toward(creature, other, dx, dy) > 0:
         return "CHASE"
     if senses.food is not None and _toward(creature, senses.food, dx, dy) >= math.cos(FOOD_ANGLE):
         return "GO_TO_FOOD"

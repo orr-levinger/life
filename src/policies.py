@@ -70,6 +70,7 @@ def random_action(creature: Creature, senses: Senses, rng: random.Random) -> Act
 
 
 _RULES_SENSOR = ProximitySensor()
+YARDSTICK_BIGGER = 1.5  # the hand-written yardstick's own idea of "bigger"; no creature that learns ever reads it
 
 
 def rules_action(creature: Creature, world: World, rng: random.Random) -> Action:
@@ -79,17 +80,17 @@ def rules_action(creature: Creature, world: World, rng: random.Random) -> Action
     others = [
         (obj, dist, angle) for kind, obj, dist, angle in sightings
         if kind == "creature" and not is_family(creature, obj)
-        and not (1 / creature.rules["threat_ratio"] < obj.size / creature.size < creature.rules["threat_ratio"])
+        and not (1 / YARDSTICK_BIGGER < obj.size / creature.size < YARDSTICK_BIGGER)
     ]
     foods = [(obj, dist, angle) for kind, obj, dist, angle in sightings if kind == "food"]
     v = creature.velocity
 
     if others:
         other, dist, angle = others[0]
-        if other.size >= creature.size * creature.rules["threat_ratio"]:
+        if other.size >= creature.size * YARDSTICK_BIGGER:
             return ("MOVE", (math.cos(angle + math.pi) * v, math.sin(angle + math.pi) * v))
         attack_range = (creature.radius + other.radius) * creature.rules["attack_range"]
-        if creature.size >= other.size * creature.rules["threat_ratio"] and dist <= attack_range:
+        if creature.size >= other.size * YARDSTICK_BIGGER and dist <= attack_range:
             return ("ATTACK", other)
         return ("MOVE", (math.cos(angle) * v, math.sin(angle) * v))
 

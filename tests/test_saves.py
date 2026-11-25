@@ -271,6 +271,21 @@ class TestSaves(unittest.TestCase):
         self.assertEqual((loaded.rules["vision_cost"], loaded.rules["hearing_cost"]), (sense, sense))
         self.assertEqual((loaded.rules["gene.vision_width.high"], loaded.rules["sprint_power"]), (120.0, 2.0))
 
+    def test_a_format_9_save_drops_the_threat_rule(self):
+        world = make_world(seed=3)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"], about["rules"]["threat_ratio"] = 9, 1.5
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertNotIn("threat_ratio", loaded.rules)
+
     def test_a_format_7_save_gets_room_to_grow(self):
         learner = Learner(MAX_CREATURES, 0)
         world = make_world(seed=11, learner=learner, species="learner")

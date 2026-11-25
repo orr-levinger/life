@@ -84,6 +84,13 @@ class TestSenses(unittest.TestCase):
         self.assertEqual(display_intent(me, ("MOVE", (-1.0, 0.0)), s), "RUN_AWAY")
         self.assertEqual(display_intent(me, ("ATTACK", hunter), s), "ATTACK")
 
+    def test_any_bigger_one_is_run_away_from_and_any_smaller_one_chased(self):
+        me = creature(10, 10, size=1.0, id_=1)
+        slightly_bigger = creature(12, 10, size=1.1, id_=2)
+        self.assertEqual(display_intent(me, ("MOVE", (-1.0, 0.0)), sense(me, world([me, slightly_bigger]))), "RUN_AWAY")
+        slightly_smaller = creature(12, 10, size=0.9, id_=3)
+        self.assertEqual(display_intent(me, ("MOVE", (1.0, 0.0)), sense(me, world([me, slightly_smaller]))), "CHASE")
+
     def test_display_intent_chase(self):
         me = creature(10, 10, size=2.0, id_=1)
         prey = creature(12, 10, size=1.0, id_=2)

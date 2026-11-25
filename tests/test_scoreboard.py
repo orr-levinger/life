@@ -44,6 +44,14 @@ class TestScoreboard(unittest.TestCase):
         board.observe(me, s, ("MOVE", (1.0, 0.0)))
         self.assertAlmostEqual(board.row(w, None, False)["flee"], 0.5)
 
+    def test_a_slightly_bigger_one_counts_for_fleeing(self):
+        w = make_world()
+        me = add(w, 10, 10, size=1.0)
+        add(w, 12, 10, size=1.1)
+        board = Scoreboard()
+        board.observe(me, sense(me, w), ("MOVE", (-1.0, 0.0)))
+        self.assertAlmostEqual(board.row(w, None, False)["flee"], 1.0)
+
     def test_standing_still_beside_a_hunter_is_not_fleeing(self):
         w, me = hunter_world()
         board = Scoreboard()

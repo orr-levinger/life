@@ -112,12 +112,11 @@ class Scoreboard:
             self._unit_moves.append((dx / length, dy / length))
             if senses.food is not None and (senses.food.x, senses.food.y) != (creature.x, creature.y):
                 self._toward_food.append(_cosine(dx, dy, senses.food.x - creature.x, senses.food.y - creature.y))
-        other = senses.other
-        bigger = creature.rules["threat_ratio"]
-        if other is not None and other.size >= bigger * creature.size:
+        other = senses.other  # any bigger one is a threat, any smaller one prey
+        if other is not None and other.size > creature.size:
             away = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) < 0
             self._fled.append(1.0 if away else 0.0)
-        if other is not None and other.size * bigger <= creature.size:  # prey: the other way round
+        if other is not None and other.size < creature.size:
             toward = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) > 0
             self._chased.append(1.0 if toward else 0.0)
         if kind == "ATTACK":

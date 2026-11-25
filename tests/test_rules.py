@@ -43,6 +43,9 @@ class TestRules(unittest.TestCase):
         genes = {r.name.split(".")[1] for r in RULES if r.name.startswith("gene.") and not r.name.startswith("gene.weights")}
         self.assertEqual(genes - set(GENE_MEANS), set())
 
+    def test_no_rule_decides_who_is_a_threat(self):
+        self.assertNotIn("threat_ratio", {r.name for r in RULES})  # the creatures learn whom to flee or chase
+
     def test_every_rule_has_a_group(self):
         from src.rules import GROUPS
         self.assertEqual([g for g, _ in GROUPS], ["costs", "world", "body", "senses", "birth", "genes", "learning", "auto", "exam", "runner"])

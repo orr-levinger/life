@@ -189,7 +189,7 @@ const PANELS = [
   { key: "generation", title: "Deepest generation alive", note: "How many parent-to-baby steps separate the newest creatures from the first ones." },
   { key: "bites_per_creature_step", title: "Bites per creature per step" },
   { key: "flee", title: "Fleeing and chasing", hunters: true, beside: { key: "chase", label: "chasing" },
-    note: "While hunters are on. Solid: when a creature 1.5 times bigger is in sight, the share of moves away from it. Dashed: when one at most two-thirds its size is in sight, the share of moves toward it." },
+    note: "While hunters are on. Solid: when a bigger creature is in sight, the share of moves away from it. Dashed: when a smaller one is in sight, the share of moves toward it." },
   { key: "attacks_rate", title: "Attacks tried per 1,000 steps", hunters: true },
   { key: "vision_width", title: "Vision cone width (degrees, average)",
     note: "Each creature's cone is in its genes: wider sees more around it, and costs more energy every step." },
@@ -659,11 +659,11 @@ function updateTiles(state) {
   set("generation", n.generation === null ? "-" : n.generation, "deepest alive", explain("generation", n, run));
   const share = (v) => v === null ? "-" : `${Math.round(v * 100)} %`;
   set("flee", share(n.flee), "away from a bigger one",
-      `When a creature at least 1.5 times bigger is in sight, the share of moves away from it, over the last 1,000 steps: ` +
+      `When a bigger creature is in sight, the share of moves away from it, over the last 1,000 steps: ` +
       `${share(n.flee)}. Running away is how prey survives hunters. "-" while no bigger creature was in sight (or hunters are off).`,
       n.flee === null ? "" : n.flee >= 0.5 ? "good" : "bad");
   set("chase", share(n.chase), "toward a smaller one",
-      `When a creature at most two-thirds its size is in sight, the share of moves toward it, over the last 1,000 steps: ` +
+      `When a smaller creature is in sight, the share of moves toward it, over the last 1,000 steps: ` +
       `${share(n.chase)}. Chasing is how a hunter eats. "-" while no smaller creature was in sight.`,
       n.chase === null ? "" : n.chase >= 0.5 ? "good" : "");
   // the genes of the living, each as its average with the lowest and highest (from the world's live numbers)

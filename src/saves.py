@@ -28,11 +28,11 @@ from .rules import ROOM_SLOTS, RULES, rule, starting_rules
 from .settings import TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 9  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 10  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
-# a rule, the three brain genes (2026-11-24)
+# a rule, the three brain genes (2026-11-24); 10: no rule decides who counts as bigger (2026-11-25)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -133,6 +133,8 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         _room_to_grow(arrays)
     if about.get("format") == 8:
         about = _from_format_8(about)
+    if about.get("format") == 9:
+        about = _from_format_9(about)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -220,6 +222,11 @@ def _from_format_8(about: Dict[str, Any]) -> Dict[str, Any]:
     old change and layer-share rules) leave."""
     kept = about["rules"]
     return {**about, "format": 9, "rules": {r.name: kept.get(r.name, r.start) for r in RULES}}
+
+
+def _from_format_9(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 9 save had a rule for who counts as bigger: it leaves (the creatures learn whom to flee or chase)."""
+    return {**about, "format": 10, "rules": {k: v for k, v in about["rules"].items() if k != "threat_ratio"}}
 
 
 def _room_to_grow(arrays: Dict[str, np.ndarray]) -> None:

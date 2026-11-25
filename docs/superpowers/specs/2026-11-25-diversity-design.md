@@ -2,7 +2,8 @@
 
 **The owner, 2026-11-25:** "I want more variety… we need to change the costs formulas and we need to add benefits to
 each… how better can we simulate nature? what can we add to the game to increase diversity?" Of the ideas discussed:
-"I LIKE ALL THE IDEAS"; of care for kin: "amazing idea".
+"I LIKE ALL THE IDEAS"; of care for kin: "amazing idea". And: "the world need to be much bigger with much more max
+creatures" — "add this to the plan".
 
 ## Why
 
@@ -15,6 +16,10 @@ Nothing else separates ways of life: all eat the same food, and nothing pays a c
 The world gives costs, benefits and senses; it never says who attacks or helps whom. Every new trait is a gene,
 every number a rule on the Rules page.
 
+0. **A bigger world with more creatures**: a new world is 120 × 72 (today 50 × 30, about 6× the area) with room for
+   300 creatures (today 80, the most the rules allow); Auto aims at 240 alive (today 64); a new world starts with 100
+   creatures, the soup keeps 40, and gets 35 obstacles and 46 trees (today 6 and 8, grown with the area). The owner's
+   world keeps its own size unless the owner changes it or starts a new world.
 1. **Size by curves** (each power a rule): energy held = tank × size^1.3; living cost = step cost × size^0.75; speed
    = cruising speed ÷ size^0.5; lifespan × size^0.5; a moving creature is heard only within the hearer's hearing × its
    size, seen only within the looker's reach × √its size.

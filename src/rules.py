@@ -23,18 +23,19 @@ class Rule:
     high: float
 
 
-def _gene(name: str, words: str, low: float, high: float, limits: tuple, start: Optional[float] = None,
-          new: Optional[tuple] = None) -> tuple:
-    """A gene's rules: its lowest and highest (each changeable within `limits`) and what a newcomer gets (a start, or
-    a range it draws from). How much a baby's copy changes is the parent's own gene, `mutation_size`."""
-    rules = [Rule(f"gene.{name}.low", "genes", f"{words}: lowest", low, *limits),
-             Rule(f"gene.{name}.high", "genes", f"{words}: highest", high, *limits)]
-    if start is not None:
-        rules.append(Rule(f"gene.{name}.start", "genes", f"{words}: a newcomer gets", start, *limits))
-    if new is not None:
-        rules += [Rule(f"gene.{name}.new_low", "genes", f"{words}: a newcomer gets at least", new[0], *limits),
-                  Rule(f"gene.{name}.new_high", "genes", f"{words}: a newcomer gets at most", new[1], *limits)]
-    return tuple(rules)
+# A creature made by hand, outside a world (the tests, the yardstick), gets these genes; the world never uses them:
+# its newcomers draw every gene from its newcomer range, and babies copy their parents.
+HAND_MADE = {"fear": 10.0, "love": 10.0, "learns": 0.5, "learning_speed": 3e-4, "mutations": 1.0, "mutation_size": 0.05,
+             "neurons": 32.0, "layers": 1.0}
+
+
+def _gene(name: str, words: str, low: float, high: float, limits: tuple, new: tuple) -> tuple:
+    """A gene's rules: its lowest and highest, and the range a newcomer draws it from (each changeable within
+    `limits`). How much a baby's copy changes is the parent's own gene, `mutation_size`."""
+    return (Rule(f"gene.{name}.low", "genes", f"{words}: lowest", low, *limits),
+            Rule(f"gene.{name}.high", "genes", f"{words}: highest", high, *limits),
+            Rule(f"gene.{name}.new_low", "genes", f"{words}: a newcomer gets at least", new[0], *limits),
+            Rule(f"gene.{name}.new_high", "genes", f"{words}: a newcomer gets at most", new[1], *limits))
 
 
 RULES = (
@@ -102,23 +103,19 @@ RULES = (
   + _gene("vision_width", "Vision width (degrees)", 30.0, 120.0, (1.0, 120.0), new=(30.0, 120.0)) \
   + _gene("vision_reach", "Vision reach", 1.0, 10.0, (0.1, 20.0), new=(1.0, 10.0)) \
   + _gene("hearing", "Hearing", 0.0, 4.0, (0.0, 20.0), new=(0.0, 4.0)) \
-  + _gene("fear", "Fear of death", 0.1, 100.0, (0.0, 1000.0), start=10.0) \
-  + _gene("love", "Love of babies", 0.1, 100.0, (0.0, 1000.0), start=10.0) \
-  + _gene("learns", "Learning from others", 0.01, 1.0, (0.0, 1.0), start=0.5) \
-  + _gene("learning_speed", "Learning speed", 1e-5, 1e-2, (1e-6, 0.1), start=3e-4) \
-  + _gene("mutations", "Genes a baby changes", 1.0, 13.0, (1.0, 13.0), start=1.0) \
-  + _gene("mutation_size", "How much a changed gene changes (share)", 0.01, 0.2, (0.0, 1.0), start=0.05)
+  + _gene("fear", "Fear of death", 0.1, 100.0, (0.0, 1000.0), new=(0.1, 30.0)) \
+  + _gene("love", "Love of babies", 0.1, 100.0, (0.0, 1000.0), new=(0.1, 30.0)) \
+  + _gene("learns", "Learning from others", 0.01, 1.0, (0.0, 1.0), new=(0.01, 1.0)) \
+  + _gene("learning_speed", "Learning speed", 1e-5, 1e-2, (1e-6, 0.1), new=(1e-4, 1e-3)) \
+  + _gene("mutations", "Genes a baby changes", 1.0, 13.0, (1.0, 13.0), new=(1.0, 3.0)) \
+  + _gene("mutation_size", "How much a changed gene changes (share)", 0.01, 0.2, (0.0, 1.0), new=(0.01, 0.1)) \
+  + _gene("neurons", "Neurons in a layer", 1.0, 64.0, (1.0, 64.0), new=(8.0, 64.0)) \
+  + _gene("layers", "Layers", 1.0, 3.0, (1.0, 3.0), new=(1.0, 3.0))
 
 RULES += (
     Rule("gene.weights.share", "genes", "Brain weights: the share that changes when they are a baby's changed gene", 0.02,
          0.0, 1.0),
     Rule("gene.weights.size", "genes", "Brain weights: how much a changed weight moves", 0.02, 0.0, 1.0),
-    Rule("gene.neurons.low", "genes", "Neurons in a layer: lowest", 1.0, 1.0, 64.0),
-    Rule("gene.neurons.high", "genes", "Neurons in a layer: highest", 64.0, 1.0, 64.0),
-    Rule("gene.neurons.start", "genes", "Neurons in a layer: a newcomer gets", 32.0, 1.0, 64.0),
-    Rule("gene.layers.low", "genes", "Layers: lowest", 1.0, 1.0, 3.0),
-    Rule("gene.layers.high", "genes", "Layers: highest", 3.0, 1.0, 3.0),
-    Rule("gene.layers.start", "genes", "Layers: a newcomer gets", 1.0, 1.0, 3.0),
 )
 
 GROUPS = (("costs", "Costs"), ("world", "World"), ("body", "Body: energy, size and speed"), ("senses", "Eating and hunting"),
@@ -218,7 +215,7 @@ GENE_MEANS = {
 }
 
 _PART_MEANS = {"low": "No creature's {g} goes below this.", "high": "No creature's {g} goes above this.",
-               "start": "A random newcomer starts with this.", "new_low": "A random newcomer gets at least this.",
+               "new_low": "A random newcomer gets at least this.",
                "new_high": "A random newcomer gets at most this."}
 
 

@@ -24,16 +24,16 @@ from .brain import Brain
 from .creature import Creature
 from .dial import Dial, settings_from_state, settings_state
 from .food import Food
-from .rules import ROOM_SLOTS, RULES, rule, starting_rules
+from .rules import HAND_MADE, ROOM_SLOTS, RULES, rule, starting_rules
 from .settings import TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 12  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 13  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
 # a rule, the three brain genes (2026-11-24); 10: no rule decides who counts as bigger (2026-11-25); 11: one reach for eating and attacking; 12: how
-# many genes a baby changes and by how much are genes
+# many genes a baby changes and by how much are genes; 13: a newcomer draws every gene from a range
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -141,6 +141,8 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         about = _from_format_10(about)
     if about.get("format") == 11:
         about = _from_format_11(about)
+    if about.get("format") == 12:
+        about = _from_format_12(about)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -177,7 +179,7 @@ def _from_format_3(about: Dict[str, Any]) -> Dict[str, Any]:
 
 def _from_format_4(about: Dict[str, Any]) -> Dict[str, Any]:
     """A format 4 save had no value genes and no pain: its creatures get the starting amounts and feel nothing."""
-    fear, love, learns = (rule(f"gene.{gene}.start").start for gene in ("fear", "love", "learns"))
+    fear, love, learns = (HAND_MADE[gene] for gene in ("fear", "love", "learns"))
     return {**about, "format": 5, "creatures": [{**c, "fear_of_death": fear, "love_of_babies": love,
                                                  "learns_from_others": learns, "hurt": None}
                                                 for c in about["creatures"]]}
@@ -218,8 +220,7 @@ def _from_format_6(about: Dict[str, Any]) -> Dict[str, Any]:
 
 def _from_format_7(about: Dict[str, Any]) -> Dict[str, Any]:
     """A format 7 save had no brain genes: their rules start at their starting values."""
-    new = ("neuron_cost", "gene.neurons.low", "gene.neurons.high", "gene.neurons.start",
-           "gene.layers.low", "gene.layers.high", "gene.layers.start")
+    new = ["neuron_cost"] + [r.name for r in RULES if r.name.startswith(("gene.neurons.", "gene.layers."))]
     return {**about, "format": 8, "rules": {**about["rules"], **{name: rule(name).start for name in new}}}
 
 
@@ -249,9 +250,17 @@ def _from_format_11(about: Dict[str, Any]) -> Dict[str, Any]:
     new = [r.name for r in RULES if r.name.startswith(("gene.mutations.", "gene.mutation_size."))]
     rules = {k: v for k, v in about["rules"].items() if not (k.startswith("gene.") and k.endswith(".change"))}
     rules.update({name: rule(name).start for name in new})
-    count, size = round(rule("gene.mutations.start").start), rule("gene.mutation_size.start").start
+    count, size = round(HAND_MADE["mutations"]), HAND_MADE["mutation_size"]
     creatures = [{**c, "mutations": count, "mutation_size": size} for c in about["creatures"]]
     return {**about, "format": 12, "rules": rules, "creatures": creatures}
+
+
+def _from_format_12(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 12 save gave newcomers fixed values of some genes: those leave, and each gene's newcomer range starts at
+    its starting values. Its creatures keep the genes they have."""
+    rules = {k: v for k, v in about["rules"].items() if not (k.startswith("gene.") and k.endswith(".start"))}
+    rules.update({r.name: r.start for r in RULES if r.name not in rules and r.name.endswith((".new_low", ".new_high"))})
+    return {**about, "format": 13, "rules": rules}
 
 
 def _room_to_grow(arrays: Dict[str, np.ndarray]) -> None:

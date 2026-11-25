@@ -550,6 +550,23 @@ class TestLearnersInWorld(unittest.TestCase):
         slot = learner.allocate(NetWeights.random(w.np_rng), LEARNING_RATE)
         return add(w, x, y, energy=energy, policy="learner", slot=slot)
 
+    def test_every_gene_of_a_newcomer_is_random(self):
+        w, learner = self.world()
+        newcomers = [w.add_newcomer() for _ in range(30)]
+        r = w.rules
+        drawn = {"fear": [c.fear_of_death for c in newcomers], "love": [c.love_of_babies for c in newcomers],
+                 "learns": [c.learns_from_others for c in newcomers], "mutations": [c.mutations for c in newcomers],
+                 "mutation_size": [c.mutation_size for c in newcomers],
+                 "learning_speed": [learner.lr(c.slot) for c in newcomers],
+                 "layers": [learner.layers(c.slot) for c in newcomers],
+                 "neurons": [n for c in newcomers for n in learner.brain_size(c.slot)]}
+        for gene, values in drawn.items():
+            self.assertGreater(len(set(values)), 1, gene)  # not one value for all
+            low, high = r[f"gene.{gene}.new_low"], r[f"gene.{gene}.new_high"]
+            self.assertTrue(all(low <= v <= high for v in values), (gene, low, high, values))
+        self.assertTrue(all(isinstance(v, int) for v in drawn["mutations"] + drawn["layers"] + drawn["neurons"]))
+        self.assertEqual([c.neurons for c in newcomers], [sum(learner.brain_size(c.slot)) for c in newcomers])
+
     def test_the_owner_changes_a_creatures_genes(self):
         w, learner = self.world()
         c = self.born(w, learner, 10, 10)
@@ -587,7 +604,7 @@ class TestLearnersInWorld(unittest.TestCase):
         first, second = w.add_newcomer(), w.add_newcomer()
         self.assertEqual((first.policy, first.slot, second.slot), ("learner", 0, 1))
         self.assertFalse(same(learner.current(0), learner.current(1)))
-        self.assertAlmostEqual(learner.lr(0), LEARNING_RATE)
+        self.assertTrue(w.rules["gene.learning_speed.new_low"] <= learner.lr(0) <= w.rules["gene.learning_speed.new_high"])
 
     def test_learner_creatures_act_and_record(self):
         w, learner = self.world()
@@ -724,14 +741,6 @@ class TestLearnersInWorld(unittest.TestCase):
         self.rewards(w, learner)
         self.assertAlmostEqual(learner._lessons[watcher.slot][0]["weight"], 0.3)
         self.assertAlmostEqual(learner._lessons[actor.slot][0]["weight"], 0.9)
-
-    def test_newcomers_start_with_the_starting_values(self):
-        VALUE_START = tuple(rule(f"gene.{g}.start").start for g in ("fear", "love", "learns"))
-        w, learner = self.world()
-        for _ in range(5):
-            c = w.add_newcomer()
-            self.assertEqual((c.fear_of_death, c.love_of_babies, c.learns_from_others), VALUE_START)
-        self.assertEqual(VALUE_START, (10.0, 10.0, 0.5))
 
     def test_babies_inherit_values_in_the_limits(self):
         FEAR_LIMITS, LOVE_LIMITS, LEARN_LIMITS = ((rule(f"gene.{g}.low").start, rule(f"gene.{g}.high").start)

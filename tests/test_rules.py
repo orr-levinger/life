@@ -34,8 +34,6 @@ class TestRules(unittest.TestCase):
     def test_how_a_baby_changes_is_in_its_genes(self):
         names = {r.name: r for r in RULES}
         self.assertFalse([n for n in names if n.startswith("gene.") and n.endswith(".change")])  # no fixed share left
-        self.assertEqual(names["gene.mutations.start"].start, 1.0)  # one gene a baby, to begin with
-        self.assertEqual(names["gene.mutation_size.start"].start, 0.05)  # by up to 5 %, to begin with
         self.assertIn("gene.mutations.high", names)
         self.assertIn("gene.mutation_size.high", names)
 
@@ -53,6 +51,14 @@ class TestRules(unittest.TestCase):
         names = {r.name for r in RULES}
         self.assertIn("reach", names)
         self.assertFalse({"eat_range", "attack_range"} & names)
+
+    def test_every_gene_of_a_newcomer_is_drawn_from_a_range(self):
+        names = {r.name for r in RULES}
+        genes = {n.split(".")[1] for n in names if n.startswith("gene.") and not n.startswith("gene.weights")}
+        self.assertFalse([n for n in names if n.startswith("gene.") and n.endswith(".start")])  # no fixed start left
+        for gene in genes:
+            self.assertIn(f"gene.{gene}.new_low", names)
+            self.assertIn(f"gene.{gene}.new_high", names)
 
     def test_every_rule_has_a_group(self):
         from src.rules import GROUPS

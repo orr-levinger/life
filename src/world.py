@@ -132,17 +132,21 @@ class World:
         r = self.rules
         size = self.rng.uniform(r["gene.size.new_low"], r["gene.size.new_high"])
         brain = Brain.random(self.np_rng) if self.species == "brain" else None
-        slot = (self.learner.newcomer(self.np_rng, r["gene.learning_speed.start"], round(r["gene.layers.start"]),
-                                      round(r["gene.neurons.start"]), r["learn_spread"]) if self.species == "learner" else None)
+        drawn = lambda gene: self.rng.uniform(r[f"gene.{gene}.new_low"], r[f"gene.{gene}.new_high"])  # noqa: E731
+        whole = lambda gene: self.rng.randint(round(r[f"gene.{gene}.new_low"]), round(r[f"gene.{gene}.new_high"]))  # noqa: E731
+        slot = None
+        if self.species == "learner":
+            neurons = [whole("neurons") for _ in range(whole("layers"))]  # every layer its own count
+            slot = self.learner.newcomer(self.np_rng, drawn("learning_speed"), neurons, r["learn_spread"])
         energy = self.rng.uniform(r["newcomer_energy_low"], r["newcomer_energy_high"])
         newcomer = Creature(self.next_id(), x, y, size, energy, self.species, brain, slot=slot, rules=r)
         newcomer.lifespan = round(self.rng.uniform(*self.settings.lifespan))
         newcomer.vision_width = self.rng.uniform(r["gene.vision_width.new_low"], r["gene.vision_width.new_high"])
         newcomer.vision_reach = self.rng.uniform(r["gene.vision_reach.new_low"], r["gene.vision_reach.new_high"])
         newcomer.hearing = self.rng.uniform(r["gene.hearing.new_low"], r["gene.hearing.new_high"])
-        newcomer.fear_of_death, newcomer.love_of_babies = r["gene.fear.start"], r["gene.love.start"]
-        newcomer.learns_from_others = r["gene.learns.start"]
-        newcomer.mutations, newcomer.mutation_size = round(r["gene.mutations.start"]), r["gene.mutation_size.start"]
+        newcomer.fear_of_death, newcomer.love_of_babies = drawn("fear"), drawn("love")
+        newcomer.learns_from_others = drawn("learns")
+        newcomer.mutations, newcomer.mutation_size = whole("mutations"), drawn("mutation_size")
         self._brain_size(newcomer)
         self.creatures.append(newcomer)
         self.newcomers += 1

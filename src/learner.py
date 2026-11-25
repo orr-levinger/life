@@ -14,13 +14,13 @@ import numpy as np
 import tensorflow as tf
 
 from .brain import jitter
-from .rules import rule, starting_rules
+from .rules import HAND_MADE, rule, starting_rules
 
 N_IN = 20
 N_HIDDEN = 32
 N_CHOICES = 3  # 0 move, 1 eat, 2 attack
 ATTACK = 2
-LEARNING_RATE = rule("gene.learning_speed.start").start  # a newcomer's, from the rules
+LEARNING_RATE = HAND_MADE["learning_speed"]  # a brain made by hand (a newcomer draws its own)
 INITIAL_SPREAD = rule("learn_spread").start  # a newborn's first spread, from the rules
 ADAM_BETAS = (0.9, 0.999)
 ADAM_EPS = 1e-8
@@ -29,7 +29,7 @@ LOG_2PI = math.log(2.0 * math.pi)
 
 ROOM = 64  # neurons a layer has room for
 MAX_LAYERS = 3
-FIRST_LAYERS, FIRST_NEURONS = 1, 32  # the first animals' brain
+FIRST_LAYERS, FIRST_NEURONS = round(HAND_MADE["layers"]), round(HAND_MADE["neurons"])  # a brain made by hand
 N_CRITIC = 32  # the critic's own hidden layer: learning's machinery, not a gene
 
 SHAPES: Dict[str, Tuple[int, ...]] = {
@@ -279,9 +279,12 @@ class Learner:
     def has_room(self) -> bool:
         return bool(self._free)
 
-    def newcomer(self, np_rng: np.random.Generator, lr: float, layers: int, neurons: int, spread: float) -> int:
-        """A newcomer of the primordial soup: a random network of `layers` layers of `neurons`, learning at `lr`."""
-        return self.allocate(NetWeights.random(np_rng, layers, neurons, spread), lr)
+    def newcomer(self, np_rng: np.random.Generator, lr: float, neurons: List[int], spread: float) -> int:
+        """A newcomer of the primordial soup: a random network with `neurons` in each of its layers, learning at `lr`."""
+        weights = NetWeights.random(np_rng, len(neurons), neurons[0], spread)
+        size = weights.size.copy()
+        size[1:1 + len(neurons)] = neurons
+        return self.allocate(weights._with(size=size), lr)
 
     def baby(self, parent_slot: int, np_rng: np.random.Generator, lr_factor: float, inherit: str, genes_changed: List[str],
              rng, rules: Dict[str, float]) -> int:

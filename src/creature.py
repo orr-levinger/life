@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-from .rules import Rules, rule, starting_rules
+from .rules import HAND_MADE, Rules, rule, starting_rules
 from .settings import TODAY_SENSES
 
 if TYPE_CHECKING:
@@ -26,9 +26,8 @@ class Creature:
                  brain: Optional[Brain] = None, parent_id: int = 0, generation: int = 0,
                  slot: Optional[int] = None, vision_width: float = TODAY_SENSES[0],
                  vision_reach: float = TODAY_SENSES[1], hearing: float = TODAY_SENSES[2],
-                 fear_of_death: float = rule("gene.fear.start").start,
-                 love_of_babies: float = rule("gene.love.start").start,
-                 learns_from_others: float = rule("gene.learns.start").start, rules: Optional[Rules] = None) -> None:
+                 fear_of_death: float = HAND_MADE["fear"], love_of_babies: float = HAND_MADE["love"],
+                 learns_from_others: float = HAND_MADE["learns"], rules: Optional[Rules] = None) -> None:
         """`rules` are its world's (a creature outside any world follows the starting rules); its tank and radius are
         set at birth from them, its speeds and attack follow them as they change."""
         if policy not in self.POLICIES:
@@ -58,8 +57,8 @@ class Creature:
         self.fear_of_death = fear_of_death  # how bad dying feels to its learning: a gene
         self.love_of_babies = love_of_babies  # how good a baby feels to its learning: a gene
         self.learns_from_others = learns_from_others  # how much a lesson from another counts: a gene
-        self.mutations = round(rule("gene.mutations.start").start)  # how many genes each of its babies changes: a gene
-        self.mutation_size = rule("gene.mutation_size.start").start  # how much each of those changes: a gene
+        self.mutations = round(HAND_MADE["mutations"])  # how many genes each of its babies changes: a gene
+        self.mutation_size = HAND_MADE["mutation_size"]  # how much each of those changes: a gene
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
         self.had_baby_at: Optional[int] = None  # the step it last had a baby (display only)
         self.neurons = 0  # the neurons its brain uses (a learner's, which the world sets); each costs energy

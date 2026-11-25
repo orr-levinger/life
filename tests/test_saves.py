@@ -322,7 +322,25 @@ class TestSaves(unittest.TestCase):
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertEqual({(c.mutations, c.mutation_size) for c in loaded.creatures}, {(1, 0.05)})
         self.assertNotIn("gene.size.change", loaded.rules)
-        self.assertEqual(loaded.rules["gene.mutations.start"], 1.0)
+        self.assertIn("gene.mutations.new_high", loaded.rules)
+
+    def test_a_format_12_save_draws_every_newcomer_gene(self):
+        world = make_world(seed=3)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 12
+            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith("gene.fear.new_")}
+            about["rules"]["gene.fear.start"] = 10.0
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertNotIn("gene.fear.start", loaded.rules)
+        self.assertLess(loaded.rules["gene.fear.new_low"], loaded.rules["gene.fear.new_high"])
 
     def test_a_format_7_save_gets_room_to_grow(self):
         learner = Learner(MAX_CREATURES, 0)

@@ -438,6 +438,13 @@ function message(title, detail) {
   document.getElementById("charts").innerHTML = `<div class="nothing"><b>${title}</b>${detail}</div>`;
 }
 
+// The senses' prices: rules of the world, so they can be changed in Auto too. Each says what the average creature pays.
+const SENSE_COSTS = [
+  ["vision_cost", "Cost of seeing (per square unit of its cone, per step)",
+   (g) => g.vision_width[1] / 360 * Math.PI * g.vision_reach[1] ** 2],
+  ["hearing_cost", "Cost of hearing (per square unit of its circle, per step)", (g) => Math.PI * g.hearing[1] ** 2],
+];
+
 // A running world's controls: built once, then only their values are updated, so a drag is never interrupted.
 function makeCard(run) {
   const card = document.createElement("div");
@@ -508,6 +515,33 @@ function makeCard(run) {
     slider.addEventListener("change", () => { state.dragging = null; change(knob.name, +slider.value); });
     box.append(row);
   }
+  const changeRule = (name, value) => {
+    state.pending[name] = { value, until: Date.now() + PENDING_FOR };
+    send("/control", { run: state.run.name, rules: { [name]: value } })
+      .then(() => tell(null), (problem) => { delete state.pending[name]; tell(problem); updateCard(state); });
+  };
+  for (const [name, label] of SENSE_COSTS) {
+    const row = document.createElement("div");
+    row.className = "knob sense-cost";
+    row.dataset.rule = name;
+    row.innerHTML = `<label for="${run.name}-${name}">${label}</label><output></output>
+      <input type="range" id="${run.name}-${name}" disabled>
+      <small><span class="low"></span><span class="pays"></span><span class="high"></span></small>`;
+    const slider = row.querySelector("input"), shown = row.querySelector("output");
+    slider.addEventListener("pointerdown", () => { state.dragging = name; });
+    slider.addEventListener("input", () => { shown.textContent = numberText(+slider.value); });
+    slider.addEventListener("change", () => { state.dragging = null; changeRule(name, +slider.value); });
+    box.append(row);
+  }
+  fetch(`/rules?run=${encodeURIComponent(run.name)}`, { cache: "no-store" }).then((r) => r.json()).then((answer) => {
+    for (const row of box.querySelectorAll(".sense-cost")) {  // each slider's range is its rule's allowed range
+      const rule = answer.rules.find((r) => r.name === row.dataset.rule), slider = row.querySelector("input");
+      Object.assign(slider, { min: rule.low, max: rule.high, step: (rule.high - rule.low) / 1000, disabled: false });
+      row.querySelector(".low").textContent = `${numberText(rule.low)} · cheaper`;
+      row.querySelector(".high").textContent = `dearer · ${numberText(rule.high)}`;
+    }
+    updateCard(state);
+  }, tell);
   const hunters = card.querySelector("[data-hunters]");
   hunters.addEventListener("change", () => change("hunters", hunters.checked));
   return state;
@@ -533,7 +567,7 @@ function updateCard(state) {
     if (now > pending.until || close(fromRow, pending.value)) { delete state.pending[name]; return fromRow; }
     return pending.value;
   };
-  card.querySelectorAll(".knob").forEach((row, index) => {
+  card.querySelectorAll(".knob:not(.sense-cost)").forEach((row, index) => {
     const knob = KNOBS[index], slider = row.querySelector("input");
     slider.disabled = !manual;
     if (state.dragging === knob.name) return;
@@ -543,6 +577,16 @@ function updateCard(state) {
   });
   const hunters = card.querySelector("[data-hunters]");
   hunters.checked = shownValue("hunters", last ? !!last.hunters : false, (a, b) => a === b);
+  const live = state.now && state.now.rules ? state.now : null;
+  card.querySelectorAll(".sense-cost").forEach((row) => {  // the senses' prices, from the world's live numbers
+    const [name, , area] = SENSE_COSTS.find(([n]) => n === row.dataset.rule), slider = row.querySelector("input");
+    if (!live || state.dragging === name) return;
+    const value = shownValue(name, live.rules[name], (a, b) => Math.abs(a - b) <= +slider.step);
+    slider.value = value;
+    row.querySelector("output").textContent = numberText(value);
+    row.querySelector(".pays").textContent = live.genes && live.genes.vision_width
+      ? `the average creature pays ${numberText(value * area(live.genes))} a step` : "";
+  });
 }
 
 function drawWorlds(running) {

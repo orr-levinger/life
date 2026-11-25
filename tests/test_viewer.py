@@ -477,6 +477,12 @@ class TestControlRoom(unittest.TestCase):
         for words in ('id="follow-pov"', "function sensedBy(", "function drawHeard(", "c.moved"):
             self.assertIn(words, page)
 
+    def test_world_card_has_the_senses_costs(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("Cost of seeing", "Cost of hearing", '"vision_cost"', '"hearing_cost"', "sense-cost"):
+            self.assertIn(words, page)
+
     def test_page_explains_the_creature_look(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

@@ -276,7 +276,7 @@ class Controls:
         ended.unlink()
         current = read_control(folder)
         write_control(folder, Control(current.mode, current.settings, False, current.watch_until, current.watch_speed,
-                                      False, current.hunters))
+                                      False, current.hunters, current.rules))  # the owner's rule changes wait on
         steps = json.loads((folder / "run.json").read_text())["steps"]
         length = ["--forever"] if steps is None else ["--steps", str(steps)]
         command = [sys.executable, "-m", "src.evolve", "--resume", str(save.resolve()), "--continue", *length,

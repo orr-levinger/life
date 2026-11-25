@@ -442,6 +442,21 @@ class TestControlRoom(unittest.TestCase):
         self.assertFalse((folder / "time.txt").exists())
         self.assertFalse(read_control(folder).stop)
 
+    def test_update_keeps_the_owners_rule_changes(self):
+        name = self.running_world()
+        folder = self.root / name
+        self.assertEqual(self.server.post("/control", {"run": name, "rules": {"sprint_speed": 0.8}})[0], 200)
+        self.assertEqual(self.server.post("/control", {"run": name, "update": True})[0], 200)
+        (folder / "saves").mkdir()
+        (folder / "saves" / "step-0004321.npz").write_bytes(b"")
+        (folder / "time.txt").write_text("1.0\n")  # it ended
+        for _ in range(100):
+            if self.recorder.launched:
+                break
+            time.sleep(0.05)
+        self.assertTrue(self.recorder.launched)
+        self.assertEqual(read_control(folder).rules, {"sprint_speed": 0.8})  # still waiting for the world after its restart
+
     def test_hunters_in_auto_is_written(self):
         name = self.running_world()
         self.assertEqual(self.server.post("/control", {"run": name, "settings": {"hunters": True}})[0], 200)

@@ -210,9 +210,9 @@ class Learner:
         tf.config.experimental.enable_op_determinism()
         self.slots = slots
         self._gen = tf.random.Generator.from_seed(seed)
-        self._params = {n: tf.Variable(tf.zeros((slots,) + s)) for n, s in SHAPES.items()}
-        self._m = {n: tf.Variable(tf.zeros((slots,) + s)) for n, s in SHAPES.items()}
-        self._v = {n: tf.Variable(tf.zeros((slots,) + s)) for n, s in SHAPES.items()}
+        self._store = {kind: {n: tf.Variable(tf.zeros((slots,) + s)) for n, s in SHAPES.items()}
+                       for kind in ("params", "m", "v")}  # every slot's weights and optimizer moments
+        self._unwritten: Dict[int, Tuple[NetWeights, bool]] = {}  # brains waiting to go in (and whether fresh: no moments)
         self._t = np.zeros(slots)
         self._lr = np.zeros(slots)
         self._inborn: List[Optional[NetWeights]] = [None] * slots
@@ -227,6 +227,46 @@ class Learner:
         self._values_graph = tf.function(self._values_math, reduce_retracing=True)
         self._pass_graph = tf.function(self._pass_math, reduce_retracing=True)
         self._awaiting: Dict[int, List[dict]] = {}  # lessons of a slot's last step, waiting for what it senses next
+        self._write_graph = tf.function(self._write_math, reduce_retracing=True)
+        self._read_graph = tf.function(self._read_math, reduce_retracing=True)
+
+    # the stored weights and moments: anything that looks at them first gets the brains still waiting written in
+    @property
+    def _params(self) -> Dict[str, tf.Variable]:
+        self._flush()
+        return self._store["params"]
+
+    @property
+    def _m(self) -> Dict[str, tf.Variable]:
+        self._flush()
+        return self._store["m"]
+
+    @property
+    def _v(self) -> Dict[str, tf.Variable]:
+        self._flush()
+        return self._store["v"]
+
+    def _flush(self) -> None:
+        """The waiting brains go into TensorFlow together: one write for all of them (a fresh one's moments zeroed),
+        instead of a whole-variable read and a write for each part of each brain."""
+        if not self._unwritten:
+            return
+        waiting, self._unwritten = self._unwritten, {}
+        slots = sorted(waiting)
+        values = {name: tf.constant(np.stack([np.asarray(getattr(waiting[s][0], name), np.float32) for s in slots]))
+                  for name in SHAPES}
+        fresh = np.array([[s] for s in slots if waiting[s][1]], dtype=np.int32).reshape(-1, 1)
+        self._write_graph(tf.constant(np.array(slots, dtype=np.int32)[:, None]), values, tf.constant(fresh))
+
+    def _write_math(self, idx, values, fresh):
+        for name, shape in SHAPES.items():
+            self._store["params"][name].scatter_nd_update(idx, values[name])
+            zeros = tf.zeros(tf.stack([tf.shape(fresh)[0], *shape]))
+            self._store["m"][name].scatter_nd_update(fresh, zeros)
+            self._store["v"][name].scatter_nd_update(fresh, zeros)
+
+    def _read_math(self, idx):
+        return {name: tf.gather(var, idx) for name, var in self._store["params"].items()}
 
     def allocate(self, weights: NetWeights, lr: float) -> int:
         """A newborn's network in the lowest free slot: these are its inborn weights, and its optimizer state and
@@ -234,10 +274,7 @@ class Learner:
         if not self._free:
             raise RuntimeError(f"all {self.slots} learner slots are taken")
         slot = self._free.pop(0)
-        for name in SHAPES:
-            self._params[name][slot].assign(tf.cast(getattr(weights, name), tf.float32))
-            self._m[name][slot].assign(tf.zeros(SHAPES[name]))
-            self._v[name][slot].assign(tf.zeros(SHAPES[name]))
+        self._unwritten[slot] = (weights, True)  # written with the others before the brains are next used
         self._t[slot] = 0
         self._lr[slot] = lr
         self._inborn[slot] = weights
@@ -272,10 +309,11 @@ class Learner:
 
     def load_state(self, state: Dict[str, np.ndarray]) -> None:
         """Back to a saved state (see `state`); experience starts empty."""
+        self._unwritten = {}
         for name in SHAPES:
-            self._params[name].assign(state[f"params.{name}"])
-            self._m[name].assign(state[f"m.{name}"])
-            self._v[name].assign(state[f"v.{name}"])
+            self._store["params"][name].assign(state[f"params.{name}"])
+            self._store["m"][name].assign(state[f"m.{name}"])
+            self._store["v"][name].assign(state[f"v.{name}"])
         self._t = state["t"].copy()
         self._lr = state["lr"].copy()
         self._free = [slot for slot in range(self.slots) if state["free"][slot]]
@@ -331,8 +369,7 @@ class Learner:
                     weights = weights.with_neuron(layer, False)
             return weights
         weights = resized(self.current(slot))
-        for name in SHAPES:
-            self._params[name][slot].assign(tf.cast(getattr(weights, name), tf.float32))
+        self._unwritten[slot] = (weights, slot in self._unwritten and self._unwritten[slot][1])  # its moments stay
         self._size[slot] = weights.size
         self._inborn[slot] = resized(self.inborn(slot))
 
@@ -363,21 +400,37 @@ class Learner:
         return weights
 
     def current(self, slot: int) -> NetWeights:
-        return NetWeights(**{name: self._params[name][slot].numpy() for name in SHAPES}, size=self._size[slot].copy())
+        """The slot's weights as they are now (as TensorFlow keeps them: float32), read for that slot alone."""
+        if slot in self._unwritten:
+            weights = self._unwritten[slot][0]
+            return NetWeights(**{name: np.asarray(getattr(weights, name), np.float32).copy() for name in SHAPES},
+                              size=self._size[slot].copy())
+        read = self._read_graph(tf.constant([slot], dtype=tf.int32))
+        return NetWeights(**{name: read[name].numpy()[0] for name in SHAPES}, size=self._size[slot].copy())
 
     def act(self, slots: Sequence[int], senses: np.ndarray, attacks_on: bool, learning: bool = True,
             calls: Optional[Sequence[int]] = None) -> List[Tuple[int, Tuple[float, float, float]]]:
         """One call for all `slots`: each rolls its own dice for a choice and a move (each axis in -1..1) with a call's
         volume (0..1); `calls` is how many kinds of call each can make (none when not given)."""
-        idx = tf.constant(list(slots), dtype=tf.int32)
-        x = tf.constant(senses[:, None, :], dtype=tf.float32)
-        attacks = tf.fill([len(slots), 1], 1.0 if attacks_on else 0.0)
-        kinds = np.zeros(len(slots)) if calls is None else np.asarray(calls, dtype=float)
-        choice, move, logp, value = self._act_graph(idx, x, attacks, tf.constant(kinds[:, None], tf.float32),
-                                                    tf.constant(self._size[list(slots)], tf.float32))
-        choice_np, move_np = choice.numpy()[:, 0], move.numpy()[:, 0, :]
+        self._flush()
+        n, full = len(slots), self.slots  # always the full batch: a new size would compile the brain maths again
+        idx = np.zeros(full, dtype=np.int32)
+        idx[:n] = slots
+        x = np.zeros((full, 1, N_IN), dtype=np.float32)
+        x[:n, 0] = senses
+        kinds = np.zeros(n) if calls is None else np.asarray(calls, dtype=float)
+        padded_kinds = np.zeros((full, 1), dtype=np.float32)
+        padded_kinds[:n, 0] = kinds
+        dice = self._gen.uniform([n, 1, N_CHOICES], 1e-12, 1.0)  # the real ones' dice only, in the same order as before
+        steps = self._gen.normal([n, 1, N_MOVE])
+        dice = tf.concat([dice, tf.ones([full - n, 1, N_CHOICES])], axis=0)
+        steps = tf.concat([steps, tf.zeros([full - n, 1, N_MOVE])], axis=0)
+        choice, move, logp, value = self._act_graph(
+            tf.constant(idx), tf.constant(x), tf.fill([full, 1], 1.0 if attacks_on else 0.0), tf.constant(padded_kinds),
+            tf.constant(self._size[idx], tf.float32), dice, steps)
+        choice_np, move_np = choice.numpy()[:n, 0], move.numpy()[:n, 0, :]
         if learning:
-            logp_np, value_np = logp.numpy()[:, 0], value.numpy()[:, 0]
+            logp_np, value_np = logp.numpy()[:n, 0], value.numpy()[:n, 0]
             for i, slot in enumerate(slots):
                 self._pending[slot] = {"obs": senses[i], "choice": int(choice_np[i]), "move": move_np[i],
                                        "logp": float(logp_np[i]), "value": float(value_np[i]),
@@ -431,6 +484,7 @@ class Learner:
                 if lesson["next_obs"] is not None:
                     next_obs[k, t] = lesson["next_obs"]
                 mask[k, t] = 1.0
+        self._flush()
         both = tf.constant(np.concatenate([obs, next_obs], axis=1), tf.float32)
         size = tf.constant(self._size[slots], tf.float32)
         value = self._values_graph(tf.constant(slots, dtype=tf.int32), both, size).numpy()
@@ -447,13 +501,14 @@ class Learner:
         batch = {key: tf.constant(value, dtype=tf.int32 if key == "choice" else tf.float32) for key, value in arrays.items()}
         return {**batch, "size": size}
 
-    def _act_math(self, idx, x, attacks, calls, size):
-        """Choices and moves of the slots `idx` (each its own dice), with their log odds and values: one graph."""
+    def _act_math(self, idx, x, attacks, calls, size, dice, steps):
+        """Choices and moves of the slots `idx` (each its own dice: uniform for the choice, normal for the move), with
+        their log odds and values: one graph."""
         p = {name: tf.gather(var, idx) for name, var in self._params.items()}
         logits, mean, log_std, value = _heads(p, x, attacks, calls, size)
-        gumbel = -tf.math.log(-tf.math.log(self._gen.uniform(tf.shape(logits), 1e-12, 1.0)))
+        gumbel = -tf.math.log(-tf.math.log(dice))
         choice = tf.argmax(logits + gumbel, axis=-1, output_type=tf.int32)
-        move = mean + tf.exp(log_std) * self._gen.normal(tf.shape(mean))
+        move = mean + tf.exp(log_std) * steps
         return choice, move, _log_prob(logits, mean, log_std, choice, move), value
 
     def _values_math(self, idx, obs, size):
@@ -463,6 +518,7 @@ class Learner:
 
     def update(self) -> int:
         """One PPO update for every slot with a full rollout (64 steps plus the one that bootstraps them)."""
+        self._flush()
         rollout = round(self.rules["learn_rollout"])
         full = [slot for slot in range(self.slots) if len(self._buffers[slot]) > rollout]
         if not full:

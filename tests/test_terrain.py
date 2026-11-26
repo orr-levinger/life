@@ -180,5 +180,21 @@ class TestRockTree(unittest.TestCase):
         np.testing.assert_array_equal(with_tree, every)
         self.assertTrue(every.any() and (only & ~every).any())  # some lines blocked, some clear
 
+    def test_in_pond_same_with_the_tree(self):  # in a pond, or blocked: only the caps near the point are tried
+        from src import terrain as module
+        rng = random.Random(11)
+        R = 20.0
+        caps = [Obstacle(rng.choice(("rock", "pond")), ((tuple(random_point(rng)), rng.uniform(0.3, 2.5)),))
+                for _ in range(80)]
+        ground = Terrain(caps, [], R)
+        points = [random_point(rng) for _ in range(400)]
+        def answers():
+            return [(ground.in_pond(p), ground.blocked(p, 0.6), ground.blocked(p, 0.6, swims=True)) for p in points]
+        with_tree = answers()
+        with mock.patch.object(module, "EVERY_CAP", True):
+            every = answers()
+        self.assertEqual(with_tree, every)
+        self.assertTrue(any(a[0] for a in every) and any(a[1] and not a[2] for a in every))  # wet ones; ones a swimmer passes
+
 if __name__ == "__main__":
     unittest.main()

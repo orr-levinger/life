@@ -127,7 +127,7 @@ def neighbours(lookers: np.ndarray, things: np.ndarray, reach: Any, R: float) ->
         empty = np.zeros(0, dtype=int)
         return empty, empty, np.zeros(0)
     near = cKDTree(things).query_ball_point(lookers, chord(np.maximum(reach, 0.0), R) * (1.0 + 1e-9) + 1e-12,
-                                             workers=-1, return_sorted=False)
+                                             workers=1, return_sorted=False)  # threads cost more than they save here
     counts = np.fromiter(map(len, near), dtype=int, count=len(near))
     i = np.repeat(np.arange(len(lookers)), counts)
     j = np.fromiter(itertools.chain.from_iterable(near), dtype=int, count=int(counts.sum()))

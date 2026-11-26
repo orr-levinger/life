@@ -16,9 +16,12 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from .rules import Rules
-from .sphere import cross, arc, exp_map, local_frame, neighbours, random_point
+from scipy.spatial import cKDTree
+
+from .sphere import chord, cross, arc, exp_map, local_frame, neighbours, random_point
 
 EVERY_ROCK = False  # True: a sight line is tried against every rock, the slow way (the tests' yardstick)
+EVERY_CAP = False  # True: a point is tried against every obstacle cap, the slow way (the tests' yardstick)
 
 KINDS = ("rock", "pond")  # a rock stops everyone and hides what is behind it; a pond stops only who cannot swim
 CIRCLES = (3, 6)  # caps making one obstacle's blob
@@ -52,6 +55,7 @@ class Terrain:
         self._c = _rows([c[0] for c in caps])
         self._cr = np.array([c[1] for c in caps], dtype=float)
         self.pond_circles = np.array([o.kind == "pond" for o in self.obstacles for _ in o.caps], dtype=bool)
+        self._tree = cKDTree(self._c) if len(self._c) else None  # the caps' centres, to find the ones near a point
         rock = ~self.pond_circles
         self._r, self._rr = self._c[rock], self._cr[rock]  # what hides what is behind it
         self._t = _rows([t.p for t in self.trees])
@@ -65,25 +69,34 @@ class Terrain:
         """[point, centre]: the arc from each point to each centre."""
         return arc(np.atleast_2d(points)[:, None, :], centres[None, :, :], self.radius)
 
+    def _near(self, p: np.ndarray, reach: float):
+        """The caps whose centre is within `reach` of the point p, found by the k-d tree (all of them for EVERY_CAP)."""
+        if EVERY_CAP:
+            return slice(None)
+        return self._tree.query_ball_point(np.asarray(p, dtype=float), float(chord(reach, self.radius)) * (1.0 + 1e-9) + 1e-12)
+
     def blocked(self, p: np.ndarray, radius: float, swims: bool = False) -> bool:
         """Whether a body of `radius` at the point p would overlap an obstacle (only a rock, for one that `swims`)."""
         if not self._cr.size:
             return False
-        overlap = self._arcs(self._c, p)[0] < self._cr + radius
-        return bool(np.any(overlap & ~self.pond_circles) if swims else np.any(overlap))
+        k = self._near(p, self._cr.max() + radius)
+        overlap = self._arcs(self._c[k], p)[0] < self._cr[k] + radius
+        return bool(np.any(overlap & ~self.pond_circles[k]) if swims else np.any(overlap))
 
     def in_pond(self, p: np.ndarray) -> bool:
         """Whether the point p is in a pond."""
         if not self.pond_circles.any():
             return False
-        return bool(np.any((self._arcs(self._c, p)[0] < self._cr) & self.pond_circles))
+        k = self._near(p, self._cr.max())
+        return bool(np.any((self._arcs(self._c[k], p)[0] < self._cr[k]) & self.pond_circles[k]))
 
     def near_pond(self, p: np.ndarray, width: float) -> bool:
         """Whether p is on the land within `width` of a pond's edge."""
         if not self.pond_circles.any():
             return False
-        d, ponds = self._arcs(self._c, p)[0], self.pond_circles
-        return bool(np.any(ponds & (d <= self._cr + width)) and not np.any(ponds & (d < self._cr)))
+        k = self._near(p, self._cr.max() + width)
+        d, ponds, r = self._arcs(self._c[k], p)[0], self.pond_circles[k], self._cr[k]
+        return bool(np.any(ponds & (d <= r + width)) and not np.any(ponds & (d < r)))
 
     def pond_spot(self, rng: random.Random) -> Optional[np.ndarray]:
         """A random point inside a random pond cap (None when there is no pond)."""

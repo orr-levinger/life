@@ -264,6 +264,11 @@ After Task 11b: 501 ms a step with ~600 alive; ~1,100 small TensorFlow calls a s
   gathers them and does one read / one write a step; GREEN.
 - [ ] **Step 2:** Test first `test_in_pond_same_with_the_tree` (random points and ponds, against every cap); RED;
   then `in_pond` / `blocked` try only the caps a k-d tree finds within reach; GREEN.
+- [ ] **Step 2b:** (the owner, 2026-11-26: "ok") Measured: deciding for the same number of creatures 19 ms, for a new
+  number 350-580 ms (the compiled brain maths is compiled again for each new batch size). Test first
+  `test_the_brains_decide_in_one_batch_size` (every call to the compiled graph has the learner's full batch, whatever
+  the number acting); RED; then the batch is padded to every slot, the dice drawn for the real ones only (each still
+  decides as before); GREEN; the timing script's alive counts stay 600 / 389 / 60.
 - [ ] **Step 3:** Time 150 steps again and profile; report each part.
 - [ ] **Step 4:** `python scripts/run_tests.py` OK under 300 s; commit "Brains in one go, water by lookup: N ms a step".
 

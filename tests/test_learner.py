@@ -1,5 +1,6 @@
 import math
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -312,6 +313,44 @@ class TestLearner(unittest.TestCase):
         self.assertLess(abs(before), 0.15)
         self.assertGreaterEqual(after, 0.8)
 
+
+class TestBrainsInOneGo(unittest.TestCase):
+    """Newborn brains wait and go into TensorFlow together, once a step; reading one brain reads that brain only."""
+
+    def test_brains_are_written_in_one_go(self):
+        learner, rng = Learner(16, 1), np.random.default_rng(2)
+        brains = [NetWeights.random(rng) for _ in range(6)]
+        with mock.patch.object(learner, "_write_graph", wraps=learner._write_graph) as write:
+            slots = [learner.allocate(b, LEARNING_RATE) for b in brains]
+            for slot, b in zip(slots, brains):  # waiting: read back as TensorFlow will keep them (float32)
+                for x, y in zip(learner.current(slot).arrays()[:-1], b.arrays()[:-1]):
+                    np.testing.assert_array_equal(x, np.float32(y))
+            learner.act(slots, np.zeros((len(slots), N_SENSES)), attacks_on=False)
+            self.assertEqual(write.call_count, 1)  # all six in one write
+        state = learner.state()
+        for slot, b in zip(slots, brains):  # now read from TensorFlow, and the optimizer starts clean
+            for x, y in zip(learner.current(slot).arrays()[:-1], b.arrays()[:-1]):
+                np.testing.assert_array_equal(x, np.float32(y))
+            self.assertFalse(state["m.w1"][slot].any() or state["v.w1"][slot].any())
+
+    def test_a_slot_used_again_starts_clean_after_learning(self):
+        learner = learner_with(4, seed=3)
+        live(learner, 0, 70)  # it learns: its weights and optimizer change
+        learner.release(0)
+        fresh = NetWeights.random(np.random.default_rng(9))
+        slot = learner.allocate(fresh, LEARNING_RATE)
+        self.assertEqual(slot, 0)
+        learner.act([0], np.zeros((1, N_SENSES)), attacks_on=False)
+        state = learner.state()
+        np.testing.assert_array_equal(state["params.w1"][0], np.float32(fresh.w1))
+        self.assertFalse(state["m.w1"][0].any() or state["v.w1"][0].any())
+
+    def test_the_brains_decide_in_one_batch_size(self):  # a new size would compile the brain maths again (~0.5 s)
+        learner = learner_with(8, seed=4)
+        with mock.patch.object(learner, "_act_graph", wraps=learner._act_graph) as graph:
+            for n in (8, 5, 3, 1):
+                self.assertEqual(len(learner.act(list(range(n)), np.full((n, N_SENSES), 0.5), attacks_on=True)), n)
+        self.assertEqual({int(call.args[0].shape[0]) for call in graph.call_args_list}, {8})
 
 if __name__ == "__main__":
     unittest.main()

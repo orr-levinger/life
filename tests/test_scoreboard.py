@@ -81,13 +81,13 @@ class TestScoreboard(unittest.TestCase):
     def test_row_reports_efficiency_and_average_energy(self):
         w = make_world()
         half_full = add(w, 10, 10, size=1.0, energy=50.0)  # 50 of 100
-        quarter_full = add(w, 30, 10, size=2.0, energy=50.0)  # 50 of 200
+        part_full = add(w, 30, 10, size=2.0, energy=50.0)  # 50 of 100 × 2^1.3
         board = Scoreboard()
-        for creature in (half_full, quarter_full):
+        for creature in (half_full, part_full):
             board.observe(creature, sense(creature, w), STILL)
         w.energy_earned, w.energy_spent = 6.0, 4.0
         first = board.row(w, None, False)
-        self.assertAlmostEqual(first["energy"], 0.375)  # each creature's share of its own maximum, averaged
+        self.assertAlmostEqual(first["energy"], (0.5 + 50.0 / part_full.max_energy) / 2)  # each one's share of its own tank, averaged
         self.assertAlmostEqual(first["efficiency"], 1.5)  # energy earned ÷ energy spent in the window
         board.observe(half_full, sense(half_full, w), STILL)
         w.energy_earned, w.energy_spent = 7.0, 8.0

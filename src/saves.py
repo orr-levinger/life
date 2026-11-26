@@ -29,7 +29,7 @@ from .terrain import Terrain, make_terrain
 from .settings import START, TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 16  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 17  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
@@ -37,7 +37,7 @@ SAVE_FORMAT = 16  # 2: Auto's state keeps the owner's hunters switch; 3: each cr
 # many genes a baby changes and by how much are genes; 13: a newcomer draws every gene from a range; 14: terrain
 # (obstacles and trees), fruit, the senses of an obstacle in view and of being under a tree (25 inputs); 15: a gene
 # changes by a share of its range, at least the smallest change; 16: a learner keeps a slot for each of up to 300
-# creatures (a world's own rules keep its size and room)
+# creatures (a world's own rules keep its size and room); 17: size by curves (six powers)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -157,6 +157,9 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
     if about.get("format") == 15:
         about = {**about, "format": 16}  # its rules stay as they are: its size and its room
         _more_slots(arrays)
+    if about.get("format") == 16:
+        powers = ("tank_power", "living_power", "speed_power", "lifespan_power", "heard_power", "seen_power")
+        about = {**about, "format": 17, "rules": {**about["rules"], **{p: rule(p).start for p in powers}}}
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about

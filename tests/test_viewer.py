@@ -453,6 +453,12 @@ class TestControlRoom(unittest.TestCase):
         self.assertIsNone(self.server.get(f"/now?run={name}"))  # none written yet
         self.assertEqual(self.server.status("/now?run=..%2F..%2Felsewhere"), 404)
 
+    def test_the_rules_page_works_out_size_by_its_powers(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for power in ("r.tank_power", "r.speed_power", "r.living_power"):
+            self.assertIn(power, page)  # "holds … energy" and the rest follow the size curves
+
     def test_the_alive_tile_reads_the_room_from_the_rules(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

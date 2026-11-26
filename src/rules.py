@@ -58,6 +58,12 @@ RULES = (
     Rule("body_radius", "body", "Body radius, × size", 0.2, 0.05, 1.0),
     Rule("cruise_speed", "body", "Cruising speed, ÷ size", 0.25, 0.05, 1.0),
     Rule("sprint_speed", "body", "Sprint top speed, × √size", 0.8, 0.1, 3.0),
+    Rule("tank_power", "body", "Energy tank grows as size to this power", 1.3, 0.5, 2.0),
+    Rule("living_power", "body", "Living cost grows as size to this power", 0.75, 0.3, 1.5),
+    Rule("speed_power", "body", "Cruising speed falls as size to this power", 0.5, 0.0, 1.5),
+    Rule("lifespan_power", "body", "Lifespan grows as size to this power", 0.5, 0.0, 1.5),
+    Rule("heard_power", "body", "A mover is heard within the hearing × its size to this power", 1.0, 0.0, 2.0),
+    Rule("seen_power", "body", "A body is seen within the reach × its size to this power", 0.5, 0.0, 2.0),
     Rule("birth_at", "birth", "Has a baby at this share of its tank", 0.7, 0.3, 1.0),
     Rule("low_energy", "birth", "Past its lifespan it dies below this share of its tank", 0.3, 0.0, 0.9),
     Rule("reach", "senses", "Reach for eating and attacking, × both radii", 3.0, 1.0, 10.0),
@@ -147,6 +153,18 @@ MEANS = {
                    "costs more.",
     "hearing_cost": "Energy hearing costs every step, for each square unit of its hearing circle. Hearing further costs "
                     "more.",
+    "tank_power": "How much more energy a bigger body holds: its tank is the tank × size to this power (1.3: twice the "
+                  "size holds about 2.5 times the energy).",
+    "living_power": "How much more a bigger body pays to stay alive: the living cost × size to this power (0.75: twice "
+                    "the size pays about 1.7 times).",
+    "speed_power": "How much slower a bigger body cruises: the cruising speed ÷ size to this power (0.5: twice the size "
+                   "is about 0.7 times as fast).",
+    "lifespan_power": "How much longer a bigger body lives: its lifespan × size to this power (0.5: twice the size lives "
+                      "about 1.4 times as long).",
+    "heard_power": "How far a moving body is heard: the listener's hearing × the mover's size to this power (1: half "
+                   "the size is heard from half as far).",
+    "seen_power": "How far a body is seen: the looker's reach × the body's size to this power (0.5: half the size is "
+                  "seen from about 0.7 as far).",
     "world_width": "How wide the world is, in map units.",
     "world_height": "How tall the world is, in map units.",
     "room": "The most creatures that can live at once. While it is full, nobody has a baby.",

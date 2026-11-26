@@ -427,6 +427,23 @@ class TestSaves(unittest.TestCase):
         self.assertEqual({k: loaded.rules[k] for k in ("room", "auto_target", "world_width", "world_height")},
                          {"room": 80.0, "auto_target": 64.0, "world_width": 50.0, "world_height": 30.0})
 
+    def test_a_format_16_save_gets_the_size_powers(self):
+        world = make_world(seed=13)
+        populate(world, 3)
+        powers = ("tank_power", "living_power", "speed_power", "lifespan_power", "heard_power", "seen_power")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 16
+            about["rules"] = {k: v for k, v in about["rules"].items() if k not in powers}
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({p: loaded.rules[p] for p in powers}, {p: rule(p).start for p in powers})
+
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)

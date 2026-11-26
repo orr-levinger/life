@@ -18,6 +18,12 @@ def is_family(a: Creature, b: Creature) -> bool:
     return a.id == b.parent_id or b.id == a.parent_id or (a.parent_id != 0 and a.parent_id == b.parent_id)
 
 
+
+def full_tank(size: float, rules: Rules) -> float:
+    """The energy a body of `size` holds: more than its size (the tank × size to the tank power)."""
+    return rules["tank"] * size ** rules["tank_power"]
+
+
 class Creature:
     SENSE_RANGE = 3.0  # the rules policy's own fixed sense range; every other creature senses by its genes
     POLICIES = ("brain", "learner", "random", "rules")
@@ -47,7 +53,7 @@ class Creature:
         self.generation = generation
 
         self.rules = starting_rules() if rules is None else rules
-        self.max_energy = size * self.rules["tank"]
+        self.max_energy = full_tank(size, self.rules)
         self.energy = min(energy, self.max_energy)
         self.radius = size * self.rules["body_radius"]
         self.vision_width = vision_width  # degrees of its vision cone: a gene
@@ -79,7 +85,7 @@ class Creature:
     @property
     def velocity(self) -> float:
         """Cruising speed: small ones are faster."""
-        return self.rules["cruise_speed"] / self.size
+        return self.rules["cruise_speed"] / self.size ** self.rules["speed_power"]
 
     @property
     def top_speed(self) -> float:
@@ -129,7 +135,7 @@ class Creature:
             self._attack(param, world)
         else:
             raise ValueError(f"unknown action {kind!r}")
-        living = (world.settings.step_cost * self.size  # being alive: a bigger body pays more
+        living = (world.settings.step_cost * self.size ** self.rules["living_power"]  # a bigger body pays more, less than its size
                   + self.rules["vision_cost"] * self.vision_area() + self.rules["hearing_cost"] * self.hearing_area()
                   + self.rules["neuron_cost"] * self.neurons)  # and each neuron of its brain
         self.energy = min(self.energy - living, self.max_energy)

@@ -6,7 +6,7 @@ from unittest import mock
 import numpy as np
 
 from src.brain import N_SENSES
-from src.creature import Creature
+from src.creature import Creature, full_tank
 from src.food import Food
 from src.policies import decide_all
 from src.learner import LEARNING_RATE, Learner, NetWeights
@@ -102,10 +102,10 @@ class TestCosts(unittest.TestCase):
         small.apply_action(("MOVE", (small.top_speed, 0.0)), w)  # running away as fast as it can
         self.assertLess(small.x - big.x, gap)
 
-    def test_speed_is_a_quarter_of_one_over_size(self):
+    def test_speed_is_a_quarter_over_the_root_of_size(self):
         w = make_world()
-        self.assertEqual([add(w, 5 + 10 * i, 10, size=size).velocity for i, size in enumerate((0.5, 1.0, 2.0))],
-                         [0.5, 0.25, 0.125])
+        speeds = [add(w, 5 + 10 * i, 10, size=size).velocity for i, size in enumerate((0.5, 1.0, 2.0))]
+        np.testing.assert_allclose(speeds, [0.25 / math.sqrt(0.5), 0.25, 0.25 / math.sqrt(2.0)])
 
     def test_move_clamped_in_corner(self):
         w = make_world()
@@ -143,7 +143,8 @@ class TestSenseGenes(unittest.TestCase):
             c.apply_action(("MOVE", (0.1, 0.0)), w)
             spent.append(before - c.energy - senses(c))
         self.assertAlmostEqual(spent[0], NO_FOOD.step_cost * 1.0 + 0.1 * NO_FOOD.move_cost * 1.0)
-        self.assertAlmostEqual(spent[1], NO_FOOD.step_cost * 2.0 + 0.1 * NO_FOOD.move_cost * 2.0)  # twice, all of it
+        self.assertAlmostEqual(spent[1], NO_FOOD.step_cost * 2.0 ** w.rules["living_power"]  # more, less than twice
+                               + 0.1 * NO_FOOD.move_cost * 2.0)  # moving: twice
 
     def test_vision_and_hearing_are_priced_apart(self):
         w = make_world()
@@ -448,20 +449,22 @@ class TestLifeAndDeath(unittest.TestCase):
         populate(w, 30)
         spans = [c.lifespan for c in w.creatures]
         shortest, longest = START.lifespan
-        self.assertTrue(all(shortest <= span <= longest for span in spans))
+        within = lambda c: shortest * c.size ** w.rules["lifespan_power"] - 1 <= c.lifespan <= longest * c.size ** w.rules["lifespan_power"] + 1  # noqa: E731
+        self.assertTrue(all(within(c) for c in w.creatures))  # its own, drawn for its size
         self.assertGreater(len(set(spans)), 20)
         for creature in w.creatures:
             creature.energy = 90.0
         w.step()
         babies = [c for c in w.creatures if c.generation == 1]
         self.assertTrue(babies)
-        self.assertTrue(all(shortest <= baby.lifespan <= longest for baby in babies))
+        self.assertTrue(all(within(baby) for baby in babies))
 
     def test_lifespans_follow_the_settings_in_force(self):
         w = make_world(START, species="random")
         w.set_settings(replace(START, lifespan=(100, 200)), 1)
         populate(w, 30)
-        self.assertTrue(all(100 <= c.lifespan <= 200 for c in w.creatures))
+        self.assertTrue(all(100 * c.size ** w.rules["lifespan_power"] - 1 <= c.lifespan <= 200 * c.size ** w.rules["lifespan_power"] + 1
+                            for c in w.creatures))  # for its size
 
     def test_a_creature_dies_at_its_own_lifespan(self):
         w = make_world()
@@ -605,7 +608,7 @@ class TestLearnersInWorld(unittest.TestCase):
         self.assertEqual((c.size, c.vision_width, c.vision_reach, c.hearing), (1.5, 60.0, 4.0, 2.0))
         self.assertEqual((c.fear_of_death, c.love_of_babies, c.learns_from_others), (3.0, 4.0, 0.2))
         self.assertAlmostEqual(c.radius, 1.5 * w.rules["body_radius"])  # its body follows its size
-        self.assertAlmostEqual(c.max_energy, 1.5 * w.rules["tank"])
+        self.assertAlmostEqual(c.max_energy, full_tank(1.5, w.rules))
         self.assertAlmostEqual(learner.lr(c.slot), 0.001)
         self.assertEqual((learner.layers(c.slot), learner.active_neurons(c.slot)), (2, 15))
         self.assertEqual((c.layers, c.neurons), (2, 15))  # what it pays for each step
@@ -619,7 +622,7 @@ class TestLearnersInWorld(unittest.TestCase):
         c.size, c.max_energy = 1.0, w.rules["tank"]
         c.energy = 90.0
         w.edit_genes(c.id, {"size": 0.5})
-        self.assertAlmostEqual(c.energy, 0.5 * w.rules["tank"])
+        self.assertAlmostEqual(c.energy, full_tank(0.5, w.rules))
 
     def test_a_gene_change_for_a_creature_gone_changes_nothing(self):
         w, learner = self.world()

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from src.creature import Creature, is_family
+from src.creature import Creature, full_tank, is_family
 from src.food import Food
 from src.brain import N_SENSES
 from src.rules import starting_rules
@@ -13,7 +13,7 @@ from src.terrain import Terrain
 
 
 def creature(x: float, y: float, size: float = 1.25, id_: int = 1, parent_id: int = 0) -> Creature:
-    return Creature(id_, x, y, size, size * 50.0, "random", parent_id=parent_id)
+    return Creature(id_, x, y, size, full_tank(size, starting_rules()) / 2, "random", parent_id=parent_id)  # half full
 
 
 def food(x: float, y: float) -> Food:
@@ -125,9 +125,9 @@ class TestSenses(unittest.TestCase):
         self.assertAlmostEqual(v[13], 0.5)  # distance ÷ its hearing radius
         self.assertAlmostEqual(v[14], -1.0)  # behind it: west
         self.assertAlmostEqual(v[15], 0.0, places=6)
-        far = creature(7.5, 10, id_=3)
+        far = creature(7.0, 10, id_=3)
         far.moved = True
-        self.assertEqual(sense(me, world([me, far])).vector[12], 0.0)  # 2.5 away: past its hearing
+        self.assertEqual(sense(me, world([me, far])).vector[12], 0.0)  # 2.5 away: past its hearing × the mover's size (2 × 1.25)
 
     def test_hearing_gives_no_size(self):
         me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)

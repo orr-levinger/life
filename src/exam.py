@@ -14,7 +14,7 @@ from typing import Any, List, Optional, Sequence, Tuple
 import numpy as np
 
 from .brain import Brain
-from .creature import Creature
+from .creature import Creature, full_tank
 from .rules import Rules, starting_rules
 from .settings import Settings
 from .world import World
@@ -52,7 +52,7 @@ def _exam_world(policy: str, brains: Sequence[Any], sizes: Sequence[float], seed
     spots = random.Random(seed)
     for slot, (brain, size) in enumerate(zip(brains, sizes)):
         x, y = spots.uniform(1.0, world.width - 1.0), spots.uniform(1.0, world.height - 1.0)
-        full = size * world.rules["tank"]
+        full = full_tank(size, world.rules)
         world.add_creature(Creature(world.next_id(), x, y, size, full * rules["exam_start_share"], policy,
                                     brain if policy == "brain" else None,
                                     slot=slot if policy == "learner" else None))

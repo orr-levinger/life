@@ -24,8 +24,8 @@ LIVING = NO_FOOD.step_cost + SENSES  # a step alive, size 1, today's senses
 
 
 def living(size: float) -> float:
-    """A step alive for a body of `size` with today's senses: a bigger body pays more."""
-    return NO_FOOD.step_cost * size + SENSES
+    """A step alive for a body of `size` with today's senses: a bigger body pays more, less than its size."""
+    return NO_FOOD.step_cost * size ** rule("living_power").start + SENSES
 
 
 def make_world(settings: Settings = NO_FOOD, seed: int = 0, evolving: bool = True, learner=None,

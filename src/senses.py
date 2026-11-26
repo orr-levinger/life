@@ -51,13 +51,14 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
     parents = np.array([c.parent_id for c in everyone])
     moved = np.array([c.moved for c in everyone], dtype=bool)
     other_x, other_y = np.array([c.x for c in everyone]), np.array([c.y for c in everyone])
+    other_size = np.array([c.size for c in everyone])
     other_dx, other_dy = other_x[None, :] - me.x[:, None], other_y[None, :] - me.y[:, None]
     other_d = np.hypot(other_dx, other_dy)
     family = ((me.ids[:, None] == parents[None, :]) | (ids[None, :] == me.parents[:, None])
               | ((me.parents[:, None] != 0) & (me.parents[:, None] == parents[None, :])))
     stranger = (me.ids[:, None] != ids[None, :]) & ~family  # never itself or its family
-    seen = stranger & _in_sight(me, world, other_x, other_y, other_dx, other_dy, other_d)
-    heard = stranger & ~seen & moved[None, :] & (other_d <= me.hearing[:, None])  # only movers sound
+    seen = stranger & _in_sight(me, world, other_x, other_y, other_dx, other_dy, other_d, other_size)
+    heard = stranger & ~seen & moved[None, :] & (other_d <= _heard_from(me, world, other_size))  # only movers sound
     nearest_seen = np.argmin(np.where(seen, other_d, np.inf), axis=1)
     nearest_heard = np.argmin(np.where(heard, other_d, np.inf), axis=1)
     sheltered = world.terrain.under_tree(me.x, me.y)
@@ -107,17 +108,23 @@ def perceived(watchers: Sequence[Creature], actors: Sequence[Creature], world: A
     me = _Eyes(watchers)
     moved = np.array([c.moved for c in actors], dtype=bool)
     ax, ay = np.array([c.x for c in actors]), np.array([c.y for c in actors])
+    sizes = np.array([c.size for c in actors])
     dx, dy = ax[None, :] - me.x[:, None], ay[None, :] - me.y[:, None]
     distance = np.hypot(dx, dy)
-    hears = (distance <= me.hearing[:, None]) & moved[None, :]  # sound goes around obstacles and trees
-    return (hears | _in_sight(me, world, ax, ay, dx, dy, distance)).T
+    hears = (distance <= _heard_from(me, world, sizes)) & moved[None, :]  # sound goes around obstacles and trees
+    return (hears | _in_sight(me, world, ax, ay, dx, dy, distance, sizes)).T
+
+
+def _heard_from(me: '_Eyes', world: Any, sizes: np.ndarray) -> np.ndarray:
+    """[listener, mover]: how far each mover is heard: the listener's hearing × the mover's size to the heard power."""
+    return me.hearing[:, None] * sizes[None, :] ** world.rules["heard_power"]
 
 
 def _in_sight(me: '_Eyes', world: Any, x: np.ndarray, y: np.ndarray, dx: np.ndarray, dy: np.ndarray,
-              distance: np.ndarray) -> np.ndarray:
-    """[looker, creature]: within its vision reach and cone, no obstacle between, and not hidden under a tree's crown
+              distance: np.ndarray, sizes: np.ndarray) -> np.ndarray:
+    """[looker, creature]: within its vision reach (× the creature's size to the seen power) and cone, no obstacle between, and not hidden under a tree's crown
     (one under a crown is seen only from within the hide reach)."""
-    sees = (distance <= me.reach[:, None]) & me.cone(dx, dy, distance)
+    sees = (distance <= me.reach[:, None] * sizes[None, :] ** world.rules["seen_power"]) & me.cone(dx, dy, distance)
     sees &= ~world.terrain.sight_blocked(me.x, me.y, x, y, only=sees)
     hidden = world.terrain.under_tree(x, y)[None, :] & (distance > world.rules["hide_reach"])
     return sees & ~hidden

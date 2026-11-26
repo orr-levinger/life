@@ -1617,14 +1617,14 @@ function ruleInput(rule) {  // one number box: a rule of the world, or one of Au
 
 // What a rule works out to for a creature of size s (v: the rule's value, r: every value now), as the world computes it.
 const WORKS_OUT = {
-  tank: (v, s) => `holds ${(v * s).toFixed(0)} energy`,
+  tank: (v, s, r) => `holds ${(v * s ** r.tank_power).toFixed(0)} energy`,
   body_radius: (v, s) => `${(2 * v * s).toFixed(2)} wide`,
-  cruise_speed: (v, s) => `moves ${(v / s).toFixed(2)} a step`,
-  sprint_speed: (v, s, r) => `bursts up to ${Math.max(r.cruise_speed / s, v * Math.sqrt(s)).toFixed(2)} a step`,
+  cruise_speed: (v, s, r) => `moves ${(v / s ** r.speed_power).toFixed(2)} a step`,
+  sprint_speed: (v, s, r) => `bursts up to ${Math.max(r.cruise_speed / s ** r.speed_power, v * Math.sqrt(s)).toFixed(2)} a step`,
   attack_cost: (v, s) => `pays ${(v * s).toFixed(2)} an attack`,
   attack_damage: (v, s) => `takes ${(v * s).toFixed(1)} from the one it hits`,
   corpse_energy: (v, s) => `leaves ${(v * s).toFixed(1)} food when it dies`,
-  step_cost: (v, s) => `pays ${(v * s).toFixed(3)} a step`,
+  step_cost: (v, s, r) => `pays ${(v * s ** r.living_power).toFixed(3)} a step`,
   move_cost: (v, s) => `pays ${(v * s).toFixed(3)} a unit moved`,
 };
 const GENE_NOW = { size: "size", vision_width: "vision_width", vision_reach: "vision_reach", hearing: "hearing",

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
 import numpy as np
 
 from .brain import Brain
-from .creature import Creature
+from .creature import Creature, full_tank
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, perceived, sense_all
@@ -108,7 +108,7 @@ class World:
             elif name in EDITABLE_GENES:
                 setattr(creature, name, float(value))
         if "size" in genes:
-            creature.max_energy = creature.size * self.rules["tank"]
+            creature.max_energy = full_tank(creature.size, self.rules)
             creature.radius = creature.size * self.rules["body_radius"]
             creature.energy = min(creature.energy, creature.max_energy)
         if "layers" in genes and creature.policy == "learner":
@@ -143,7 +143,7 @@ class World:
             slot = self.learner.newcomer(self.np_rng, drawn("learning_speed"), neurons, r["learn_spread"])
         energy = self.rng.uniform(r["newcomer_energy_low"], r["newcomer_energy_high"])
         newcomer = Creature(self.next_id(), x, y, size, energy, self.species, brain, slot=slot, rules=r)
-        newcomer.lifespan = round(self.rng.uniform(*self.settings.lifespan))
+        newcomer.lifespan = self._lifespan(size)
         newcomer.vision_width = self.rng.uniform(r["gene.vision_width.new_low"], r["gene.vision_width.new_high"])
         newcomer.vision_reach = self.rng.uniform(r["gene.vision_reach.new_low"], r["gene.vision_reach.new_high"])
         newcomer.hearing = self.rng.uniform(r["gene.hearing.new_low"], r["gene.hearing.new_high"])
@@ -316,7 +316,7 @@ class World:
         parent.had_baby_at = self.step_count
         baby = Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
                         parent_id=parent.id, generation=parent.generation + 1, slot=slot, rules=self.rules)
-        baby.lifespan = round(self.rng.uniform(*self.settings.lifespan))
+        baby.lifespan = self._lifespan(size)
         baby.vision_width = self._inherited(parent.vision_width, "vision_width", picked, change)
         baby.vision_reach = self._inherited(parent.vision_reach, "vision_reach", picked, change)
         baby.hearing = self._inherited(parent.hearing, "hearing", picked, change)
@@ -342,6 +342,10 @@ class World:
         """Every creature's brain size, from the learner (after a load, or creatures added by hand)."""
         for creature in self.creatures:
             self._brain_size(creature)
+
+    def _lifespan(self, size: float) -> int:
+        """Steps a body of `size` lives: drawn from the world's lifespan, longer for a bigger body."""
+        return round(self.rng.uniform(*self.settings.lifespan) * size ** self.rules["lifespan_power"])
 
     def _inherited(self, value: float, gene: str, picked: Set[str], change: float) -> float:
         """A parent's gene for its baby: a picked gene ± up to `change` (the parent's mutation size) of the gene's whole

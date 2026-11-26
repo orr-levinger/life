@@ -174,6 +174,8 @@ def _vector(creature: Creature, food: Optional['Food'], other: Optional[Creature
         vector[16:20] = (1.0,) + creature.hurt
     vector[20:24] = wall  # the nearest obstacle in its field of vision
     vector[24] = 1.0 if sheltered else 0.0  # under a tree's crown
+    vector[25] = 1.0 if food is not None and food.meat else 0.0  # the nearest food it sees is meat
+    vector[26] = creature.diet  # what it lives on
     return vector
 
 

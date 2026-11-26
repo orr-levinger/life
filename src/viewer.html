@@ -644,7 +644,7 @@ const TILES = [
   ["flee", "Flees bigger"], ["chase", "Chases smaller"], ["size", "Size"], ["brain", "Brain (neurons)"],
   ["vision", "Sees (degrees)"], ["reach", "Sees how far"], ["hearing", "Hears how far"], ["fear", "Fear of death"],
   ["love", "Love of babies"], ["learns", "Learns from others"], ["mutations", "Genes a baby changes"],
-  ["mutation_size", "How much each changes"],
+  ["mutation_size", "How much each changes"], ["diet", "Diet (0 plants, 1 meat)"],
 ];
 
 function makeTiles(state) {
@@ -760,6 +760,7 @@ function updateTiles(state) {
   geneTile("learns", "learns_from_others", 2, "", "Learning from others (1 = as much as from its own step)");
   geneTile("mutations", "mutations", 1, "", "How many genes each baby changes (the rest are copied exactly)");
   geneTile("mutation_size", "mutation_size", 3, "", "How much each changed gene of a baby changes, either way (0.05 = 5 %)");
+  geneTile("diet", "diet", 2, "", "Diet: 0 lives on plants and fruit, 1 on meat (corpses and hits)");
   const points = state.samples.filter((x) => x.energy !== null);
   const svg = state.tiles.querySelector("svg");
   if (points.length > 1) {
@@ -911,6 +912,11 @@ async function fetchView() {
 
 // Hunger as a colour: red when empty, yellow at half, green from 70 % of a full tank (enough for a baby).
 const HUNGER = [[0, [226, 75, 74]], [0.35, [237, 161, 0]], [0.7, [27, 175, 122]]];
+function meatColour(diet) {  // a creature's outline: green for a plant eater, dark red for a meat eater
+  const d = Math.max(0, Math.min(1, diet));
+  return `rgb(${Math.round(40 + 120 * d)},${Math.round(140 - 120 * d)},${Math.round(50 - 30 * d)})`;
+}
+
 function hungerColour(energy) {
   const e = Math.max(0, Math.min(1, energy));
   for (let i = 1; i < HUNGER.length; i++) {
@@ -1032,7 +1038,7 @@ function drawCreature(g, x, y, r, c, wanderers, line, color) {
   g.closePath();
   g.fillStyle = c.did === "HIT_BY_ATTACK" ? SIGN.attack : hungerColour(c.energy);  // hit: it turns red
   g.fill();
-  g.lineWidth = line; g.strokeStyle = "rgba(0,0,0,0.35)"; g.stroke();
+  g.lineWidth = Math.max(line, r * 0.12); g.strokeStyle = meatColour(c.diet ?? 0); g.stroke();  // its outline: its diet
   g.strokeStyle = "rgba(0,0,0,0.45)"; g.lineWidth = Math.max(0.8, r * 0.05);  // stripes: learning speed
   for (let i = 0; i < s.stripes; i++) {
     const sx = -r * (0.2 + i * 0.13);
@@ -1153,7 +1159,8 @@ function drawHeard(g, x, y, unit, distance, color) {  // a sound: a blur where i
 const GENE_BOXES = [["size", "Size", 2], ["vision_width", "Vision width (degrees)", 0], ["vision_reach", "Sees how far", 2],
   ["hearing", "Hears how far", 2], ["fear_of_death", "Fear of death", 2], ["love_of_babies", "Love of babies", 2],
   ["learns_from_others", "Learns from others", 2], ["learning_speed", "Learning speed", 6],
-  ["mutations", "Genes a baby changes", 0], ["mutation_size", "How much each changes (share)", 3]];
+  ["mutations", "Genes a baby changes", 0], ["mutation_size", "How much each changes (share)", 3],
+  ["diet", "Diet (0 plants, 1 meat)", 2]];
 
 function drawGenes(c) {  // the followed creature's genes as boxes, filled once when the panel opens
   const box = document.querySelector("#genes-panel .gene-boxes");
@@ -1274,6 +1281,10 @@ function paint() {
     const x = food.x * unit, y = food.y * unit, d = Math.max(food.radius * unit, 2.5);
     if (food.fruit) {  // fruit: a small red berry
       g.fillStyle = GROUND.fruit; g.beginPath(); g.arc(x, y, d * 0.8, 0, 2 * Math.PI); g.fill();
+      continue;
+    }
+    if (food.meat) {  // meat: a dark red lump
+      g.fillStyle = "#7a1f1f"; g.beginPath(); g.arc(x, y, d, 0, 2 * Math.PI); g.fill();
       continue;
     }
     g.fillStyle = FOOD_COLOUR;  // food: small tan diamonds
@@ -1628,7 +1639,7 @@ const WORKS_OUT = {
   move_cost: (v, s) => `pays ${(v * s).toFixed(3)} a unit moved`,
 };
 const GENE_NOW = { size: "size", vision_width: "vision_width", vision_reach: "vision_reach", hearing: "hearing",
-                   fear: "fear_of_death", love: "love_of_babies", learns: "learns_from_others", neurons: "neurons",
+                   fear: "fear_of_death", love: "love_of_babies", learns: "learns_from_others", neurons: "neurons", diet: "diet",
                    mutations: "mutations", mutation_size: "mutation_size" };
 let ruleNow = { sizes: null, genes: null, values: {} };  // the creatures alive now and the rules' values, for the examples
 

@@ -459,6 +459,12 @@ class TestControlRoom(unittest.TestCase):
         for power in ("r.tank_power", "r.speed_power", "r.living_power"):
             self.assertIn(power, page)  # "holds … energy" and the rest follow the size curves
 
+    def test_page_shows_the_diet(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('geneTile("diet"', '["diet", "Diet', "meatColour"):
+            self.assertIn(words, page)  # a tile, a box to change it, a meat eater drawn redder
+
     def test_the_alive_tile_reads_the_room_from_the_rules(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

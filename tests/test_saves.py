@@ -32,6 +32,13 @@ def before_terrain(arrays):
             arrays[name] = arrays[name][..., :20, :]
 
 
+def before_diet(arrays):
+    """A save from before format 18: brains of 25 inputs (no meat seen, no diet of its own)."""
+    for name in list(arrays):
+        if name == "brain.w1" or (name.startswith("learner.") and name.split(".")[-1] in ("w1", "wh")):
+            arrays[name] = arrays[name][..., :25, :]
+
+
 def before_rules(about):
     """A save from before format 6: the world's size instead of its rules."""
     rules = about.pop("rules")
@@ -409,6 +416,7 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 15
+            before_diet(arrays)
             about["rules"] = {**about["rules"], "room": 80.0, "auto_target": 64.0, "world_width": 50.0,
                               "world_height": 30.0}
             arrays["about"] = np.array(json.dumps(about))
@@ -420,10 +428,13 @@ class TestSaves(unittest.TestCase):
             if key == "generator":
                 continue
             self.assertEqual(after[key].shape[0], 300, key)
-            np.testing.assert_array_equal(after[key][:80], before[key], err_msg=key)  # its 80 brains unchanged
+            if key.split(".")[-1] in ("w1", "wh"):  # the input weights it had then (25 inputs)
+                np.testing.assert_array_equal(after[key][:80, :25], before[key][:, :25], err_msg=key)
+            else:
+                np.testing.assert_array_equal(after[key][:80], before[key], err_msg=key)  # its 80 brains unchanged
         self.assertTrue(after["free"][80:].all())  # the 220 new slots are empty and free
         for c in world.creatures:
-            np.testing.assert_array_equal(loaded.learner.current(c.slot).w1, learner.current(c.slot).w1)
+            np.testing.assert_array_equal(loaded.learner.current(c.slot).w1[:25], learner.current(c.slot).w1[:25])
         self.assertEqual({k: loaded.rules[k] for k in ("room", "auto_target", "world_width", "world_height")},
                          {"room": 80.0, "auto_target": 64.0, "world_width": 50.0, "world_height": 30.0})
 
@@ -438,11 +449,41 @@ class TestSaves(unittest.TestCase):
                 arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
             about = json.loads(str(arrays["about"]))
             about["format"] = 16
+            before_diet(arrays)
             about["rules"] = {k: v for k, v in about["rules"].items() if k not in powers}
             arrays["about"] = np.array(json.dumps(about))
             np.savez(path, **arrays)
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertEqual({p: loaded.rules[p] for p in powers}, {p: rule(p).start for p in powers})
+
+    def test_a_format_17_save_gets_a_diet_and_meat(self):
+        from src.food import Food
+        world = make_world(seed=14)
+        populate(world, 3)
+        world.foods = [Food(5.0, 5.0, remaining_duration=5, energy=8.0), Food(6.0, 6.0, remaining_duration=-1, energy=9.0)]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 17
+            for c in about["creatures"]:
+                del c["diet"]
+            for f in about["foods"]:
+                del f["meat"]
+            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith("gene.diet") and k != "diet_bite"}
+            arrays["about"] = np.array(json.dumps(about))
+            arrays["brain.w1"] = arrays["brain.w1"][:, :25, :]  # 25 inputs then
+            old_w1 = arrays["brain.w1"]
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({c.diet for c in loaded.creatures}, {0.5})
+        self.assertEqual([f.meat for f in loaded.foods], [True, False])  # a food that runs out is a corpse
+        self.assertIn("gene.diet.high", loaded.rules)
+        for i, c in enumerate(loaded.creatures):
+            self.assertTrue(np.array_equal(c.brain.w1[:25], old_w1[i]))
+            self.assertTrue(np.all(c.brain.w1[25:] == 0.0))  # the two new senses start silent
 
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)

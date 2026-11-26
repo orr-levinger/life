@@ -289,11 +289,11 @@ class TestEvolve(unittest.TestCase):
         self.assertEqual(set(creature), {"id", "x", "y", "radius", "energy", "heading", "did", "generation", "age",
                                          "lifespan", "earned", "spent", "size", "facing", "vision_width",
                                          "vision_reach", "hearing", "fear_of_death", "love_of_babies",
-                                         "learns_from_others", "neurons", "layers", "moved", "bumped", "brain", "mutations", "mutation_size",
+                                         "learns_from_others", "neurons", "layers", "moved", "bumped", "brain", "mutations", "mutation_size", "diet",
                                          "learning_speed", "intent", "target", "baby"})
         self.assertTrue(0.0 <= creature["energy"] <= 1.0)
         self.assertTrue(0.0 <= creature["x"] <= 50 and 0.0 <= creature["y"] <= 30)
-        self.assertEqual(set(view["foods"][0]), {"x", "y", "radius", "fruit"})
+        self.assertEqual(set(view["foods"][0]), {"x", "y", "radius", "fruit", "meat"})
         self.assertEqual(set(view["terrain"]), {"obstacles", "trees"})
 
     def test_watching_never_changes_the_world(self):

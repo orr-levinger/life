@@ -65,6 +65,7 @@ class Creature:
         self.learns_from_others = learns_from_others  # how much a lesson from another counts: a gene
         self.mutations = round(HAND_MADE["mutations"])  # how many genes each of its babies changes: a gene
         self.mutation_size = HAND_MADE["mutation_size"]  # how much each of those changes: a gene
+        self.diet = HAND_MADE["diet"]  # 0 lives on plants, 1 on meat: a gene
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
         self.had_baby_at: Optional[int] = None  # the step it last had a baby (display only)
         self.neurons = 0  # the neurons its brain uses (a learner's, which the world sets); each costs energy
@@ -94,7 +95,7 @@ class Creature:
 
     @property
     def attack_damage(self) -> float:
-        return self.size * self.rules["attack_damage"]
+        return self.size * self.rules["attack_damage"] * (1.0 + self.diet * self.rules["diet_bite"])
 
     @property
     def attack_cost(self) -> float:
@@ -150,10 +151,11 @@ class Creature:
             return
         amount = min(self.rules["bite"], food.energy)
         food.energy -= amount
-        self.energy += amount
-        self.food_eaten += amount
+        gained = amount * (self.diet if food.meat else 1.0 - self.diet)  # what its diet makes of the bite
+        self.energy += gained
+        self.food_eaten += gained
         world.total_bites += 1
-        self._earn(amount, world)
+        self._earn(gained, world)
         if food.energy <= 0:
             world.foods.remove(food)
         self.last_action = "EAT"
@@ -199,14 +201,15 @@ class Creature:
         dx, dy = self.x - target.x, self.y - target.y
         distance = math.hypot(dx, dy)
         target.hurt = (taken / target.max_energy, dx / distance if distance else 0.0, dy / distance if distance else 0.0)
-        self.energy += self.rules["hunter_share"] * taken
-        self._earn(self.rules["hunter_share"] * taken, world)
+        gained = self.rules["hunter_share"] * taken * self.diet  # a hit feeds a meat eater
+        self.energy += gained
+        self._earn(gained, world)
         self.last_action = "ATTACK"
         target.last_action = "HIT_BY_ATTACK"
         if target.energy <= 0:
             from .food import Food
             corpse = Food(target.x, target.y, remaining_duration=round(self.rules["corpse_steps"]),
-                          energy=target.size * self.rules["corpse_energy"])
+                          energy=target.size * self.rules["corpse_energy"], meat=True)
             world.foods.append(corpse)
             world.foods_created_this_step.add(id(corpse))
             world.kill(target, "attack")

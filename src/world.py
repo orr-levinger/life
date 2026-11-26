@@ -26,7 +26,7 @@ Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
 FREE_SPOT_TRIES = 1000  # tries to find a newcomer a spot that no obstacle covers
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
-         "layers", "neurons", "weights", "mutations", "mutation_size")  # a baby changes its parent's `mutations` of them
+         "layers", "neurons", "weights", "mutations", "mutation_size", "diet")  # a baby changes its parent's `mutations` of them
 
 
 class World:
@@ -149,6 +149,7 @@ class World:
         newcomer.hearing = self.rng.uniform(r["gene.hearing.new_low"], r["gene.hearing.new_high"])
         newcomer.fear_of_death, newcomer.love_of_babies = drawn("fear"), drawn("love")
         newcomer.learns_from_others = drawn("learns")
+        newcomer.diet = drawn("diet")
         newcomer.mutations, newcomer.mutation_size = whole("mutations"), drawn("mutation_size")
         self._brain_size(newcomer)
         self.creatures.append(newcomer)
@@ -324,6 +325,7 @@ class World:
         baby.love_of_babies = self._inherited(parent.love_of_babies, "love", picked, change)
         baby.learns_from_others = self._inherited(parent.learns_from_others, "learns", picked, change)
         baby.mutation_size = self._inherited(parent.mutation_size, "mutation_size", picked, change)
+        baby.diet = self._inherited(parent.diet, "diet", picked, change)
         low, high = gene_limits(self.rules, "mutations")
         step = self.rng.choice((-1, 1)) if "mutations" in picked else 0  # a count: one more or one fewer
         baby.mutations = int(min(max(parent.mutations + step, low), high))

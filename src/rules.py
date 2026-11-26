@@ -26,7 +26,7 @@ class Rule:
 # A creature made by hand, outside a world (the tests, the yardstick), gets these genes; the world never uses them:
 # its newcomers draw every gene from its newcomer range, and babies copy their parents.
 HAND_MADE = {"fear": 10.0, "love": 10.0, "learns": 0.5, "learning_speed": 3e-4, "mutations": 1.0, "mutation_size": 0.05,
-             "neurons": 32.0, "layers": 1.0}
+             "neurons": 32.0, "layers": 1.0, "diet": 0.0}  # a creature made by hand eats plants
 
 
 def _gene(name: str, words: str, low: float, high: float, limits: tuple, new: tuple) -> tuple:
@@ -67,6 +67,7 @@ RULES = (
     Rule("birth_at", "birth", "Has a baby at this share of its tank", 0.7, 0.3, 1.0),
     Rule("low_energy", "birth", "Past its lifespan it dies below this share of its tank", 0.3, 0.0, 0.9),
     Rule("reach", "senses", "Reach for eating and attacking, × both radii", 3.0, 1.0, 10.0),
+    Rule("diet_bite", "senses", "A meat eater's hit takes more: × (1 + diet × this)", 1.0, 0.0, 5.0),
     Rule("hunter_share", "senses", "A hunter keeps this share of what it takes", 0.8, 0.0, 1.0),
     Rule("corpse_energy", "senses", "A corpse's food, × the prey's size", 8.0, 0.0, 50.0),
     Rule("corpse_steps", "senses", "A corpse lasts this many steps", 5.0, 1.0, 100.0),
@@ -124,7 +125,8 @@ RULES = (
   + _gene("mutations", "Genes a baby changes", 1.0, 13.0, (1.0, 13.0), new=(1.0, 3.0)) \
   + _gene("mutation_size", "How much a changed gene changes (share)", 0.01, 0.2, (0.0, 1.0), new=(0.01, 0.1)) \
   + _gene("neurons", "Neurons in a layer", 1.0, 64.0, (1.0, 64.0), new=(8.0, 64.0)) \
-  + _gene("layers", "Layers", 1.0, 3.0, (1.0, 3.0), new=(1.0, 3.0))
+  + _gene("layers", "Layers", 1.0, 3.0, (1.0, 3.0), new=(1.0, 3.0)) \
+  + _gene("diet", "Diet (0 plants, 1 meat)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
 
 RULES += (
     Rule("gene_min_change", "genes", "A changed gene moves by at least up to this share of its range", 0.01, 0.0, 0.2),
@@ -165,6 +167,8 @@ MEANS = {
                    "the size is heard from half as far).",
     "seen_power": "How far a body is seen: the looker's reach × the body's size to this power (0.5: half the size is "
                   "seen from about 0.7 as far).",
+    "diet_bite": "How much harder a meat eater hits: a hit takes × (1 + its diet × this). 1: a pure meat eater hits "
+                 "twice as hard as a plant eater of its size.",
     "world_width": "How wide the world is, in map units.",
     "world_height": "How tall the world is, in map units.",
     "room": "The most creatures that can live at once. While it is full, nobody has a baby.",
@@ -251,6 +255,8 @@ GENE_MEANS = {
                      "way (0.05 = 5 %).",
     "neurons": "How many neurons each brain layer has. Each neuron costs energy every step.",
     "layers": "How many layers its brain has.",
+    "diet": "What it lives on: 0 = plants and fruit only, 1 = meat only (corpses and hits). In between it gets that "
+            "share of each: 0.3 gets 70 % of a plant bite and 30 % of a meat bite. A meat eater also hits harder.",
 }
 
 _PART_MEANS = {"low": "No creature's {g} goes below this.", "high": "No creature's {g} goes above this.",
@@ -297,7 +303,8 @@ def check(rules: Rules, name: str, value: float) -> Optional[str]:
 # The genes the owner may change on a picked creature: its attribute and the rules' gene name (its limits).
 EDITABLE_GENES = {"size": "size", "vision_width": "vision_width", "vision_reach": "vision_reach", "hearing": "hearing",
                   "fear_of_death": "fear", "love_of_babies": "love", "learns_from_others": "learns",
-                  "learning_speed": "learning_speed", "mutations": "mutations", "mutation_size": "mutation_size"}
+                  "learning_speed": "learning_speed", "mutations": "mutations", "mutation_size": "mutation_size",
+                  "diet": "diet"}
 
 
 def check_genes(rules: Rules, genes: object) -> Optional[str]:

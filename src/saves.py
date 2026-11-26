@@ -29,7 +29,7 @@ from .terrain import Terrain, make_terrain
 from .settings import START, TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 17  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 18  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
@@ -37,13 +37,15 @@ SAVE_FORMAT = 17  # 2: Auto's state keeps the owner's hunters switch; 3: each cr
 # many genes a baby changes and by how much are genes; 13: a newcomer draws every gene from a range; 14: terrain
 # (obstacles and trees), fruit, the senses of an obstacle in view and of being under a tree (25 inputs); 15: a gene
 # changes by a share of its range, at least the smallest change; 16: a learner keeps a slot for each of up to 300
-# creatures (a world's own rules keep its size and room); 17: size by curves (six powers)
+# creatures (a world's own rules keep its size and room); 17: size by curves (six powers); 18: the diet
+# gene, meat (a corpse), the senses of meat seen and of its own diet (27 inputs)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
 INPUTS_HEARD = 5  # format 4: the brain hears (inputs 13-17)
 INPUTS_PAIN = 4  # format 5: the brain feels pain (inputs 18-21)
 INPUTS_TERRAIN = 5  # format 14: an obstacle in view (4 inputs) and being under a tree (1)
+INPUTS_DIET = 2  # format 18: the nearest food it sees is meat, its own diet
 HEARD_SIZE = 16  # format 7: the heard size (input 17, from 0: 16) leaves the brain
 
 
@@ -95,11 +97,11 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                        "vision_reach": c.vision_reach, "hearing": c.hearing, "facing": list(c.facing),
                        "fear_of_death": c.fear_of_death, "love_of_babies": c.love_of_babies,
                        "learns_from_others": c.learns_from_others, "mutations": c.mutations,
-                       "mutation_size": c.mutation_size,
+                       "mutation_size": c.mutation_size, "diet": c.diet,
                        "hurt": None if c.hurt is None else list(c.hurt)}
                       for c, brain in zip(world.creatures, brain_of)],
         "foods": [{"x": f.x, "y": f.y, "energy": f.energy, "remaining_duration": f.remaining_duration, "fruit": f.fruit,
-                   "radius": f.radius} for f in world.foods],  # a food keeps the radius it was made with as it is eaten
+                   "meat": f.meat, "radius": f.radius} for f in world.foods],  # a food keeps the radius it was made with as it is eaten
         "extra": extra,
     }
     arrays: Dict[str, np.ndarray] = {"about": np.array(json.dumps(about))}
@@ -160,6 +162,9 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
     if about.get("format") == 16:
         powers = ("tank_power", "living_power", "speed_power", "lifespan_power", "heard_power", "seen_power")
         about = {**about, "format": 17, "rules": {**about["rules"], **{p: rule(p).start for p in powers}}}
+    if about.get("format") == 17:
+        about = _from_format_17(about)
+        _widen_inputs(arrays, INPUTS_DIET)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -167,7 +172,7 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
 
 
 def _food(saved: Dict[str, Any]) -> Food:
-    food = Food(saved["x"], saved["y"], saved["remaining_duration"], saved["energy"], fruit=saved["fruit"])
+    food = Food(saved["x"], saved["y"], saved["remaining_duration"], saved["energy"], fruit=saved["fruit"], meat=saved["meat"])
     food.radius = saved["radius"]
     return food
 
@@ -293,6 +298,14 @@ def _from_format_13(about: Dict[str, Any]) -> Dict[str, Any]:
             "dial": dial, "foods": [{**f, "fruit": False} for f in about["foods"]]}
 
 
+def _from_format_17(about: Dict[str, Any]) -> Dict[str, Any]:
+    """A format 17 save had no diet: its creatures live half on plants, half on meat; a food that runs out (a corpse)
+    is meat; the diet rules start at their starting values."""
+    rules = {**about["rules"], **{r.name: r.start for r in RULES if r.name.startswith("gene.diet") or r.name == "diet_bite"}}
+    return {**about, "format": 18, "rules": rules, "creatures": [{**c, "diet": 0.5} for c in about["creatures"]],
+            "foods": [{**f, "meat": f["remaining_duration"] != -1 and not f["fruit"]} for f in about["foods"]]}
+
+
 def _room_to_grow(arrays: Dict[str, np.ndarray]) -> None:
     """A format 7 learner's brain was 1 layer of 32 with no room: it keeps those 32, with room for 64 beside them and
     for 2 more layers (all 0, unused), and its size genes say [1, 32, 0, 0]."""
@@ -390,6 +403,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.fear_of_death, creature.love_of_babies = saved["fear_of_death"], saved["love_of_babies"]
         creature.learns_from_others = saved["learns_from_others"]
         creature.mutations, creature.mutation_size = saved["mutations"], saved["mutation_size"]
+        creature.diet = saved["diet"]
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])
         world.add_creature(creature)
     world.foods = [_food(f) for f in about["foods"]]

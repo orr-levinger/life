@@ -347,6 +347,8 @@ class TestHunting(unittest.TestCase):
     def test_hunter_gains_eighty_percent(self):
         w = make_world(NO_FOOD_ATTACKS)
         hunter = add(w, 10, 10, size=2.0, energy=100.0)
+        hunter.diet = 1.0  # a meat eater: a hit feeds it in full
+        hunter.rules["diet_bite"] = 0.0  # this test: the share it keeps, not the harder bite
         prey = add(w, 11, 10, size=1.0, energy=50.0)
         hunter.apply_action(("ATTACK", prey), w)
         self.assertAlmostEqual(prey.energy, 40.0)

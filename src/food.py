@@ -18,7 +18,8 @@ class Food:
     Size is based on energy (size = energy).
     """
 
-    def __init__(self, x: float, y: float, remaining_duration: int, energy: float, fruit: bool = False):
+    def __init__(self, x: float, y: float, remaining_duration: int, energy: float, fruit: bool = False,
+                 meat: bool = False):
         """
         Initialize a new Food object.
 
@@ -31,7 +32,8 @@ class Food:
         self.x = float(x)
         self.y = float(y)
         self.energy = energy
-        self.fruit = fruit  # dropped by a tree (it looks different; it feeds the same)
+        self.fruit = fruit  # dropped by a tree (it looks different; a plant all the same)
+        self.meat = meat  # a corpse: it feeds by the eater's diet, plants by the rest
 
         # Radius is 0.01 of the energy
         self.radius = 0.01 * self.energy

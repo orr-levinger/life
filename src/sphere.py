@@ -5,10 +5,12 @@ it senses and how it moves are given in its own view: (ahead, left).
 Every function takes single points (shape (3,)) or arrays of them (shape (..., 3)) and broadcasts."""
 from __future__ import annotations
 
+import itertools
 import math
 from typing import Any, Tuple
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 TINY = 1e-12  # below this a direction has no length: two points are the same or opposite
 
@@ -107,3 +109,28 @@ def exp_map(base: np.ndarray, e1: np.ndarray, e2: np.ndarray, x: float, y: float
         return base.copy()
     t = (x * e1 + y * e2) / d
     return _unit(base * math.cos(d / R) + t * math.sin(d / R))
+
+
+def chord(distance: np.ndarray, R: float) -> np.ndarray:
+    """The straight line through the ball (of radius 1) between two points `distance` apart along the ground: it grows
+    with the distance, so the nearest by one are the nearest by the other."""
+    return 2.0 * np.sin(np.minimum(np.asarray(distance, dtype=float) / R, math.pi) / 2.0)
+
+
+def neighbours(lookers: np.ndarray, things: np.ndarray, reach: Any, R: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Every pair (looker i, thing j) at most reach[i] apart along the ground, and that distance: a k-d tree of the
+    things (their 3D points) finds the ones within each looker's reach as a straight line through the ball, so only
+    those are measured, never every pair."""
+    lookers, things = np.atleast_2d(lookers), np.atleast_2d(things)
+    reach = np.broadcast_to(np.asarray(reach, dtype=float), (len(lookers),))
+    if not len(lookers) or not len(things):
+        empty = np.zeros(0, dtype=int)
+        return empty, empty, np.zeros(0)
+    near = cKDTree(things).query_ball_point(lookers, chord(np.maximum(reach, 0.0), R) * (1.0 + 1e-9) + 1e-12,
+                                             workers=-1, return_sorted=False)
+    counts = np.fromiter(map(len, near), dtype=int, count=len(near))
+    i = np.repeat(np.arange(len(lookers)), counts)
+    j = np.fromiter(itertools.chain.from_iterable(near), dtype=int, count=int(counts.sum()))
+    d = arc(lookers[i], things[j], R)
+    keep = d <= reach[i]
+    return i[keep], j[keep], d[keep]

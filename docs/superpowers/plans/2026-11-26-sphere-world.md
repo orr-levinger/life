@@ -231,6 +231,42 @@ view changes). Test: a timing in the browser pane: `planet.bench(30)` (frames dr
   senses and kin; its test `test_the_grid_finds_the_same_pairs` (against all pairs, 300 random points); time again.
 - [ ] **Step 2:** Commit (if code changed) with the numbers in the message.
 
+### Task 11b: Neighbours by k-d tree (the owner, 2026-11-26: "use the most advanced optimiztions algorithems", "do it")
+
+Measured first (Task 11 Step 1): 1099 ms a step with ~600 alive; senses ~320 ms, kin shares ~215 ms, learning from
+others ~170 ms (every pair), the learner ~260 ms. Nothing about what a creature senses changes: only how the near ones
+are found.
+
+**Files:** `requirements.txt` (scipy, downloaded with the owner's yes), `src/sphere.py`, `src/senses.py`,
+`src/world.py`, `src/terrain.py`; tests in `tests/test_sphere.py`, `tests/test_senses.py`, `tests/test_terrain.py`.
+
+- [ ] **Step 1:** `pip install scipy`; pin its version in `requirements.txt`.
+- [ ] **Step 2:** Test first `test_tree_finds_the_same_pairs` (300 random points, each its own reach; against every
+  pair by arc) and `test_tree_pairs_on_a_tiny_and_a_huge_planet`; RED; then `sphere.neighbours(points, reaches, R)`:
+  a `scipy.spatial.cKDTree` on the 3D points, each one's reach as the chord 2R·sin(reach / 2R), the pairs exact by
+  arc; GREEN.
+- [ ] **Step 3:** Test first `test_senses_same_with_and_without_the_tree` (a hand-made world of 40 creatures and
+  rocks: every input identical to the every-pair result); RED; then senses, kin shares and learning from others
+  use the neighbour pairs, their bearings and distances computed in one NumPy pass; GREEN.
+- [ ] **Step 4:** Test first `test_sight_blocked_same_with_the_rock_tree` (random lines and rocks, against every
+  rock); RED; then a sight line tests only the rocks a k-d tree of rock caps finds near it; GREEN.
+- [ ] **Step 5:** Time 150 steps again (the Task 11 script) and profile; report each part. Still above 200 ms:
+  report what is left and ask the owner (Numba would be a separate download).
+- [ ] **Step 6:** `python scripts/run_tests.py` OK under 300 s; commit "Neighbours by k-d tree: N ms a step with 600".
+
+### Task 11c: Brains copied in one go, water by lookup (the owner, 2026-11-26: "most important is to make it fast first")
+
+After Task 11b: 501 ms a step with ~600 alive; ~1,100 small TensorFlow calls a step copy brains slot by slot (~118 ms),
+"in a pond?" asked one creature at a time against every cap (~48 ms). What a creature does and senses stays the same.
+
+- [ ] **Step 1:** Find every slot-by-slot TensorFlow read and write (profile callers); test first that a batch of
+  slot writes and reads gives the same weights as one at a time (`tests/test_learner.py`); RED; then the learner
+  gathers them and does one read / one write a step; GREEN.
+- [ ] **Step 2:** Test first `test_in_pond_same_with_the_tree` (random points and ponds, against every cap); RED;
+  then `in_pond` / `blocked` try only the caps a k-d tree finds within reach; GREEN.
+- [ ] **Step 3:** Time 150 steps again and profile; report each part.
+- [ ] **Step 4:** `python scripts/run_tests.py` OK under 300 s; commit "Brains in one go, water by lookup: N ms a step".
+
 ### Task 12: Final
 
 - [ ] **Step 1:** `python scripts/run_tests.py` → OK under 300 s.
@@ -250,6 +286,7 @@ view changes). Test: a timing in the browser pane: `planet.bench(30)` (frames dr
 | 5 | The page shows the planet, spins and zooms; creatures in 3D from genes | screenshots (whole, close-up, follow, POV) sent | the owner sees them |
 | 6 | Page speed | `bench(30)` with 600 alive | under 33 ms a frame (number reported) |
 | 7 | Step speed | timing script, 600 alive | ms per step reported; grid added if above 200 ms |
+| 7b | Neighbours by k-d tree give the same senses | `python -m unittest tests.test_sphere tests.test_senses tests.test_terrain` | `OK`; step time reported before and after |
 | 8 | three.js served locally | `test_static_files_are_served`; no `http` import in the page | `OK` |
 | 9 | One commit per task | `git log --oneline` | Tasks 0–12 |
 | 10 | On GitHub for the Mac | `git push origin evolve-from-scratch` | pushed |

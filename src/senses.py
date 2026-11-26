@@ -9,7 +9,7 @@ import numpy as np
 
 from .brain import N_SENSES
 from .creature import Creature, similarity
-from .sphere import arc, bearing
+from .sphere import arc, bearing, neighbours
 
 if TYPE_CHECKING:
     from .food import Food
@@ -23,6 +23,7 @@ KIN_INPUT = 44  # how alike the nearest creature it sees is
 IN_WATER = 45  # it is in a pond
 WATER_SEEN = 46  # the nearest obstacle in its field of vision is a pond
 CALL_INPUTS = 27  # where the heard call starts: its kind (10), how loud (1), from where (2), the voice (4)
+EVERY_PAIR = False  # True: every pair measured, the slow way (the tests' yardstick for the k-d tree)
 
 
 @dataclass(frozen=True)
@@ -48,8 +49,9 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
     foods, everyone = world.foods, world.creatures
     if foods:
         food_p = np.stack([f.p for f in foods])
-        food_d = me.distance(food_p)
-        food_edge = food_d - np.array([f.radius for f in foods])[None, :]  # distance to each food's edge
+        radii = np.array([f.radius for f in foods])
+        food_d = me.distance(food_p, np.maximum(me.reach, me.radius + radii.max()))  # what it sees or stands on
+        food_edge = food_d - radii[None, :]  # distance to each food's edge
         food_seen = (food_d <= me.reach[:, None]) & me.cone(food_p, food_d)
         food_seen &= ~world.terrain.sight_blocked(me.p, food_p, only=food_seen)  # nothing seen through a rock
         nearest_food = np.argmin(np.where(food_seen, food_d, np.inf), axis=1)
@@ -57,9 +59,9 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
     ids = np.array([c.id for c in everyone])
     moved = np.array([c.moved for c in everyone], dtype=bool)
     other_p = np.stack([c.p for c in everyone])
-    other_d = me.distance(other_p)
-    stranger = me.ids[:, None] != ids[None, :]  # anyone but itself: family is seen like anyone
     seen_from, heard_from = _noticed(everyone, world)
+    other_d = me.distance(other_p, me.noticing(seen_from, heard_from))
+    stranger = me.ids[:, None] != ids[None, :]  # anyone but itself: family is seen like anyone
     seen = stranger & _in_sight(me, world, other_p, other_d, seen_from)
     heard = stranger & ~seen & moved[None, :] & (other_d <= me.hearing[:, None] * heard_from[None, :])  # only movers sound
     nearest_seen = np.argmin(np.where(seen, other_d, np.inf), axis=1)
@@ -101,7 +103,7 @@ def _calls_heard(me: '_Eyes', world: Any) -> np.ndarray:
         return out
     where = np.stack([np.asarray(c.p, dtype=float) for c, _, _ in calls])
     carries = np.array([volume for _, _, volume in calls]) * world.rules["call_reach"]
-    distance = me.distance(where)
+    distance = me.distance(where, np.full(len(me.p), carries.max()))
     loud = np.where((distance <= carries[None, :]) & (me.ids[:, None] != np.array([c.id for c, _, _ in calls])[None, :]),
                     1.0 - distance / np.maximum(carries[None, :], 1e-9), -1.0)
     for i in np.nonzero(loud.max(axis=1) >= 0.0)[0]:
@@ -123,22 +125,38 @@ class _Eyes:
         self.f = np.stack([np.asarray(c.facing, dtype=float) for c in creatures])
         self.ids = np.array([c.id for c in creatures])
         self.reach = np.array([c.vision_reach for c in creatures])
+        self.radius = np.array([c.radius for c in creatures])
         self.hearing = np.array([c.hearing for c in creatures])
         width = np.array([c.vision_width for c in creatures])
         self.all_around = width >= 360.0
         self.half = np.cos(np.radians(width / 2.0))
-    def distance(self, points: np.ndarray) -> np.ndarray:
-        """[creature, point]: how far along the ground."""
-        return arc(self.p[:, None, :], points[None, :, :], self.R)
+    def distance(self, points: np.ndarray, reach: Optional[np.ndarray] = None) -> np.ndarray:
+        """[creature, point]: how far along the ground. With `reach` (each creature's farthest sense), a k-d tree finds
+        the points within it and only those are measured; the rest are inf (too far for anything it does)."""
+        if reach is None or EVERY_PAIR:
+            return arc(self.p[:, None, :], points[None, :, :], self.R)
+        i, j, d = neighbours(self.p, points, reach, self.R)
+        out = np.full((len(self.p), len(points)), np.inf)
+        out[i, j] = d
+        return out
+
+    def noticing(self, seen_from: np.ndarray, heard_from: np.ndarray) -> np.ndarray:
+        """Each creature's farthest sense of a body: its vision reach or its hearing, × the most noticeable body's."""
+        return np.maximum(self.reach * seen_from.max(initial=0.0), self.hearing * heard_from.max(initial=0.0))
 
     def toward(self, points: np.ndarray) -> tuple:
         """[creature, point]: where each point is in each creature's own view, (ahead, left)."""
         return bearing(self.p[:, None, :], self.f[:, None, :], points[None, :, :])
 
     def cone(self, points: np.ndarray, distance: np.ndarray) -> np.ndarray:
-        """[creature, point]: whether each point lies inside each creature's vision cone (at distance 0: inside)."""
-        ahead, _ = self.toward(points)
-        return self.all_around[:, None] | (ahead >= self.half[:, None]) | (distance == 0)
+        """[creature, point]: whether each point lies inside each creature's vision cone (at distance 0: inside); only
+        the measured points (a finite distance) are looked at, the others are never in sight anyway."""
+        out = np.broadcast_to(self.all_around[:, None] | (distance == 0), distance.shape).copy()
+        i, j = np.nonzero(np.isfinite(distance) & ~out)
+        if len(i):
+            ahead, _ = bearing(self.p[i], self.f[i], points[j])
+            out[i, j] = ahead >= self.half[i]
+        return out
 
 
 def sense(creature: Creature, world: Any) -> Senses:
@@ -151,7 +169,7 @@ def perceived(watchers: Sequence[Creature], actors: Sequence[Creature], world: A
     moved = np.array([c.moved for c in actors], dtype=bool)
     where = np.stack([c.p for c in actors])
     seen_from, heard_from = _noticed(actors, world)
-    distance = me.distance(where)
+    distance = me.distance(where, me.noticing(seen_from, heard_from))
     hears = (distance <= me.hearing[:, None] * heard_from[None, :]) & moved[None, :]  # sound goes around obstacles
     return (hears | _in_sight(me, world, where, distance, seen_from)).T
 
@@ -179,9 +197,13 @@ def _obstacles_seen(me: '_Eyes', world: Any) -> np.ndarray:
     out, wet = np.zeros((len(me.p), 4)), np.zeros(len(me.p))
     if not world.terrain.obstacles:
         return out, wet
-    edge, centres = world.terrain.nearest_edges(me.p)
-    ahead, left = me.toward(centres)
-    visible = (edge <= me.reach[:, None]) & (me.all_around[:, None] | (ahead >= me.half[:, None]) | (edge == 0))
+    edge, centres = world.terrain.nearest_edges(me.p, None if EVERY_PAIR else me.reach)
+    near = edge <= me.reach[:, None]
+    ahead, left = np.full(edge.shape, -np.inf), np.zeros(edge.shape)
+    i, j = np.nonzero(near)
+    if len(i):
+        ahead[i, j], left[i, j] = bearing(me.p[i], me.f[i], centres[j])
+    visible = near & (me.all_around[:, None] | (ahead >= me.half[:, None]) | (edge == 0))
     nearest = np.argmin(np.where(visible, edge, np.inf), axis=1)
     for i in np.nonzero(visible.any(axis=1))[0]:
         j = nearest[i]

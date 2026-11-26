@@ -193,5 +193,42 @@ class TestSenses(unittest.TestCase):
         self.assertTrue(math.isclose(child.radius, 0.25))
 
 
+class TestTheTree(unittest.TestCase):
+    """The k-d tree only finds the near ones faster: what every creature senses is what measuring every pair gives."""
+
+    def planet(self):
+        import random
+        from src import senses
+        from src.settings import START
+        from src.terrain import make_terrain
+        from src.world import World
+        from tests.helpers import SMALL_WORLD, populate
+        w = World(SMALL_WORLD["planet_radius"], START, "brain", random.Random(5), np.random.default_rng(5),
+                  random.Random(6), rules={**starting_rules(), **SMALL_WORLD})
+        w.terrain = make_terrain(w.rules, w.rng, w.radius)
+        populate(w, 40)
+        for _ in range(3):  # food grows, they turn and move
+            w.step()
+        return w, senses
+
+    def test_senses_same_with_and_without_the_tree(self):
+        from unittest import mock
+        w, senses = self.planet()
+        self.assertGreater(len(w.creatures), 20)
+        self.assertGreater(len(w.foods), 10)
+        with_tree = senses.sense_all(w)
+        seen_tree = perceived(w.creatures, w.creatures, w)
+        with mock.patch.object(senses, "EVERY_PAIR", True):
+            every = senses.sense_all(w)
+            seen_every = perceived(w.creatures, w.creatures, w)
+        for a, b in zip(with_tree, every):
+            np.testing.assert_array_equal(a.vector, b.vector)
+            self.assertIs(a.food, b.food)
+            self.assertIs(a.other, b.other)
+            self.assertIs(a.on_food, b.on_food)
+            self.assertIs(a.heard, b.heard)
+        np.testing.assert_array_equal(seen_tree, seen_every)
+        self.assertTrue(any(x.other is not None for x in every))  # some do see each other: the test means something
+
 if __name__ == "__main__":
     unittest.main()

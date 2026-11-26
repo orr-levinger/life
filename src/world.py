@@ -300,16 +300,17 @@ class World:
         if not carers:
             return {}
         changes = np.array([c.energy - before for c, before in zip(acting, energy_before)])
+        sees = perceived(carers, acting, self).T & (np.array([id(c) for c in carers])[:, None]
+                                                    != np.array([id(c) for c in acting])[None, :])
+        carer, actor = np.nonzero(sees)  # only the pairs that perceive each other: how alike is asked of those alone
+        alike = np.ones(len(carer))
         genes = kin_genes(self.rules)  # with no gene to tell them apart, all are alike
-        alike = np.ones((len(carers), len(acting)))
-        if genes:
+        if genes and len(carer):
             spans = np.array([self.rules[f"gene.{g}.high"] - self.rules[f"gene.{g}.low"] for g in genes])
             mine = np.array([[getattr(c, g) for g in genes] for c in carers]) / spans
             theirs = np.array([[getattr(c, g) for g in genes] for c in acting]) / spans
-            alike = 1.0 - np.abs(mine[:, None, :] - theirs[None, :, :]).mean(axis=2)  # [carer, actor]
-        sees = perceived(carers, acting, self).T & (np.array([id(c) for c in carers])[:, None]
-                                                    != np.array([id(c) for c in acting])[None, :])
-        share = (sees * alike * changes[None, :]).sum(axis=1)
+            alike = 1.0 - np.abs(mine[carer] - theirs[actor]).mean(axis=1)
+        share = np.bincount(carer, weights=alike * changes[actor], minlength=len(carers))
         return {id(c): c.kin * s for c, s in zip(carers, share)}
 
     @staticmethod

@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from src.sphere import arc, bearing, exp_map, local_frame, random_point, tangent_toward, walk
+from src.sphere import arc, bearing, exp_map, local_frame, neighbours, random_point, tangent_toward, walk
 
 R = 37.0
 
@@ -75,6 +75,31 @@ class TestSphere(unittest.TestCase):
         self.assertEqual(len(octants), 8)
         self.assertTrue(np.all(np.abs(octants - 1000) < 250))
 
+
+    def test_tree_finds_the_same_pairs(self):  # the k-d tree finds exactly the pairs within each one's own reach
+        rng = np.random.default_rng(3)
+        R = 37.0
+        lookers, things = rng.normal(size=(300, 3)), rng.normal(size=(200, 3))
+        lookers /= np.linalg.norm(lookers, axis=1, keepdims=True)
+        things /= np.linalg.norm(things, axis=1, keepdims=True)
+        reach = rng.uniform(0.0, 25.0, 300)
+        every = arc(lookers[:, None, :], things[None, :, :], R)
+        want = {(int(i), int(j)) for i, j in zip(*np.nonzero(every <= reach[:, None]))}
+        i, j, d = neighbours(lookers, things, reach, R)
+        self.assertEqual({(int(a), int(b)) for a, b in zip(i, j)}, want)
+        np.testing.assert_array_equal(d, every[i, j])  # the same distances, to the last digit
+
+    def test_tree_pairs_on_a_tiny_and_a_huge_planet(self):
+        rng = np.random.default_rng(4)
+        for R, reach in ((2.0, 7.0), (1.0e6, 3.0)):  # reach past the far side; a planet flat over the reach
+            pts = rng.normal(size=(120, 3))
+            if R > 1000:
+                pts = np.array([exp_map(np.array([0.36, 0.48, 0.8]), *local_frame(np.array([0.36, 0.48, 0.8])), x, y, R)
+                                for x, y in rng.uniform(-6.0, 6.0, (120, 2))])
+            pts /= np.linalg.norm(pts, axis=1, keepdims=True)
+            every = arc(pts[:, None, :], pts[None, :, :], R)
+            i, j, _ = neighbours(pts, pts, np.full(120, reach), R)
+            self.assertEqual(len(i), int(np.sum(every <= reach)), R)
 
 if __name__ == "__main__":
     unittest.main()

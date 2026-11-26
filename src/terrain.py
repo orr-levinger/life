@@ -16,7 +16,9 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from .rules import Rules
-from .sphere import cross, arc, exp_map, local_frame, random_point
+from .sphere import cross, arc, exp_map, local_frame, neighbours, random_point
+
+EVERY_ROCK = False  # True: a sight line is tried against every rock, the slow way (the tests' yardstick)
 
 KINDS = ("rock", "pond")  # a rock stops everyone and hides what is behind it; a pond stops only who cannot swim
 CIRCLES = (3, 6)  # caps making one obstacle's blob
@@ -103,7 +105,22 @@ class Terrain:
             return out
         looker, thing = np.nonzero(np.ones(out.shape, dtype=bool) if only is None else only)
         if len(looker):
-            out[looker, thing] = _way_crosses(a[looker], b[thing], self._r, self._rr / self.radius)
+            out[looker, thing] = (_way_crosses(a[looker], b[thing], self._r, self._rr / self.radius) if EVERY_ROCK
+                                  else self._crosses_near(a[looker], b[thing]))
+        return out
+
+    def _crosses_near(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        """[pair]: whether a rock stands on the way from a to b, trying only the rocks a k-d tree finds near it: every
+        point of the way is within half its length of its middle, so a rock that touches it has its centre within half
+        the length plus its own radius of that middle (ways between near-opposite points try every rock)."""
+        middle = a + b
+        size = np.linalg.norm(middle, axis=-1)
+        middle = np.where(size[:, None] > 1e-9, middle / np.maximum(size, 1e-9)[:, None], a)
+        reach = np.where(size > 1e-9, arc(a, b, self.radius) / 2.0 + self._rr.max(), math.pi * self.radius)
+        way, rock, _ = neighbours(middle, self._r, reach, self.radius)
+        out = np.zeros(len(a), dtype=bool)
+        if len(way):
+            out[way[_way_near(a[way], b[way], self._r[rock], self._rr[rock] / self.radius)]] = True
         return out
 
     def under_tree(self, points: np.ndarray) -> np.ndarray:
@@ -113,9 +130,17 @@ class Terrain:
             return np.zeros(len(points), dtype=bool)
         return np.any(self._arcs(self._t, points) < self._tr[None, :], axis=1)
 
-    def nearest_edges(self, points: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """[point, cap]: the arc from each point to each obstacle cap's edge (0 inside it); and the caps' centres."""
-        return np.maximum(self._arcs(self._c, points) - self._cr[None, :], 0.0), self._c
+    def nearest_edges(self, points: np.ndarray, reach: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+        """[point, cap]: the arc from each point to each obstacle cap's edge (0 inside it); and the caps' centres. With
+        `reach` (each point's), only the caps whose edge may lie within it are measured (a k-d tree finds them); the
+        rest are inf."""
+        if reach is None or not self._cr.size:
+            return np.maximum(self._arcs(self._c, points) - self._cr[None, :], 0.0), self._c
+        points = np.atleast_2d(points)
+        i, j, d = neighbours(points, self._c, np.asarray(reach) + self._cr.max(), self.radius)
+        out = np.full((len(points), len(self._c)), np.inf)
+        out[i, j] = np.maximum(d - self._cr[j], 0.0)
+        return out, self._c
 
     def state(self) -> Dict:
         return {"radius": self.radius,
@@ -134,19 +159,22 @@ def _angle(p: np.ndarray, q: np.ndarray) -> np.ndarray:
 
 def _way_crosses(a: np.ndarray, b: np.ndarray, centres: np.ndarray, angles: np.ndarray) -> np.ndarray:
     """[pair]: whether the shortest way along the ground from a to b (pairs of points) comes within any cap's angle
-    of its centre: the angle to the way's great circle where the centre's nearest point on it lies between a and b,
-    else the angle to the nearer end."""
+    of its centre."""
+    return np.any(_way_near(a[:, None, :], b[:, None, :], centres[None, :, :], angles[None, :]), axis=1)
+
+
+def _way_near(a: np.ndarray, b: np.ndarray, c: np.ndarray, angle: np.ndarray) -> np.ndarray:
+    """Whether the shortest way from a to b comes within `angle` of the centre c (all broadcast): the angle to the
+    way's great circle where the centre's nearest point on it lies between a and b, else the angle to the nearer end."""
     pole = cross(a, b)
     length = np.linalg.norm(pole, axis=-1, keepdims=True)
     pole = np.where(length > 1e-12, pole / np.maximum(length, 1e-12), 0.0)  # 0 for a way of no length
-    c = centres[None, :, :]
-    off = np.sum(c * pole[:, None, :], axis=-1)  # the sine of the centre's angle from the great circle
-    foot = c - pole[:, None, :] * off[..., None]  # its nearest point on that great circle (not normalised)
-    between = ((np.sum(cross(a[:, None, :], foot) * pole[:, None, :], axis=-1) >= 0)
-               & (np.sum(cross(foot, b[:, None, :]) * pole[:, None, :], axis=-1) >= 0) & (length > 1e-12))
-    to_way = np.where(between, np.arcsin(np.clip(np.abs(off), 0.0, 1.0)),
-                      np.minimum(_angle(a[:, None, :], c), _angle(b[:, None, :], c)))
-    return np.any(to_way < angles[None, :], axis=1)
+    off = np.sum(c * pole, axis=-1)  # the sine of the centre's angle from the great circle
+    foot = c - pole * off[..., None]  # its nearest point on that great circle (not normalised)
+    between = ((np.sum(cross(a, foot) * pole, axis=-1) >= 0)
+               & (np.sum(cross(foot, b) * pole, axis=-1) >= 0) & (length[..., 0] > 1e-12))
+    to_way = np.where(between, np.arcsin(np.clip(np.abs(off), 0.0, 1.0)), np.minimum(_angle(a, c), _angle(b, c)))
+    return to_way < angle
 
 
 def make_terrain(rules: Rules, rng: random.Random, radius: float,

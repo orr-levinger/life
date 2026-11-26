@@ -163,5 +163,22 @@ class TestTrees(unittest.TestCase):
         self.assertEqual(sense(far, w).vector[24], 0.0)
 
 
+class TestRockTree(unittest.TestCase):
+    def test_sight_blocked_same_with_the_rock_tree(self):  # only the rocks near a sight line are tried: the same answer
+        from src import terrain as module
+        rng = random.Random(9)
+        R = 20.0
+        rocks = [Obstacle("rock", ((tuple(random_point(rng)), rng.uniform(0.3, 2.0)),)) for _ in range(60)]
+        ponds = [Obstacle("pond", ((tuple(random_point(rng)), 1.5),))]
+        ground = Terrain(rocks + ponds, [], R)
+        lookers = np.array([random_point(rng) for _ in range(60)])
+        things = np.array([random_point(rng) for _ in range(90)])
+        only = arc(lookers[:, None, :], things[None, :, :], R) <= 18.0
+        with_tree = ground.sight_blocked(lookers, things, only=only)
+        with mock.patch.object(module, "EVERY_ROCK", True):
+            every = ground.sight_blocked(lookers, things, only=only)
+        np.testing.assert_array_equal(with_tree, every)
+        self.assertTrue(every.any() and (only & ~every).any())  # some lines blocked, some clear
+
 if __name__ == "__main__":
     unittest.main()

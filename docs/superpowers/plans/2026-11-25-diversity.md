@@ -9,7 +9,8 @@ benefits and senses; genes live on the creature and are listed in `src/rules.py`
 (`src/viewer.html`) shows each gene as a tile and a Genes-panel box.
 **Tech Stack:** Python 3.12, NumPy, TensorFlow (`src/learner.py`), stdlib HTTP server, one HTML page.
 **Approvals:** the ideas — the owner, 2026-11-25, "I LIKE ALL THE IDEAS", "care for kin amazing idea", "write the plan";
-Task 0 — "the world need to be much bigger with much more max creatures", "add this to the plan".
+Task 0 — "the world need to be much bigger with much more max creatures", "add this to the plan". The plan —
+"Approved, start Task 0" (2026-11-26); Task 3 changed — "lets just build it and fine tune it later" (2026-11-26).
 This plan is approved only by the owner's explicit yes.
 
 ## Global Constraints
@@ -53,6 +54,18 @@ are padded from 80 slots to 300 (empty slots, free).
    `tests.test_saves` → `OK`.
 4. Whole suite → `OK`. Speed: a copy of a new world run to 300 alive; the ms per step reported to the owner before
    any world is switched (today 13 ms with 80).
+4b. Speed (the owner, 2026-11-26: "Yes, fix the speed"; measured: 618 ms a step with 300 alive, 64.5 of 93.7 s in
+   `Terrain.sight_blocked`): `sight_blocked(..., only=mask)` checks only the pairs already within reach and cone,
+   in one pass over those pairs; `senses` passes its masks. Test first (`tests/test_terrain.py`): for random terrain,
+   points and masks, `sight_blocked(..., only=mask)` equals the full check `& mask` → fails (`TypeError: only`),
+   then `OK`. Timing script with 80 and 300 alive → the ms reported.
+4c. Fast tests (the owner, 2026-11-26: "hard limits for tests! 5 minutes! 1 second above it should fail the tests!",
+   "we should never run full life simulations as tests!"): `scripts/run_tests.py` runs every test file, 4 at a time,
+   and fails when the whole run passes `--limit` seconds (300); its test (`tests/test_run_tests.py`) first fails (no
+   script), then `OK`. Test worlds are small whatever the starting rules (`tests/helpers.SMALL_WORLD`: 50 × 30, room
+   80, 30 first, soup 10, 6 obstacles, 8 trees, target 64) for `make_world`, Auto's tests and the runs the tests
+   start. `python scripts/run_tests.py` → `OK` under 300 s. The tests that still run whole worlds are listed to the
+   owner with a proposal to replace them.
 5. Commit "A bigger world…" (judge passes; stat shows only this task's files). The owner's world updated (it keeps
    50 × 30 and 80 room until the owner changes them or starts a new world).
 6. Report the measured step time and, if the owner starts a new world, its alive count after 20,000 steps.
@@ -88,19 +101,26 @@ meat; `_attack` gain × diet, damage × (1 + diet × `diet_bite`); inputs 25 (ne
 5. Commit "Diet gene…" (judge passes; stat shows only this task's files). World updated; `now.json` genes has `diet`.
 6. After 20,000 steps report the Diet tile.
 
-### Task 3 — The call and its voice (spec decision 4)
-**Files:** `src/learner.py` (`N_CHOICES` 4), `src/brain.py` (`N_SENSES` 35), `src/creature.py`, `src/world.py`,
-`src/senses.py`, `src/policies.py`, `src/saves.py`, `src/viewer.html` (a call drawn as a ring), `tests/test_call.py`
-(new), `tests/test_saves.py`.
-**Interfaces:** action `CALL` (rule `call_cost`); inputs 27–34: heard call, distance ÷ hearing, direction (cos, sin),
-the voice (diet, size, water, stealth scaled to their ranges; 0 until those genes exist).
-1. Write `tests/test_call.py`: calling costs `call_cost`; a hearer gets direction and voice; similar genes → voices
-   within 0.05; no call → zeros; a converted brain calls in under 2 % of 1,000 steps. Run → fails.
+### Task 3 — Calls of several kinds, each with a volume (spec decision 4, changed by the owner 2026-11-26)
+**Files:** `src/rules.py`, `src/learner.py` (choices: the 3 of today + 10 calls; the move head gains a volume),
+`src/brain.py` (`N_SENSES` + 17), `src/creature.py`, `src/world.py`, `src/senses.py`, `src/policies.py`,
+`src/saves.py`, `src/evolve.py`, `src/viewer.html` (a call drawn as a ring as wide as it carries; a Calls tile and
+box), `tests/test_call.py` (new), `tests/test_saves.py`.
+**Interfaces:** gene `calls` 0–10 (newcomers 0–0, smallest change 1); rule `call_reach` (how far a call at full volume
+carries); actions `CALL_1`…`CALL_10`, those above the creature's `calls` closed (masked like unused neurons), each
+starting at bias −5; the loudest call heard this step gives 17 inputs: which call (10), how loud it arrived
+(1 − distance ÷ its reach), direction (cos, sin), the voice (diet, size, water, stealth scaled 0–1; 0 until those
+genes exist). No energy cost.
+1. Write `tests/test_call.py`: a creature with calls 0 cannot call; with calls 3 it can make calls 1–3 only; a call
+   at volume 0.5 is heard within 0.5 × `call_reach` and not beyond; the hearer gets the call's kind, loudness,
+   direction and voice; similar genes → voices within 0.05; no call → zeros; calling costs no energy; a newcomer has
+   calls 0; a converted brain calls in under 2 % of 1,000 steps. Run → fails.
 2. Code. Step-1 command → `OK`.
-3. Format 19: the choice head widened with bias −5; inputs widened by 8. `tests.test_saves` → `OK`.
+3. Format 19: creatures get calls 0; the choice head widened by 10 with bias −5; the move head gains the volume;
+   inputs widened by 17. `tests.test_saves` → `OK`.
 4. Whole suite → `OK`; timing reported.
-5. Commit "The call…" (judge passes). World updated.
-6. After 20,000 steps report the share of steps spent calling, near hunters and away from them.
+5. Commit "Calls…" (judge passes). World updated.
+6. After 20,000 steps report the Calls tile and the share of steps spent calling, near hunters and away from them.
 
 ### Task 4 — Care for kin (spec decision 5)
 **Files:** `src/rules.py`, `src/world.py` (`_teach`), `src/creature.py` (family rule removed), `src/senses.py`

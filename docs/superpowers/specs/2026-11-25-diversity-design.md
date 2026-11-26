@@ -26,9 +26,15 @@ every number a rule on the Rules page.
 2. **Diet gene** 0 (plants) – 1 (meat): energy from food and fruit × (1 − diet); from corpses and hits × diet; a bite
    hurts × (1 + diet). Senses: the nearest seen food is meat; its own diet.
 3. **Fighting back** needs no new rule: anyone may attack anyone, and attackers' hits add up.
-4. **The call**: a new action. Everyone within hearing hears its direction and the caller's voice — the caller's
-   diet, size, water and stealth genes, each scaled 0–1 (similar genes sound alike; never a hash). It costs energy;
-   predators hear it too. Its meaning is left to evolution.
+4. **Calls** (the owner, 2026-11-26: "several types of call… 1 call could mean danger 1 call could mean food";
+   "number of calls is also a gene between 1 and 10"; "a call should have a volume that control the distance";
+   "cost price is u are being noticed"; "lets just build it and fine tune it later"): a gene `calls` 0–10, how many
+   different calls a creature can make; newcomers start at 0 and evolution turns calls on (a baby's mutation adds
+   one). Each call type is its own action (those above its gene are closed); with each call the brain also chooses a
+   volume 0–1, and the call carries volume × `call_reach`. Everyone within that distance hears which call it was, how
+   loud it arrived, its direction and the caller's voice — the caller's diet, size, water and stealth genes, each
+   scaled 0–1 (similar genes sound alike; never a hash). No energy cost: its price is being noticed (predators hear
+   it too) and the step spent calling. No call has a meaning; meanings are left to evolution.
 5. **Care for kin** gene 0–1: a share of what happens to the creatures it perceives (their change in energy) counts in
    its own reward, scaled by how similar their genes are. The fixed rules "family can never be attacked" and "family
    is not seen as another creature" go. Sense: how similar the nearest seen creature is.

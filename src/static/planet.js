@@ -4,7 +4,8 @@
 // a creature to follow it; its point of view shows only what it senses (the world's own rules, src/senses.py).
 import * as THREE from "three";
 import { OrbitControls } from "/static/OrbitControls.js";
-import { BEASTS } from "/static/beasts.js";
+import { mergeGeometries } from "/static/BufferGeometryUtils.js";
+import { BEASTS, NEAR, DOT } from "/static/beasts.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
 const NEAR_FAR = { near: 0.05, far: 4000 };
@@ -55,7 +56,7 @@ function bladeTexture(renderer) {
   return t;
 }
 function makeGround(R, renderer) {
-  const geometry = new THREE.SphereGeometry(R, 192, 128);
+  const geometry = new THREE.SphereGeometry(R, 96, 64);  // light enough to draw without a graphics card (192 x 128 cost 10 ms a frame)
   const pos = geometry.attributes.position, colours = new Float32Array(pos.count * 3), c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i) / R, y = pos.getY(i) / R, z = pos.getZ(i) / R;
@@ -66,7 +67,7 @@ function makeGround(R, renderer) {
   geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
   const blades = bladeTexture(renderer);
   blades.repeat.set(Math.round(R * 4.4), Math.round(R * 2.2));  // about two tiles per unit of ground
-  return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true, map: blades, roughness: 1 }));
+  return new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, map: blades }));
 }
 
 // ---------- rocks rising out of the grass, ponds a little sunk, trees in their forests
@@ -86,22 +87,25 @@ function makeTerrain(terrain, R) {
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x8b847c, roughness: 0.95, flatShading: true });
   const pondMat = new THREE.MeshStandardMaterial({ color: 0x2f6fb8, roughness: 0.15, metalness: 0.1 });
   let seed = 1;
+  const rocks = [], ponds = [], at = new THREE.Object3D();  // every rock in one piece, every pond in one: two draws
   for (const o of terrain.obstacles || []) {
     for (const cap of o.caps) {
       const p = v3(cap), r = cap[3];
+      at.scale.set(1, 1, 1);
       if (o.kind === "rock") {
-        const rock = new THREE.Mesh(rockGeometry(seed++), rockMat);
-        standOn(rock, p, R, -0.15 * r);
-        rock.scale.set(r, r * (0.8 + 0.5 * ((seed * 0.37) % 1)), r);
-        rock.rotateY(seed * 1.7);
-        group.add(rock);
+        const geometry = rockGeometry(seed++);
+        standOn(at, p, R, -0.15 * r);
+        at.scale.set(r, r * (0.8 + 0.5 * ((seed * 0.37) % 1)), r);
+        at.rotateY(seed * 1.7);
+        at.updateMatrix(); rocks.push(geometry.applyMatrix4(at.matrix));
       } else {
-        const pond = new THREE.Mesh(new THREE.CircleGeometry(r, 40).rotateX(-Math.PI / 2), pondMat);
-        standOn(pond, p, R, 0.03);
-        group.add(pond);
+        standOn(at, p, R, 0.03);
+        at.updateMatrix(); ponds.push(new THREE.CircleGeometry(r, 40).rotateX(-Math.PI / 2).applyMatrix4(at.matrix));
       }
     }
   }
+  if (rocks.length) group.add(new THREE.Mesh(mergeGeometries(rocks), rockMat));
+  if (ponds.length) group.add(new THREE.Mesh(mergeGeometries(ponds), pondMat));
   const trees = terrain.trees || [];
   if (trees.length) {
     const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.24, 1.3, 7).translate(0, 0.65, 0),
@@ -143,9 +147,9 @@ export function makePlanet(container, { onPick } = {}) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.enablePan = false; controls.zoomSpeed = 1.1; controls.rotateSpeed = 0.6;
   state = { container, renderer, scene, camera, controls, onPick, R: null, terrainKey: null, ground: null, terrain: null,
-            food: {}, beasts: new THREE.Group(), marks: new THREE.Group(), follow: null, pov: false, picture: null,
+            food: {}, beasts: new THREE.Group(), herd: new THREE.Group(), batches: new Map(), marks: new THREE.Group(), follow: null, pov: false, picture: null,
             dragged: false };
-  scene.add(state.beasts, state.marks);
+  scene.add(state.beasts, state.herd, state.marks);
   const size = () => {
     const w = container.clientWidth || 800, h = container.clientHeight || 500;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -215,9 +219,20 @@ function drawFood(picture, R, sensed) {
 }
 
 function drawBeasts(placed, R, sensed, followed, options) {
-  const keep = new Set();
+  // near the camera each creature has its full body; far away it joins its body plan's batch; all rings are one batch
+  const keep = new Set(), far = new Map(), eye = state.camera.position, at = new THREE.Object3D();
   const shown = sensed ? placed.filter((x) => x === followed || sensed.sees.has(x.c.id)) : placed;
-  for (const x of shown) {
+  const rings = batch("rings", look.ringGeometry, look.ringMaterial, shown.length);
+  shown.forEach((x, i) => {
+    standOn(at, x.p, R, 0, x.f); at.scale.setScalar(Math.max(x.c.size, 0.3)); at.updateMatrix();
+    rings.setMatrixAt(i, at.matrix); rings.setColorAt(i, look.ring(x.c)); rings.userData.ids[i] = x.c.id;
+    const away = at.position.distanceTo(eye);
+    if (away >= NEAR) {
+      const key = look.farKey(x.c, away >= DOT ? "dot" : "far");
+      if (!far.has(key)) far.set(key, []);
+      far.get(key).push([x.c, at.matrix.clone()]);
+      return;
+    }
     keep.add(x.c.id);
     let body = state.beasts.children.find((b) => b.userData.id === x.c.id);
     const key = look.key(x.c);
@@ -229,9 +244,32 @@ function drawBeasts(placed, R, sensed, followed, options) {
     }
     standOn(body, x.p, R, 0, x.f);
     look.dress(body, x.c, { followed: x === followed, hovered: x.c.id === options.hover });
-  }
+  });
+  done(rings, shown.length);
   for (const b of [...state.beasts.children]) if (!keep.has(b.userData.id)) state.beasts.remove(b);
+  for (const [key, mesh] of state.batches) if (key !== "rings" && !far.has(key)) done(mesh, 0);
+  for (const [key, list] of far) {
+    const mesh = batch(key, look.farGeometry(key), look.farMaterial, list.length);
+    list.forEach(([c, matrix], i) => { mesh.setMatrixAt(i, matrix); mesh.setColorAt(i, look.coat(c)); mesh.userData.ids[i] = c.id; });
+    done(mesh, list.length);
+  }
   drawMarks(shown, R, sensed, followed, options);
+}
+function batch(key, geometry, material, n) {  // one draw for many: grows when it must, its ids say who is who
+  let mesh = state.batches.get(key);
+  if (!mesh || mesh.instanceMatrix.count < n) {
+    if (mesh) state.herd.remove(mesh);
+    mesh = new THREE.InstancedMesh(geometry, material, Math.max(64, n * 2));
+    mesh.frustumCulled = false; mesh.userData.ids = [];
+    state.batches.set(key, mesh); state.herd.add(mesh);
+  }
+  return mesh;
+}
+function done(mesh, n) {
+  mesh.count = n; mesh.userData.ids.length = n;
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  mesh.boundingSphere = null;  // picking measures it again
 }
 
 // vision cones, call rings and the follow ring, flat on the ground
@@ -310,7 +348,9 @@ export function creatureAt(event) {  // the creature under the pointer, or null
   const box = state.renderer.domElement.getBoundingClientRect();
   const mouse = new THREE.Vector2(((event.clientX - box.left) / box.width) * 2 - 1, -((event.clientY - box.top) / box.height) * 2 + 1);
   const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, state.camera);
-  for (const hit of ray.intersectObjects(state.beasts.children, true)) {
+  const batched = [...state.batches].filter(([key]) => key !== "rings").map(([, mesh]) => mesh);
+  for (const hit of ray.intersectObjects([...state.beasts.children, ...batched], true)) {
+    if (hit.instanceId !== undefined && hit.object.userData.ids) return hit.object.userData.ids[hit.instanceId];
     let o = hit.object;
     while (o && o.userData.id === undefined) o = o.parent;
     if (o) return o.userData.id;
@@ -323,15 +363,16 @@ export function render() { if (state) state.renderer.render(state.scene, state.c
 // frames drawn back to back, each one finished: how fast this machine draws the planet (no waiting on the page clock)
 export function bench(n = 30) {
   if (!state) return null;
-  const gl = state.renderer.getContext(), times = [];
+  const gl = state.renderer.getContext(), times = [], pixel = new Uint8Array(4);
   for (let i = 0; i < n; i++) {
     const s = performance.now();
-    state.controls.update(); state.renderer.render(state.scene, state.camera); gl.finish();
+    state.controls.update(); state.renderer.render(state.scene, state.camera);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);  // waits until the frame is drawn (gl.finish may not)
     times.push(performance.now() - s);
   }
   times.sort((a, b) => a - b);
   const ms = times[Math.floor(n / 2)];
-  return { msPerFrame: +ms.toFixed(1), framesPerSecond: +(1000 / ms).toFixed(1), creatures: state.beasts.children.length };
+  return { msPerFrame: +ms.toFixed(1), framesPerSecond: +(1000 / ms).toFixed(1), creatures: (state.lastPlaced || []).length };
 }
 
 // What `me` senses (the world's rules, src/senses.py): seen within its vision reach and inside its cone; heard when not

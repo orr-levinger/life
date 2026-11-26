@@ -1,11 +1,14 @@
 // How a creature looks, from its genes (the look the owner approved in the gallery, 2026-11-26): a body plan that
 // blends a grazer (diet 0), a hunter (diet 1) and a swimmer (water 1), and on it every other gene's own sign.
 // Low-poly and flat-shaded; the parts sharing a material are merged; bodies with the same rounded genes share their
-// geometry. Near the camera the full body; far away a simple one of the same plan and colours (THREE.LOD).
+// geometry. Near the camera the full body; far away a simple one of its body plan, drawn in batches (one per plan,
+// each body in its own coat colour): this box draws without a graphics card, so every draw counts.
 import * as THREE from "three";
 import { mergeGeometries } from "/static/BufferGeometryUtils.js";
 
-const NEAR = 15;  // closer than this to the camera: the full body
+export const NEAR = 15;  // closer than this to the camera: the full body
+export const DOT = 40;  // farther than this: the simplest body, its trunk and head (a few pixels on the screen)
+const farMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.75 });  // every far body
 const mix = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
@@ -53,6 +56,13 @@ function genesOf(c) {
 }
 const keyOf = (g) => Object.values(g).join(",");
 
+function coatOf(g) {  // the coat's colour: tan grazer, rust hunter, teal swimmer; stealth dulls it
+  const p = g.diet, w = g.water;
+  const base = new THREE.Color().setRGB(mix(0.55, 0.45, p), mix(0.55, 0.22, p), mix(0.3, 0.14, p)).lerp(new THREE.Color(0.18, 0.55, 0.62), w * 0.8);
+  if (g.stealth > 0) base.lerp(new THREE.Color(0.42, 0.42, 0.36), 0.6 * g.stealth);  // stealth: a duller coat
+  return base;
+}
+
 // ---------- one body (genes 0..1 except layers 1-3 and calls 0-10), full or simple
 export function beastModel(g, detail = "near") {
   const p = g.diet, w = g.water, h = 1 - p;
@@ -65,17 +75,17 @@ export function beastModel(g, detail = "near") {
   const len = mix(1.15, 1.5, p) * mix(1, 1.25, w), tall = mix(0.72, 0.5, p) * mix(1, 0.8, w), wide = mix(0.68, 0.48, p) * mix(1, 0.85, w);
   const legLen = mix(0.62, 0.42, p) * mix(1, 0.45, w);
   const bodyY = legLen + tall * 0.42, round = g.love;
-  const near = detail === "near";
+  const near = detail === "near", dot = detail === "dot";
   const ball = (d) => new THREE.IcosahedronGeometry(0.5, near ? d : 0);
   put("skin", ball(1), len * 0.18, bodyY + tall * 0.05 * h, 0, 0, 0, 0, len * 0.62, tall * mix(1, 1.15, p), wide * (1 + 0.25 * round));
   put("skin", ball(1), -len * 0.22, bodyY, 0, 0, 0, 0, len * 0.6, tall * mix(1.05, 0.85, p), wide * (0.95 + 0.25 * round));
   const headR = (0.22 + 0.1 * g.neurons) * mix(1, 1.2, p), neckLen = mix(0.55, 0.22, p) * mix(1, 0.4, w);
   const nx = len * 0.5, ny = bodyY + tall * 0.2, neckA = mix(0.9, 0.25, p);
-  put("skin", new THREE.CylinderGeometry(0.11, 0.17, neckLen, near ? 7 : 4), nx + Math.sin(neckA) * neckLen * 0.5, ny + Math.cos(neckA) * neckLen * 0.5, 0, 0, 0, -neckA);
+  if (!dot) put("skin", new THREE.CylinderGeometry(0.11, 0.17, neckLen, near ? 7 : 4), nx + Math.sin(neckA) * neckLen * 0.5, ny + Math.cos(neckA) * neckLen * 0.5, 0, 0, 0, -neckA);
   const hx = nx + Math.sin(neckA) * neckLen + headR * 0.4, hy = ny + Math.cos(neckA) * neckLen;
   put("skin", new THREE.IcosahedronGeometry(headR, near ? 1 : 0), hx, hy, 0, 0, 0, 0, mix(1.15, 1.35, p), mix(0.95, 0.75, p), mix(0.9, 1.0, p));
   // legs: a grazer's straight with hooves, a hunter's crouched and clawed, a swimmer's short and webbed
-  for (const [fx, s] of [[0.32, 1], [0.32, -1], [-0.32, 1], [-0.32, -1]]) {
+  if (!dot) for (const [fx, s] of [[0.32, 1], [0.32, -1], [-0.32, 1], [-0.32, -1]]) {
     const lx = fx * len, lz = s * wide * 0.32;
     if (p < 0.5 || !near) put("skin", new THREE.CylinderGeometry(0.075, 0.06, legLen, near ? 6 : 3), lx, legLen / 2, lz);
     else {
@@ -143,8 +153,7 @@ export function beastModel(g, detail = "near") {
     if (g.calls > 0) put("sac", new THREE.IcosahedronGeometry(0.06 + 0.022 * g.calls, 1), hx - headR * 0.1, hy - headR * 0.95, 0);  // calls: a throat sac
     if (g.kin > 0.05) put("white", new THREE.BoxGeometry(headR * 0.9, headR * (0.2 + 0.4 * g.kin), 0.02), hx + headR * 0.65, hy + headR * 0.1, 0, 0, Math.PI / 2, 0.3);  // kin: a blaze
   }
-  const base = new THREE.Color().setRGB(mix(0.55, 0.45, p), mix(0.55, 0.22, p), mix(0.3, 0.14, p)).lerp(new THREE.Color(0.18, 0.55, 0.62), w * 0.8);
-  if (g.stealth > 0) base.lerp(new THREE.Color(0.42, 0.42, 0.36), 0.6 * g.stealth);  // stealth: a duller coat
+  const base = coatOf(g);
   const kind = w > 0.5 ? "water" : p > 0.5 ? "meat" : "plant";
   const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.75, ...extra });
   const mats = {
@@ -155,6 +164,20 @@ export function beastModel(g, detail = "near") {
     accent: mat(0xc86fd6, { roughness: 0.4 }), sac: mat(0xf08aa8, { roughness: 0.25 }),
   };
   const group = new THREE.Group();
+  if (!near) {  // far away: one mesh, each part's colour on its corners; the skin white, so a batch paints each coat
+    const all = [], white = new THREE.Color(1, 1, 1);
+    for (const [name, geos] of Object.entries(parts)) {
+      for (const x of geos) {
+        const c = name === "skin" ? white : name === "dark" ? new THREE.Color(0.45, 0.45, 0.45) : mats[name].color;
+        const geo = x.index ? x.toNonIndexed() : x, n = geo.attributes.position.count, rgb = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) rgb.set([c.r, c.g, c.b], i * 3);
+        geo.deleteAttribute("uv"); geo.setAttribute("color", new THREE.BufferAttribute(rgb, 3));
+        all.push(geo);
+      }
+    }
+    group.add(new THREE.Mesh(mergeGeometries(all), farMaterial));
+    return group;
+  }
   for (const [name, geos] of Object.entries(parts)) {
     if (!geos.length) continue;
     group.add(new THREE.Mesh(mergeGeometries(geos.map((x) => (x.index ? x.toNonIndexed() : x))), mats[name]));
@@ -162,32 +185,33 @@ export function beastModel(g, detail = "near") {
   return group;
 }
 
-// ---------- what the planet uses: models shared by alike genes, a full one near and a simple one far, a hunger ring
-const models = new Map();
-const ringGeometry = new THREE.RingGeometry(0.78, 0.92, 24).rotateX(-Math.PI / 2);
-const ringMats = new Map();
-function ringMat(energy) {  // green full, yellow half, red hungry (ten shades)
-  const k = Math.round(clamp01(energy) * 10);
-  if (!ringMats.has(k)) ringMats.set(k, new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0.033 * k, 0.85, 0.5),
-                                                                       transparent: true, opacity: 0.9, depthWrite: false }));
-  return ringMats.get(k);
+// ---------- what the planet uses: near, a full body for each creature (shared by alike genes); far, a simple body of
+// its plan (diet and water in quarters) drawn in one batch per plan, coloured by its coat; every hunger ring in one batch
+const models = new Map(), farModels = new Map();
+const PLAIN = { size: 1, love: 0.3, fear: 0, layers: 1, neurons: 0.25, learns: 0, learning: 0, width: 0.5, reach: 0.5,
+                hearing: 0.4, armour: 0, stealth: 0, calls: 0, kin: 0 };
+const ringColours = [...Array(11).keys()].map((k) => new THREE.Color().setHSL(0.033 * k, 0.85, 0.5));
+function ringColour(energy) { return ringColours[Math.round(clamp01(energy) * 10)]; }  // green full, yellow half, red hungry
+function farGeometry(key) {
+  if (!farModels.has(key)) {
+    const [diet, water, detail] = key.split(",");
+    farModels.set(key, beastModel({ ...PLAIN, diet: Number(diet), water: Number(water) }, detail).children[0].geometry);
+  }
+  return farModels.get(key);
 }
 export const BEASTS = {
   key: (c) => keyOf(genesOf(c)),
-  make(c) {
+  make(c) {  // a full body, for a creature near the camera
     const g = genesOf(c), key = keyOf(g);
-    if (!models.has(key)) models.set(key, { near: beastModel(g, "near"), far: beastModel(g, "far") });
-    const model = models.get(key), lod = new THREE.LOD();
-    lod.addLevel(model.near.clone(), 0); lod.addLevel(model.far.clone(), NEAR);
-    const holder = new THREE.Group();
-    holder.add(lod);
-    const ring = new THREE.Mesh(ringGeometry, ringMat(c.energy)); ring.position.y = 0.02; ring.scale.setScalar(1.2);
-    holder.add(ring);
-    holder.userData.ring = ring;
-    return holder;
+    if (!models.has(key)) models.set(key, beastModel(g, "near"));
+    return models.get(key).clone();
   },
-  dress(holder, c) {
-    holder.scale.setScalar(Math.max(c.size, 0.3));
-    holder.userData.ring.material = ringMat(c.energy);
-  },
+  dress(body, c) { body.scale.setScalar(Math.max(c.size, 0.3)); },
+  farKey(c, detail) { const g = genesOf(c); return `${g.diet},${g.water},${detail}`; },  // detail: far or dot
+  farGeometry,
+  farMaterial,
+  coat: (c) => coatOf(genesOf(c)),
+  ringGeometry: new THREE.RingGeometry(0.78, 0.92, 24).rotateX(-Math.PI / 2).scale(1.2, 1.2, 1.2).translate(0, 0.02, 0),
+  ringMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false }),
+  ring: (c) => ringColour(c.energy),
 };

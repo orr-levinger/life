@@ -494,6 +494,8 @@ class TestControlRoom(unittest.TestCase):
         self.assertIn('/static/OrbitControls.js', planet)
         for name in ("makePlanet", "updatePlanet", "followCreature", "pointOfView", "bench"):
             self.assertIn(f"export function {name}", planet)
+        self.assertIn("gl.readPixels(", planet)  # the bench waits for each frame to be drawn (gl.finish may not)
+        self.assertIn("new THREE.SphereGeometry(R, 96, 64)", planet)  # the ground light enough to draw without a graphics card
         for text in (page, planet):
             self.assertNotIn("http://", text.replace("http://www.w3.org/2000/svg", ""))  # an SVG name, not a download
             self.assertNotIn("https://", text)  # nothing from the internet
@@ -507,9 +509,13 @@ class TestControlRoom(unittest.TestCase):
                      "learns_from_others", "learning_speed", "vision_width", "vision_reach", "hearing", "armour",
                      "stealth", "calls", "kin"):
             self.assertIn(f"c.{gene}", beasts, gene)  # each gene shows in the body
-        for words in ("export function beastModel(", "export const BEASTS", "THREE.LOD"):
-            self.assertIn(words, beasts)  # a full body near the camera, a simple one far away
+        for words in ("export function beastModel(", "export const BEASTS", "farGeometry(", "ringColour(", "export const DOT"):
+            self.assertIn(words, beasts)  # a full body near, a simple one far, a simplest one farther, a hunger ring
         self.assertIn('from "/static/beasts.js"', planet)
+        # drawn in batches (this box draws without a graphics card): far bodies by body plan, all hunger rings in one,
+        # the rocks in one and the ponds in one
+        for words in ("look.farKey(", "look.ringGeometry", "mergeGeometries(rocks)", "mergeGeometries(ponds)"):
+            self.assertIn(words, planet)
         with urllib.request.urlopen(self.server.base + "/static/gallery.html") as response:
             self.assertIn("beastModel", response.read().decode("utf-8"))  # each gene low, middle and high
 

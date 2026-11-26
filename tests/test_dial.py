@@ -101,6 +101,11 @@ class TestStep(unittest.TestCase):
 
 
 class TestDial(unittest.TestCase):
+    def test_food_sliders_reach_further(self):  # the owner, 2026-11-26: tops 800 pieces, 20 a step, 100 energy
+        ends = {k.name: k.easiest for k in KNOBS}
+        self.assertEqual((ends["max_food"], ends["food_per_step"], ends["food_energy"]), (800.0, 20.0, 100.0))
+        self.assertEqual((START.max_food, START.food_per_step, START.food_energy), (400, 6.0, (20, 40)))  # starts as before
+
     def test_starts_at_the_easy_start(self):
         dial = Dial()
         self.assertEqual((dial.level, dial.settings), (0, START))

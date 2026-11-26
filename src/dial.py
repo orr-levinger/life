@@ -31,12 +31,12 @@ class Knob:
 
 
 KNOBS = (
-    Knob("max_food", -1, easiest=400.0, hardest=20.0),
-    Knob("food_energy", -1, easiest=60.0, hardest=3.0),
+    Knob("max_food", -1, easiest=800.0, hardest=20.0),
+    Knob("food_energy", -1, easiest=100.0, hardest=3.0),
     Knob("move_cost", +1, easiest=0.1, hardest=3.0),
     Knob("step_cost", +1, easiest=0.01, hardest=0.5),
     Knob("lifespan", -1, easiest=10000.0, hardest=625.0),
-    Knob("food_per_step", -1, easiest=6.0, hardest=0.2),
+    Knob("food_per_step", -1, easiest=20.0, hardest=0.2),
     Knob("fruit_rate", -1, easiest=0.2, hardest=0.002),
 )
 

@@ -244,7 +244,7 @@ class TestControlRoom(unittest.TestCase):
         self.assertEqual([k["name"] for k in answer["knobs"]], [k.name for k in KNOBS])
         energy = next(k for k in answer["knobs"] if k["name"] == "food_energy")
         self.assertEqual((energy["label"], energy["easiest"], energy["hardest"], energy["start"]),
-                         ("Energy per food", 60.0, 3.0, 30.0))
+                         ("Energy per food", 100.0, 3.0, 30.0))
         self.assertIs(answer["hunters"], False)
 
     def test_the_next_worlds_rules_are_changed_with_nothing_running(self):
@@ -290,7 +290,7 @@ class TestControlRoom(unittest.TestCase):
         self.assertEqual((status, answer["error"]), (400, "species must be one of learning, instinct"))
         status, answer = self.server.post("/start", {"species": "learning", "seed": 1, "mode": "auto",
                                                      "settings": {"food_energy": 0.5}})
-        self.assertEqual((status, answer["error"]), (400, "food_energy must be between 3 and 60, not 0.5"))
+        self.assertEqual((status, answer["error"]), (400, "food_energy must be between 3 and 100, not 0.5"))
         self.assertEqual(self.recorder.launched, [])
 
     def test_control_writes_the_run_s_file(self):

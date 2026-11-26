@@ -267,6 +267,15 @@ After Task 11b: 501 ms a step with ~600 alive; ~1,100 small TensorFlow calls a s
 - [ ] **Step 3:** Time 150 steps again and profile; report each part.
 - [ ] **Step 4:** `python scripts/run_tests.py` OK under 300 s; commit "Brains in one go, water by lookup: N ms a step".
 
+### Task 11d: Food sliders reach further (the owner, 2026-11-26: "yes" to slider tops 800 / 20 / 100)
+
+The easiest ends of three knobs (`src/dial.py`): food pieces at most 400 -> 800, new food per step 6 -> 20, energy per
+food 60 -> 100. Auto may go that easy too. New worlds still start at START (400, 6, 20-40).
+
+- [ ] **Step 1:** Test first `test_food_sliders_reach_further` (`tests/test_dial.py`: the three knobs' easiest ends,
+  and START unchanged); RED; then the three numbers; GREEN; `python -m unittest tests.test_dial tests.test_viewer` OK.
+- [ ] **Step 2:** Commit "Food sliders reach 800 pieces, 20 a step, 100 energy".
+
 ### Task 12: Final
 
 - [ ] **Step 1:** `python scripts/run_tests.py` → OK under 300 s.

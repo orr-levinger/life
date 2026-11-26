@@ -136,6 +136,18 @@ class TestBrainGenes(unittest.TestCase):
 
 
 class TestLearner(unittest.TestCase):
+    def test_the_spreads_stay_bounded(self):
+        import src.learner as L
+        import tensorflow as tf
+        learner = learner_with(1)
+        learner._params["log_std"][0].assign([50.0, -50.0, 50.0])  # pushed far by exploring, never used
+        p = {name: tf.gather(var, [0]) for name, var in learner._params.items()}
+        _, _, log_std, _ = L._heads(p, tf.zeros((1, 1, N_SENSES)), tf.ones((1, 1)), tf.zeros((1, 1)),
+                                    tf.constant([[1.0, 32.0, 0.0, 0.0]]))
+        self.assertTrue(np.all(np.abs(log_std.numpy()) <= max(abs(L.LOG_STD_LOW), abs(L.LOG_STD_HIGH))))
+        moves = [m for _, m in learner.act([0], np.zeros((1, N_SENSES)), True, learning=False, calls=[1])]
+        self.assertTrue(np.all(np.isfinite(moves)))
+
     def test_act_shapes_and_ranges(self):
         learner = learner_with(4)
         actions = learner.act([0, 1, 2, 3], np.zeros((4, N_SENSES)), attacks_on=True)

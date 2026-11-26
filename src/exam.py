@@ -21,6 +21,10 @@ from .world import World
 
 
 
+EXAM_BODIES = {"tank_power": 1.0, "living_power": 1.0, "speed_power": 1.0, "lifespan_power": 0.0, "heard_power": 0.0,
+               "seen_power": 0.0}  # the exam's bodies grow in straight lines with size, as before size curves
+
+
 def exam_settings(rules: Rules) -> Settings:
     """The exam's own world, from the rules: always the same unless the owner changes it on the Rules page."""
     return Settings(fruit_rate=0.0, max_food=rules["exam_max_food"], food_energy=(rules["exam_food_energy_low"], rules["exam_food_energy_high"]),
@@ -44,7 +48,8 @@ def _exam_world(policy: str, brains: Sequence[Any], sizes: Sequence[float], seed
         learner = Learner(len(sizes), seed)
         for weights in brains:  # a fresh learner hands out slots 0, 1, 2 … in order
             learner.allocate(weights, lr=0.0)
-    exam_rules = starting_rules()  # the exam world's bodies follow the starting rules, so the test stays the same
+    exam_rules = {**starting_rules(), "world_width": rules["exam_width"], "world_height": rules["exam_height"],
+                  **EXAM_BODIES}  # its own size, and bodies as they were: the test stays the same
     world = World(exam_rules["world_width"], exam_rules["world_height"], exam_settings(rules), policy,
                   random.Random(seed + 2), np.random.default_rng(seed), random.Random(seed + 1), evolving=False,
                   learner=learner, rules=exam_rules)
@@ -55,7 +60,7 @@ def _exam_world(policy: str, brains: Sequence[Any], sizes: Sequence[float], seed
         full = full_tank(size, world.rules)
         world.add_creature(Creature(world.next_id(), x, y, size, full * rules["exam_start_share"], policy,
                                     brain if policy == "brain" else None,
-                                    slot=slot if policy == "learner" else None))
+                                    slot=slot if policy == "learner" else None, rules=world.rules))
     return world
 
 

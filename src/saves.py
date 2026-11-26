@@ -15,6 +15,7 @@ import math
 import os
 import random
 import zipfile
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -29,7 +30,7 @@ from .terrain import Terrain, make_terrain
 from .settings import START, TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 25  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 26  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
@@ -42,7 +43,8 @@ SAVE_FORMAT = 25  # 2: Auto's state keeps the owner's hunters switch; 3: each cr
 # closed above it, a volume), the heard call (44 inputs); 20: care for kin (a gene), family seen and attacked like
 # anyone, how alike the one it sees is (45 inputs); 21: water (a gene; ponds let swimmers in, grow food, hide
 # nothing), the senses of being in water and of water ahead (47 inputs), whether each moved last step; 22: stealth;
-# 23: armour; 24: seasons; 25: forests and rich pond edges (rules only: a world keeps its ground)
+# 23: armour; 24: seasons; 25: forests and rich pond edges (rules only: a world keeps its ground);
+# 26: the exam world's own size
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -109,6 +111,8 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                       for c, brain in zip(world.creatures, brain_of)],
         "foods": [{"x": f.x, "y": f.y, "energy": f.energy, "remaining_duration": f.remaining_duration, "fruit": f.fruit,
                    "meat": f.meat, "radius": f.radius} for f in world.foods],  # a food keeps the radius it was made with as it is eaten
+        "calls": [{"id": c.id, "x": c.x, "y": c.y, "size": c.size, "diet": c.diet, "water": c.water, "stealth": c.stealth,
+                   "kind": kind, "volume": volume} for c, kind, volume in world.calls],  # heard in the next step
         "extra": extra,
     }
     arrays: Dict[str, np.ndarray] = {"about": np.array(json.dumps(about))}
@@ -200,6 +204,9 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
     if about.get("format") == 24:
         regions = ("forests", "forest_spread", "pond_edge_food", "pond_edge_width")
         about = {**about, "format": 25, "rules": {**about["rules"], **{name: rule(name).start for name in regions}}}
+    if about.get("format") == 25:
+        about = {**about, "format": 26,
+                 "rules": {**about["rules"], **{name: rule(name).start for name in ("exam_width", "exam_height")}}}
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -467,5 +474,9 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         world.add_creature(creature)
     world.foods = [_food(f) for f in about["foods"]]
     world.terrain = Terrain.from_state(about["terrain"])
+    living = {c.id: c for c in world.creatures}
+    world.calls = [(living.get(saved["id"]) or SimpleNamespace(**{k: saved[k] for k in ("id", "x", "y", "size", "diet",
+                                                                                       "water", "stealth")}),
+                    saved["kind"], saved["volume"]) for saved in about.get("calls", [])]  # a caller since gone still heard
     world.count_neurons()
     return world, Dial.from_state(about["dial"]), about["extra"]

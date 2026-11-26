@@ -23,6 +23,8 @@ N_CHOICES = CALL_FIRST + N_CALLS  # 0 move, 1 eat, 2 attack, 3-12 a call of each
 ATTACK = 2
 CALL_BIAS = -6.0  # a call starts almost never chosen: all ten together about 1 % (bias -5 would make it 2 %)
 N_MOVE = 3  # the move's two axes and a call's volume
+LOG_STD_LOW, LOG_STD_HIGH = -5.0, 2.0  # a move's spread stays between e^-5 and e^2 (a spread nothing uses would
+# otherwise grow with every round of exploring, until it overflows)
 LEARNING_RATE = HAND_MADE["learning_speed"]  # a brain made by hand (a newcomer draws its own)
 INITIAL_SPREAD = rule("learn_spread").start  # a newborn's first spread, from the rules
 ADAM_BETAS = (0.9, 0.999)
@@ -166,7 +168,7 @@ def _heads(p: Dict[str, tf.Tensor], x: tf.Tensor, attacks: tf.Tensor, calls: tf.
     closed = tf.cast(tf.range(N_CALLS, dtype=tf.float32)[None, None, :] >= calls[..., None], tf.float32)
     logits += MASKED * tf.concat([tf.zeros_like(logits[..., :CALL_FIRST]), closed], axis=-1)
     mean = tf.tanh(tf.einsum("kth,khm->ktm", h, p["wm"]) + p["bm"][:, None, :])
-    log_std = tf.broadcast_to(p["log_std"][:, None, :], tf.shape(mean))
+    log_std = tf.clip_by_value(tf.broadcast_to(p["log_std"][:, None, :], tf.shape(mean)), LOG_STD_LOW, LOG_STD_HIGH)
     critic_h = tf.tanh(tf.einsum("kti,kih->kth", x, p["wh"]) + p["bh"][:, None, :])
     value = tf.einsum("kth,khv->ktv", critic_h, p["wv"])[..., 0] + p["bv"][:, None, 0]
     return logits, mean, log_std, value

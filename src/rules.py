@@ -113,6 +113,8 @@ RULES = (
          0.01, 0.3),
     Rule("exam_every", "exam", "The exam every this many steps (changing the exam makes older scores incomparable)", 2000.0,
          250.0, 20000.0),
+    Rule("exam_width", "exam", "The exam world's width", 50.0, 10.0, 200.0),
+    Rule("exam_height", "exam", "The exam world's height", 30.0, 10.0, 120.0),
     Rule("exam_brains", "exam", "Creatures taking each exam", 20.0, 2.0, 80.0),
     Rule("exam_steps", "exam", "Steps an exam lasts", 500.0, 50.0, 5000.0),
     Rule("exam_max_food", "exam", "The exam world: food pieces at most", 80.0, 5.0, 400.0),
@@ -200,6 +202,8 @@ MEANS = {
     "pond_edge_food": "How much thicker food grows on the land near a pond's edge than on open ground (2 = twice "
                       "as thick).",
     "pond_edge_width": "How far out from a pond's edge the rich ground reaches.",
+    "exam_width": "How wide the exam's own world is (a new world's size never changes the exam).",
+    "exam_height": "How tall the exam's own world is.",
     "year_steps": "How many steps a year lasts: food and fruit grow most a quarter into it and least three "
                   "quarters into it.",
     "season_depth": "How strong the seasons are: food and fruit grow × (1 + this × sin(2π × step ÷ year)). 0.5: "

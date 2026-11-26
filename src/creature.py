@@ -16,10 +16,18 @@ if TYPE_CHECKING:
 KIN_GENES = ("size", "diet", "water", "stealth", "armour", "vision_width", "vision_reach", "hearing")
 
 
+def kin_genes(rules: Rules) -> list:
+    """The genes that tell creatures apart in this world: those it has, each with a range."""
+    return [g for g in KIN_GENES if f"gene.{g}.low" in rules and rules[f"gene.{g}.high"] > rules[f"gene.{g}.low"]]
+
+
 def similarity(a: Creature, b: Creature, rules: Rules) -> float:
     """How alike two creatures' genes are: 1 minus the mean difference, each gene as a share of its range (1 =
-    twins, 0 = as unlike as the genes allow). A gene the world does not have yet is left out."""
-    genes = [g for g in KIN_GENES if f"gene.{g}.low" in rules]
+    twins, 0 = as unlike as the genes allow). A gene the world does not have yet, or one the owner closed to a single
+    value, is left out."""
+    genes = kin_genes(rules)
+    if not genes:
+        return 1.0
     return 1.0 - sum(abs(getattr(a, g) - getattr(b, g)) / (rules[f"gene.{g}.high"] - rules[f"gene.{g}.low"])
                      for g in genes) / len(genes)
 

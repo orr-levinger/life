@@ -17,7 +17,7 @@ from src.learner import Learner
 from src.saves import SAVE_FORMAT, SaveError, load_world, save_world, saves_of
 from src.rules import ROOM_SLOTS as MAX_CREATURES
 from src.settings import START
-from tests.helpers import make_world, populate, small_world
+from tests.helpers import add, make_world, populate, small_world
 from tests.test_learner import live
 from src.brain import N_SENSES
 from src.rules import rule
@@ -635,6 +635,20 @@ class TestSaves(unittest.TestCase):
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertEqual({r: loaded.rules[r] for r in regions}, {r: rule(r).start for r in regions})
         self.assertEqual(loaded.terrain.state(), world.terrain.state())  # its ground stays as it was
+
+    def test_a_save_keeps_the_last_steps_calls(self):
+        world = make_world(seed=22)
+        caller, gone = add(world, 10, 10), add(world, 20, 10)
+        caller.calls = gone.calls = 3
+        caller.apply_action(("CALL", (2, 0.5)), world)
+        gone.apply_action(("CALL", (1, 1.0)), world)
+        world.creatures.remove(gone)  # it called, then died: its call is still heard next step
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            loaded, _, _ = load_world(path, learner_seed=0)
+        kept = [(c.id, c.x, c.y, kind, volume) for c, kind, volume in loaded.calls]
+        self.assertEqual(kept, [(caller.id, 10.0, 10.0, 2, 0.5), (gone.id, 20.0, 10.0, 1, 1.0)])
 
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)

@@ -50,6 +50,18 @@ class TestKin(unittest.TestCase):
             w._teach([watcher, other], [watcher.energy, other.energy + 10.0])
         return learner._buffers[watcher.slot][-1]["reward"], similarity(watcher, other, w.rules)
 
+    def test_a_gene_with_no_range_is_left_out(self):
+        w = make_world()
+        a, b = add(w, 10, 10), add(w, 12, 10, size=1.5)
+        without = similarity(a, b, {k: v for k, v in w.rules.items() if not k.startswith("gene.armour")})
+        w.rules["gene.armour.low"] = w.rules["gene.armour.high"] = 0.0  # the owner turns armour off
+        self.assertEqual(similarity(a, b, w.rules), without)  # no division by zero: as if there were no armour
+        a.policy = "learner"
+        a.kin = 1.0
+        with mock.patch("src.world.perceived", return_value=np.ones((2, 1), dtype=bool)):
+            shares = w._kin_shares([a, b], [a.energy, b.energy + 5.0])
+        self.assertTrue(np.isfinite(shares[id(a)]))
+
     def test_it_shares_what_happens_to_one_like_it(self):
         reward, alike = self.reward(kin=1.0, alike=True)
         self.assertGreater(alike, 0.9)

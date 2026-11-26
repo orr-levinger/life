@@ -23,6 +23,14 @@ def brains(n: int, seed: int = 0):
 
 
 class TestExam(unittest.TestCase):
+    def test_the_exam_world_stays_as_it_was(self):
+        from src.exam import _exam_world
+        from src.rules import starting_rules
+        world = _exam_world("random", [None, None], [1.0, 2.0], 0, starting_rules())
+        self.assertEqual((world.width, world.height), (50.0, 30.0))  # whatever size a new world has
+        self.assertEqual([c.max_energy for c in world.creatures], [100.0, 200.0])  # its bodies as they were
+        self.assertAlmostEqual(world.creatures[1].velocity, 0.125)
+
     def test_copies_start_identical(self):
         with_brains, with_walkers = exam_worlds(brains(3), [0.5, 1.0, 2.0], seed=4, rules=RULES)
         self.assertGreater(len(with_brains.foods), 0)

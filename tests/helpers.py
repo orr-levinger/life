@@ -9,12 +9,30 @@ import numpy as np
 from src.brain import Brain
 from src.creature import Creature
 from src.rules import rule, starting_rules
+from src.sphere import exp_map, local_frame
 from src.settings import START, TODAY_SENSES, Settings
 from src.world import World
 
-SMALL_WORLD = {"world_width": 50.0, "world_height": 30.0, "room": 80.0, "first_creatures": 30.0, "soup": 10.0,
+TEST_RADIUS = 1000.0  # a test planet: nearly flat over the few units a test uses
+SMALL_WORLD = {"planet_radius": TEST_RADIUS, "room": 80.0, "first_creatures": 30.0, "soup": 10.0,
                "obstacles": 6.0, "trees": 8.0, "auto_target": 64.0}  # a test world stays small and quick, whatever a
 # new world's starting rules are (the owner, 2026-11-26: "we should never run full life simulations as tests!")
+BASE = np.array([0.36, 0.48, 0.8])  # where a test's local map is centred: any point, none special on a sphere
+EAST, NORTH = local_frame(BASE)  # the map's x and y at its centre
+
+
+def at(x: float, y: float, R: float = TEST_RADIUS) -> np.ndarray:
+    """The point (x, y) of the local map: x along EAST, y along NORTH, as one straight walk from its centre."""
+    return exp_map(BASE, EAST, NORTH, x, y, R)
+
+
+def face(creature: Creature, fx: float, fy: float) -> None:
+    """Turn a creature to the map direction (fx, fy) at its place."""
+    d = fx * EAST + fy * NORTH
+    d = d - creature.p * float(d @ creature.p)
+    creature.facing = d / np.linalg.norm(d)
+
+
 NO_FOOD = replace(START, max_food=0, food_per_step=0)  # the easy start with nothing to eat
 NO_FOOD_ATTACKS = replace(NO_FOOD, attacks=True)
 WIDTH, REACH, HEARING = TODAY_SENSES
@@ -30,7 +48,7 @@ def living(size: float) -> float:
 
 def make_world(settings: Settings = NO_FOOD, seed: int = 0, evolving: bool = True, learner=None,
                species: str = "brain", inherit: str = "learned") -> World:
-    return World(50, 30, settings, species, random.Random(seed), np.random.default_rng(seed),
+    return World(TEST_RADIUS, settings, species, random.Random(seed), np.random.default_rng(seed),
                  random.Random(seed + 1000), evolving, learner, inherit, rules={**starting_rules(), **SMALL_WORLD})
 
 
@@ -42,8 +60,10 @@ def fixed_brain(outputs: Sequence[float]) -> Brain:
 
 def add(world: World, x: float, y: float, size: float = 1.0, energy: float = 50.0, policy: str = "random",
         brain: Optional[Brain] = None, parent_id: int = 0, slot: Optional[int] = None) -> Creature:
-    creature = Creature(world.next_id(), x, y, size, energy, policy, brain, parent_id=parent_id, slot=slot)
+    creature = Creature(world.next_id(), at(x, y, world.radius), size, energy, policy, brain, parent_id=parent_id,
+                        slot=slot)
     world.add_creature(creature)
+    face(creature, 1.0, 0.0)  # facing east on the map, as a creature made by hand did
     return creature
 
 

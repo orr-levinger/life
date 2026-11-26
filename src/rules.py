@@ -49,6 +49,7 @@ RULES = (
     Rule("neuron_cost", "costs", "Each neuron, each step", 0.0005, 0.0, 0.01),
     Rule("vision_cost", "costs", "Vision, per square unit seen, each step", 0.05 / (math.pi * 3.0 ** 2), 0.0, 0.01),
     Rule("hearing_cost", "costs", "Hearing, per square unit heard, each step", 0.05 / (math.pi * 3.0 ** 2), 0.0, 0.01),
+    Rule("planet_radius", "world", "A new planet's radius", 37.0, 5.0, 2000.0),
     Rule("world_width", "world", "The world's width", 120.0, 20.0, 200.0),
     Rule("world_height", "world", "The world's height", 72.0, 12.0, 120.0),
     Rule("room", "world", "Room for this many creatures (births pause when full)", 300.0, 10.0, 300.0),
@@ -215,6 +216,8 @@ MEANS = {
                   "hears it, hunters too.",
     "diet_bite": "How much harder a meat eater hits: a hit takes × (1 + its diet × this). 1: a pure meat eater hits "
                  "twice as hard as a plant eater of its size.",
+    "planet_radius": "How big a new world's planet is: its radius. Walking all the way round takes 2π × this "
+                     "(37: about 232). A running world keeps its own.",
     "world_width": "How wide the world is, in map units.",
     "world_height": "How tall the world is, in map units.",
     "room": "The most creatures that can live at once. While it is full, nobody has a baby.",

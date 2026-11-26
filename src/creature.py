@@ -4,6 +4,10 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
+
+import numpy as np
+
+from .sphere import arc, bearing, local_frame, walk
 from .rules import HAND_MADE, Rules, rule, starting_rules
 from .settings import TODAY_SENSES
 
@@ -47,7 +51,7 @@ class Creature:
     SENSE_RANGE = 3.0  # the rules policy's own fixed sense range; every other creature senses by its genes
     POLICIES = ("brain", "learner", "random", "rules")
 
-    def __init__(self, id: int, x: float, y: float, size: float, energy: float, policy: str,
+    def __init__(self, id: int, p: np.ndarray, size: float, energy: float, policy: str,
                  brain: Optional[Brain] = None, parent_id: int = 0, generation: int = 0,
                  slot: Optional[int] = None, vision_width: float = TODAY_SENSES[0],
                  vision_reach: float = TODAY_SENSES[1], hearing: float = TODAY_SENSES[2],
@@ -63,8 +67,7 @@ class Creature:
             raise ValueError("a learner creature needs its slot in the world's learner")
         self.id = id
         self.slot = slot  # where a learner creature's network lives in the world's learner
-        self.x = float(x)
-        self.y = float(y)
+        self.p = np.asarray(p, dtype=float)  # where it is: a point on the planet (a unit vector)
         self.size = size
         self.policy = policy
         self.brain = brain
@@ -78,7 +81,7 @@ class Creature:
         self.vision_width = vision_width  # degrees of its vision cone: a gene
         self.vision_reach = vision_reach  # how far it sees: a gene
         self.hearing = hearing  # how far it hears, all around: a gene
-        self.facing: Tuple[float, float] = (1.0, 0.0)  # where its cone points: the direction of its last move
+        self.facing = local_frame(self.p)[0]  # where its cone points: a ground direction, the way it last moved
         self.fear_of_death = fear_of_death  # how bad dying feels to its learning: a gene
         self.love_of_babies = love_of_babies  # how good a baby feels to its learning: a gene
         self.learns_from_others = learns_from_others  # how much a lesson from another counts: a gene
@@ -106,7 +109,7 @@ class Creature:
         self.spent = 0.0  # energy it used on moving, living, eating at nothing and attacking
         self.last_action = "NONE"
         self.intent = "REST"  # display only
-        self.intended_vector: Tuple[float, float] = (0.0, 0.0)  # display only
+        self.intended_vector: Tuple[float, float] = (0.0, 0.0)  # display only: its last move (ahead, left)
 
     @property
     def velocity(self) -> float:
@@ -133,7 +136,7 @@ class Creature:
     def can_reach(self, food: Food) -> bool:
         """The one eat-range rule: close enough to take a bite."""
         reach = (self.radius + food.radius) * self.rules["reach"]
-        return math.hypot(food.x - self.x, food.y - self.y) <= reach
+        return float(arc(self.p, food.p, self.rules["planet_radius"])) <= reach  # along the ground
 
     def vision_area(self) -> float:
         return self.vision_width / 360.0 * math.pi * self.vision_reach ** 2
@@ -178,7 +181,7 @@ class Creature:
 
     def _pace(self, world: World) -> float:
         """Its share of its speed where it is: its water in a pond, 1 - water × the land penalty on land."""
-        if world.terrain.in_pond(self.x, self.y):
+        if world.terrain.in_pond(self.p):
             return self.water
         return 1.0 - self.water * self.rules["land_penalty"]
 
@@ -212,6 +215,7 @@ class Creature:
         self.last_action = "EAT"
 
     def _move(self, vector: Tuple[float, float], world: World) -> None:
+        """A move in its own view: (ahead, left), as long as it wants to go, capped by its pace there."""
         dx, dy = vector
         distance = math.hypot(dx, dy)
         pace = self._pace(world)  # in water × its water, on land slower the more it is a swimmer
@@ -219,19 +223,17 @@ class Creature:
         if distance > top:
             dx, dy = dx * top / distance, dy * top / distance
             distance = top
+        to, facing = walk(self.p, self.facing, dx, dy, distance, world.radius)
         if distance > 0:
-            self.facing = (dx / distance, dy / distance)
-        x, y = self.x, self.y
-        to_x = min(max(self.x + dx, self.radius), world.width - self.radius)
-        to_y = min(max(self.y + dy, self.radius), world.height - self.radius)
-        if world.terrain.blocked(to_x, to_y, self.radius, swims=self.water > 0):  # it runs into an obstacle: it stays, and it hurts
+            self.facing = facing  # it faces the way it moved, even when an obstacle stops it
+        if distance > 0 and world.terrain.blocked(to, self.radius, swims=self.water > 0):  # it runs into an obstacle: it stays, and it hurts
             self.bumped = True
             self.energy -= self.rules["bump_cost"]
             self._spend(self.rules["bump_cost"], world)
             self.last_action = "MOVE"
             return
-        self.x, self.y = to_x, to_y
-        self.moved = (self.x, self.y) != (x, y)  # a step that went somewhere makes a sound
+        self.p = to
+        self.moved = distance > 0  # a step that went somewhere makes a sound
         sprint = max(1.0, distance / max(cruise, 1e-9)) ** self.rules["sprint_power"]  # faster than cruising costs more
         cost = distance * world.settings.move_cost * self.size * sprint  # a bigger body pays more to move
         self.energy -= cost
@@ -246,14 +248,13 @@ class Creature:
         self._spend(self.attack_cost, world)
         reach = (self.radius + target.radius) * self.rules["reach"]
         if (target not in world.creatures or target.energy <= 0
-                or math.hypot(target.x - self.x, target.y - self.y) > reach):
+                or float(arc(self.p, target.p, world.radius)) > reach):
             self.last_action = "ATTACK_MISS"
             return
         taken = min(target.energy, self.attack_damage * (1.0 - target.armour * self.rules["armour_strength"]))
         target.energy -= taken
-        dx, dy = self.x - target.x, self.y - target.y
-        distance = math.hypot(dx, dy)
-        target.hurt = (taken / target.max_energy, dx / distance if distance else 0.0, dy / distance if distance else 0.0)
+        ahead, left = bearing(target.p, target.facing, self.p)  # in the one hit's own view: where the hitter stands
+        target.hurt = (taken / target.max_energy, float(ahead), float(left))
         gained = self.rules["hunter_share"] * taken * self.diet  # a hit feeds a meat eater
         self.energy += gained
         self._earn(gained, world)
@@ -261,7 +262,7 @@ class Creature:
         target.last_action = "HIT_BY_ATTACK"
         if target.energy <= 0:
             from .food import Food
-            corpse = Food(target.x, target.y, remaining_duration=round(self.rules["corpse_steps"]),
+            corpse = Food(target.p.copy(), remaining_duration=round(self.rules["corpse_steps"]),
                           energy=target.size * self.rules["corpse_energy"], meat=True)
             world.foods.append(corpse)
             world.foods_created_this_step.add(id(corpse))
@@ -271,5 +272,5 @@ class Creature:
         return "purple" if self.policy in ("brain", "learner") else "green"
 
     def __repr__(self) -> str:
-        return (f"<Creature {self.id} {self.policy} x={self.x:.2f} y={self.y:.2f} size={self.size:.2f} "
+        return (f"<Creature {self.id} {self.policy} at {np.round(self.p, 3)} size={self.size:.2f} "
                 f"energy={self.energy:.2f}/{self.max_energy:.2f}>")

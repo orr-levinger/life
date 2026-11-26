@@ -10,7 +10,7 @@ from src.food import Food
 from src.rules import starting_rules
 from src.senses import N_SENSES, sense
 from src.terrain import Obstacle, Terrain, Tree, make_terrain
-from tests.helpers import NO_FOOD, add, make_world
+from tests.helpers import at, NO_FOOD, add, make_world
 
 ROCK = Obstacle("rock", ((20.0, 10.0, 2.0),))  # one round rock: x 18-22 at y 10
 
@@ -85,9 +85,9 @@ class TestObstacles(unittest.TestCase):
         w = walled(make_world())
         me = add(w, 15.0, 10.0, size=1.0)
         me.vision_width, me.vision_reach, me.facing = 120.0, 15.0, (1.0, 0.0)
-        w.foods.append(Food(25.0, 10.0, remaining_duration=-1, energy=10.0))  # behind the rock
+        w.foods.append(Food(at(25.0, 10.0), remaining_duration=-1, energy=10.0))  # behind the rock
         self.assertIsNone(sense(me, w).food)
-        w.foods.append(Food(17.0, 12.5, remaining_duration=-1, energy=10.0))  # beside it, in the open
+        w.foods.append(Food(at(17.0, 12.5), remaining_duration=-1, energy=10.0))  # beside it, in the open
         self.assertIsNotNone(sense(me, w).food)
 
     def test_checking_only_the_pairs_asked_gives_the_same_answer(self):

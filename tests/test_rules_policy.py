@@ -3,7 +3,7 @@ import unittest
 
 from src.food import Food
 from src.policies import rules_action
-from tests.helpers import add, make_world
+from tests.helpers import at, add, make_world
 
 
 class TestRulesPolicy(unittest.TestCase):
@@ -36,7 +36,7 @@ class TestRulesPolicy(unittest.TestCase):
     def test_goes_toward_visible_food(self):
         w = make_world()
         me = add(w, 10, 10, policy="rules")
-        w.foods.append(Food(12, 10, remaining_duration=-1, energy=10.0))
+        w.foods.append(Food(at(12, 10), remaining_duration=-1, energy=10.0))
         kind, (dx, dy) = rules_action(me, w, random.Random(0))
         self.assertEqual(kind, "MOVE")
         self.assertGreater(dx, 0)
@@ -45,7 +45,7 @@ class TestRulesPolicy(unittest.TestCase):
     def test_eats_food_in_reach(self):
         w = make_world()
         me = add(w, 10, 10, policy="rules")
-        f = Food(10.5, 10, remaining_duration=-1, energy=10.0)
+        f = Food(at(10.5, 10), remaining_duration=-1, energy=10.0)
         w.foods.append(f)
         self.assertEqual(rules_action(me, w, random.Random(0)), ("EAT", f))
 

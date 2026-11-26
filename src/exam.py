@@ -50,7 +50,7 @@ def _exam_world(policy: str, brains: Sequence[Any], sizes: Sequence[float], seed
             learner.allocate(weights, lr=0.0)
     exam_rules = {**starting_rules(), "world_width": rules["exam_width"], "world_height": rules["exam_height"],
                   **EXAM_BODIES}  # its own size, and bodies as they were: the test stays the same
-    world = World(exam_rules["world_width"], exam_rules["world_height"], exam_settings(rules), policy,
+    world = World(exam_rules["planet_radius"], exam_settings(rules), policy,
                   random.Random(seed + 2), np.random.default_rng(seed), random.Random(seed + 1), evolving=False,
                   learner=learner, rules=exam_rules)
     world.prefill_food()

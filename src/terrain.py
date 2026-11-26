@@ -54,19 +54,17 @@ class Terrain:
     def empty() -> Terrain:
         return Terrain([], [])
 
-    def blocked(self, x: float, y: float, radius: float, swims: bool = False) -> bool:
-        """Whether a body of `radius` at (x, y) would overlap an obstacle (only a rock, for one that `swims`)."""
+    def blocked(self, p: np.ndarray, radius: float, swims: bool = False) -> bool:
+        """Whether a body of `radius` at the point p would overlap an obstacle (only a rock, for one that `swims`)."""
         if not self._cr.size:
             return False
-        overlap = np.hypot(self._cx - x, self._cy - y) < self._cr + radius
-        return bool(np.any(overlap & ~self.pond_circles) if swims else np.any(overlap))
+        raise NotImplementedError("rocks and ponds move onto the sphere in Task 3 of the sphere plan")
 
-    def in_pond(self, x: float, y: float) -> bool:
-        """Whether the point (x, y) is in a pond."""
+    def in_pond(self, p: np.ndarray) -> bool:
+        """Whether the point p is in a pond."""
         if not self.pond_circles.any():
             return False
-        inside = np.hypot(self._cx - x, self._cy - y) < self._cr
-        return bool(np.any(inside & self.pond_circles))
+        raise NotImplementedError("rocks and ponds move onto the sphere in Task 3 of the sphere plan")
 
     def near_pond(self, x: float, y: float, width: float) -> bool:
         """Whether (x, y) is on the land within `width` of a pond's edge."""

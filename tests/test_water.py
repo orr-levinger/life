@@ -6,7 +6,7 @@ from dataclasses import replace
 from src.food import Food
 from src.senses import IN_WATER, WATER_SEEN, sense
 from src.terrain import Obstacle, Terrain
-from tests.helpers import NO_FOOD, add, make_world
+from tests.helpers import at, NO_FOOD, add, make_world
 
 
 def pond_world():
@@ -57,7 +57,7 @@ class TestWater(unittest.TestCase):
         w = pond_world()
         looker = add(w, 15.0, 10.0)
         looker.vision_width, looker.vision_reach, looker.facing = 120.0, 12.0, (1.0, 0.0)
-        w.foods.append(Food(25.0, 10.0, remaining_duration=-1, energy=10.0))  # beyond the pond
+        w.foods.append(Food(at(25.0, 10.0), remaining_duration=-1, energy=10.0))  # beyond the pond
         self.assertIsNotNone(sense(looker, w).food)
         looker.y, w.foods[0].y = 20.0, 20.0  # beyond the rock
         self.assertIsNone(sense(looker, w).food)

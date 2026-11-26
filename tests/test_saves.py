@@ -17,7 +17,7 @@ from src.learner import Learner
 from src.saves import SAVE_FORMAT, SaveError, load_world, save_world, saves_of
 from src.rules import ROOM_SLOTS as MAX_CREATURES
 from src.settings import START
-from tests.helpers import add, make_world, populate, small_world
+from tests.helpers import at, add, make_world, populate, small_world
 from tests.test_learner import live
 from src.brain import N_SENSES
 from src.rules import rule
@@ -460,7 +460,7 @@ class TestSaves(unittest.TestCase):
         from src.food import Food
         world = make_world(seed=14)
         populate(world, 3)
-        world.foods = [Food(5.0, 5.0, remaining_duration=5, energy=8.0), Food(6.0, 6.0, remaining_duration=-1, energy=9.0)]
+        world.foods = [Food(at(5.0, 5.0), remaining_duration=5, energy=8.0), Food(at(6.0, 6.0), remaining_duration=-1, energy=9.0)]
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "step.npz"
             save_world(path, world, Dial(), {})

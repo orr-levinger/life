@@ -7,11 +7,11 @@ import numpy as np
 from src.food import Food
 from src.policies import brain_action, learner_action, random_action
 from src.senses import sense
-from tests.helpers import add, fixed_brain, make_world
+from tests.helpers import at, add, fixed_brain, make_world
 
 
 def food(x: float, y: float) -> Food:
-    return Food(x, y, remaining_duration=-1, energy=10.0)
+    return Food(at(x, y), remaining_duration=-1, energy=10.0)
 
 
 class TestBrainPolicy(unittest.TestCase):

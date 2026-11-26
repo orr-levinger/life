@@ -4,7 +4,7 @@ from src.exam import ExamResult
 from src.food import Food
 from src.scoreboard import ROW_KEYS, Scoreboard
 from src.senses import sense
-from tests.helpers import add, make_world
+from tests.helpers import at, add, make_world
 
 STILL = ("MOVE", (0.0, 0.0))
 
@@ -12,7 +12,7 @@ STILL = ("MOVE", (0.0, 0.0))
 def food_world():
     w = make_world()
     me = add(w, 10, 10)
-    w.foods.append(Food(12, 10, remaining_duration=-1, energy=10.0))
+    w.foods.append(Food(at(12, 10), remaining_duration=-1, energy=10.0))
     return w, me
 
 

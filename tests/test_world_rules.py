@@ -13,7 +13,7 @@ from src.learner import LEARNING_RATE, Learner, NetWeights
 from src.rules import ROOM_SLOTS as MAX_CREATURES, gene_limits, rule, starting_rules
 from src.settings import START
 BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, rule("eat_miss").start
-from tests.helpers import LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
+from tests.helpers import at, LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
 from tests.test_learner import live, same
 
 STAY = [0, 0, -1, -1]
@@ -21,7 +21,7 @@ EAT = [0, 0, 1, -1]
 
 
 def food(x: float, y: float, energy: float = 10.0) -> Food:
-    return Food(x, y, remaining_duration=-1, energy=energy)
+    return Food(at(x, y), remaining_duration=-1, energy=energy)
 
 
 def crowd(w) -> None:

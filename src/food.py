@@ -3,6 +3,9 @@
 from typing import Tuple
 import math
 
+import numpy as np
+
+
 class Food:
     """
     Represents a food item in the world that creatures can eat.
@@ -18,19 +21,18 @@ class Food:
     Size is based on energy (size = energy).
     """
 
-    def __init__(self, x: float, y: float, remaining_duration: int, energy: float, fruit: bool = False,
+    def __init__(self, p: np.ndarray, remaining_duration: int, energy: float, fruit: bool = False,
                  meat: bool = False):
         """
         Initialize a new Food object.
 
         Args:
-            x, y: Continuous coordinates where the food is located
+            p: where the food lies, a point on the planet (a unit vector)
             remaining_duration: Number of world steps this food persists before disappearing
                                -1 means it never expires (infinite lifespan)
             energy: How much energy this food contains (also determines size)
         """
-        self.x = float(x)
-        self.y = float(y)
+        self.p = np.asarray(p, dtype=float)  # where it lies: a point on the planet (a unit vector)
         self.energy = energy
         self.fruit = fruit  # dropped by a tree (it looks different; a plant all the same)
         self.meat = meat  # a corpse: it feeds by the eater's diet, plants by the rest

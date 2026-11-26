@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from src.food import Food
 from src.senses import sense
-from tests.helpers import NO_FOOD, NO_FOOD_ATTACKS, add, make_world
+from tests.helpers import at, NO_FOOD, NO_FOOD_ATTACKS, add, make_world
 
 
 def quiet(world):
@@ -19,7 +19,7 @@ def eats(diet, **food):
     w = quiet(make_world(NO_FOOD))
     c = add(w, 10, 10, energy=20.0)
     c.diet = diet
-    piece = Food(10.0, 10.0, remaining_duration=-1, energy=10.0, **food)
+    piece = Food(at(10.0, 10.0), remaining_duration=-1, energy=10.0, **food)
     w.foods.append(piece)
     c.apply_action(("EAT", piece), w)
     return c.energy - 20.0, 10.0 - piece.energy
@@ -60,7 +60,7 @@ class TestDiet(unittest.TestCase):
         w = make_world(NO_FOOD)
         me = add(w, 10, 10)
         me.vision_width, me.vision_reach, me.facing, me.diet = 120.0, 5.0, (1.0, 0.0), 0.7
-        w.foods.append(Food(12.0, 10.0, remaining_duration=5, energy=8.0, meat=True))
+        w.foods.append(Food(at(12.0, 10.0), remaining_duration=5, energy=8.0, meat=True))
         v = sense(me, w).vector
         self.assertEqual((v[25], v[26]), (1.0, 0.7))
         w.foods[0].meat = False
@@ -78,7 +78,7 @@ class TestDiet(unittest.TestCase):
         w = make_world(NO_FOOD)
         c = add(w, 10, 10)
         c.diet = 0.8
-        w.foods.append(Food(12.0, 10.0, remaining_duration=5, energy=8.0, meat=True))
+        w.foods.append(Food(at(12.0, 10.0), remaining_duration=5, energy=8.0, meat=True))
         view = world_view(w)
         self.assertEqual((view["creatures"][0]["diet"], view["foods"][0]["meat"]), (0.8, True))
         self.assertEqual(world_now(w)["genes"]["diet"], [0.8, 0.8, 0.8])

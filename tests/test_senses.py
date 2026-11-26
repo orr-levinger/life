@@ -1,5 +1,7 @@
 import math
 import unittest
+
+from tests.helpers import at
 from types import SimpleNamespace
 
 import numpy as np
@@ -13,11 +15,11 @@ from src.terrain import Terrain
 
 
 def creature(x: float, y: float, size: float = 1.25, id_: int = 1, parent_id: int = 0) -> Creature:
-    return Creature(id_, x, y, size, full_tank(size, starting_rules()) / 2, "random", parent_id=parent_id)  # half full
+    return Creature(id_, at(x, y), size, full_tank(size, starting_rules()) / 2, "random", parent_id=parent_id)  # half full
 
 
 def food(x: float, y: float) -> Food:
-    return Food(x, y, remaining_duration=-1, energy=10.0)
+    return Food(at(x, y), remaining_duration=-1, energy=10.0)
 
 
 def world(creatures=(), foods=()):
@@ -93,7 +95,7 @@ class TestSenses(unittest.TestCase):
         self.assertEqual(display_intent(me, ("MOVE", (0.0, 1.0)), s), "GO_TO_FOOD")
 
     def eye(self, x, y, width, reach, hearing, size=1.25):
-        me = Creature(1, x, y, size, size * 50.0, "random", vision_width=width, vision_reach=reach, hearing=hearing)
+        me = Creature(1, at(x, y), size, size * 50.0, "random", vision_width=width, vision_reach=reach, hearing=hearing)
         me.facing = (1.0, 0.0)
         return me
 

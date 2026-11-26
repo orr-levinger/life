@@ -35,13 +35,13 @@ class World:
     FOOD_RADIUS_MARGIN = 0.4  # a new food's largest radius (energy 40 × 0.01): keeps candidates inside the world
     PREFILL_STEPS = 100  # food spawn passes before a fresh world starts, so it doesn't begin empty
 
-    def __init__(self, width: int, height: int, settings: Settings, species: str, rng: random.Random,
+    def __init__(self, radius: float, settings: Settings, species: str, rng: random.Random,
                  np_rng: np.random.Generator, food_rng: random.Random, evolving: bool = True,
                  learner: Optional[Learner] = None, inherit: str = "learned", rules: Optional[Rules] = None) -> None:
         """`species` is what this world's newcomers are. `evolving=False` is an exam world: nobody is born, dies,
         ages or learns, and food is placed without looking at creatures. `inherit` says what a learning baby gets:
         the parent's brain as it is now ("learned") or as the parent was born ("inborn"). `rules` are the world's own
-        (default: the starting rules); `width` and `height` set its size rules."""
+        (default: the starting rules); `radius` is its planet's (its rule `planet_radius`)."""
         if species not in Creature.POLICIES:
             raise ValueError(f"species must be one of {Creature.POLICIES}, got {species!r}")
         if inherit not in INHERIT:
@@ -49,7 +49,7 @@ class World:
         self.rules: Rules = starting_rules() if rules is None else rules
         if learner is not None:
             learner.rules = self.rules  # learning's numbers are the world's rules
-        self.rules["world_width"], self.rules["world_height"] = float(width), float(height)
+        self.rules["planet_radius"] = float(radius)
         self.settings = settings  # how hard survival is right now; the dial changes it
         self.level = 0  # how many of the dial's nudges are in force
         self.species = species
@@ -82,18 +82,13 @@ class World:
         return new_id
 
     @property
-    def width(self) -> float:
-        return self.rules["world_width"]
-
-    @property
-    def height(self) -> float:
-        return self.rules["world_height"]
+    def radius(self) -> float:
+        """Its planet's radius: distances along the ground are angles × this."""
+        return self.rules["planet_radius"]
 
     def change_rules(self, changes: Rules) -> None:
-        """The owner's rule changes, at once; a smaller world brings everything inside it."""
-        self.rules.update(changes)
-        for thing in list(self.creatures) + list(self.foods):
-            thing.x, thing.y = min(thing.x, self.width), min(thing.y, self.height)
+        """The owner's rule changes, at once (a running planet keeps its own size)."""
+        self.rules.update({k: v for k, v in changes.items() if k != "planet_radius"})
 
     def edit_genes(self, creature_id: int, genes: Dict[str, Any]) -> None:
         """The owner's change to a living creature's genes (checked by rules.check_genes); a creature gone is left be.

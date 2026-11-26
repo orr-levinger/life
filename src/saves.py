@@ -439,7 +439,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         learner = Learner(ROOM_SLOTS, learner_seed)
         learner.load_state({key[len(LEARNER):]: value for key, value in arrays.items() if key.startswith(LEARNER)})
     rules = about["rules"]
-    world = World(rules["world_width"], rules["world_height"], settings_from_state(about["settings"]), about["species"],
+    world = World(rules["planet_radius"], settings_from_state(about["settings"]), about["species"],
                   random.Random(), np.random.default_rng(), random.Random(), learner=learner, inherit=about["inherit"],
                   rules=dict(rules))
     world.set_settings(world.settings, about["level"])

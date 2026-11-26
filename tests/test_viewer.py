@@ -483,6 +483,21 @@ class TestControlRoom(unittest.TestCase):
         for words in ('geneTile("armour"', '["armour", "Armour'):
             self.assertIn(words, page)  # a tile and a box to change it
 
+    def test_page_draws_a_planet(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            planet = response.read().decode("utf-8")
+        self.assertIn('"three": "/static/three.module.min.js"', page)  # the library from this server
+        self.assertIn('from "/static/planet.js"', page)
+        self.assertIn('from "three"', planet)
+        self.assertIn('/static/OrbitControls.js', planet)
+        for name in ("makePlanet", "updatePlanet", "followCreature", "pointOfView", "bench"):
+            self.assertIn(f"export function {name}", planet)
+        for text in (page, planet):
+            self.assertNotIn("http://", text.replace("http://www.w3.org/2000/svg", ""))  # an SVG name, not a download
+            self.assertNotIn("https://", text)  # nothing from the internet
+
     def test_static_files_are_served(self):
         with urllib.request.urlopen(self.server.base + "/static/three.module.min.js") as response:
             self.assertEqual(response.status, 200)
@@ -501,8 +516,11 @@ class TestControlRoom(unittest.TestCase):
     def test_page_shows_the_calls(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ('geneTile("calls"', '["calls", "Calls', "drawCall("):
-            self.assertIn(words, page)  # a tile, a box to change it, a ring as wide as a call carries
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            planet = response.read().decode("utf-8")
+        for words in ('geneTile("calls"', '["calls", "Calls'):
+            self.assertIn(words, page)  # a tile, a box to change it
+        self.assertIn("if (x.c.call)", planet)  # a ring as wide as a call carries
 
     def test_page_shows_the_diet(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
@@ -602,8 +620,11 @@ class TestControlRoom(unittest.TestCase):
     def test_page_has_a_point_of_view_button(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ('id="follow-pov"', "function sensedBy(", "function drawHeard(", "c.moved"):
-            self.assertIn(words, page)
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            planet = response.read().decode("utf-8")
+        self.assertIn('id="follow-pov"', page)
+        for words in ("export function sensedBy(", "hears.set(", "c.moved"):  # only what it senses: seen, or a sound's blur
+            self.assertIn(words, planet)
 
     def test_world_card_has_the_senses_costs(self):
         with urllib.request.urlopen(self.server.base + "/") as response:

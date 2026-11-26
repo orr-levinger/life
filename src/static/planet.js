@@ -1,0 +1,369 @@
+// The live view of a watched world: its planet in 3D (three.js, served from this repository).
+// The page hands it each picture of the world (`/view`: points on the planet, facings, terrain caps) and draws it:
+// textured grass, rocks rising out of it, ponds, forests, food, creatures; drag to spin, wheel or pinch to zoom; click
+// a creature to follow it; its point of view shows only what it senses (the world's own rules, src/senses.py).
+import * as THREE from "three";
+import { OrbitControls } from "/static/OrbitControls.js";
+
+const UP = new THREE.Vector3(0, 1, 0);
+const NEAR_FAR = { near: 0.05, far: 4000 };
+
+let state = null;  // the one planet on the page
+
+// How creatures look: a plain stand-in body until a fuller look is handed over (useLook).
+const PLAIN = {
+  key: () => "plain",
+  make(c) {
+    const group = new THREE.Group();
+    const colour = new THREE.Color().setRGB(0.55 - 0.1 * c.diet, 0.55 - 0.33 * c.diet, 0.3 - 0.16 * c.diet)
+      .lerp(new THREE.Color(0.18, 0.55, 0.62), (c.water || 0) * 0.8);
+    const mat = new THREE.MeshStandardMaterial({ color: colour, flatShading: true, roughness: 0.7 });
+    const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), mat); body.scale.set(1.2, 0.7, 0.8); body.position.y = 0.45;
+    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), mat); head.position.set(0.62, 0.6, 0);
+    group.add(body, head);
+    return group;
+  },
+  dress(body, c) { body.scale.setScalar(Math.max(c.size, 0.3)); },
+};
+let look = PLAIN;
+export function useLook(newLook) { look = newLook; if (state) state.beasts.clear(); }
+
+// ---------- small helpers
+const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+function slerp(a, b, t) {  // between two unit vectors, along the ball
+  const dot = Math.max(-1, Math.min(1, a.dot(b)));
+  const angle = Math.acos(dot);
+  if (angle < 1e-6) return a.clone();
+  const s = Math.sin(angle);
+  return a.clone().multiplyScalar(Math.sin((1 - t) * angle) / s).add(b.clone().multiplyScalar(Math.sin(t * angle) / s));
+}
+function standOn(object, p, R, lift, facing) {  // object's +y along the ground's normal at p, its +x along `facing`
+  const n = p.clone().normalize();
+  object.position.copy(n).multiplyScalar(R + lift);
+  if (facing) {
+    const f = facing.clone().sub(n.clone().multiplyScalar(facing.dot(n))).normalize();
+    const side = new THREE.Vector3().crossVectors(f, n);
+    object.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(f, n, side));
+  } else {
+    object.quaternion.setFromUnitVectors(UP, n);
+  }
+}
+function noise3(x, y, z, seed) {  // smooth value noise from a few sines: enough for grass patches and rock shapes
+  return Math.sin(x * 1.7 + seed) * Math.sin(y * 2.3 + seed * 1.3) * Math.sin(z * 1.9 + seed * 0.7)
+    + 0.5 * Math.sin(x * 4.1 + seed * 2.1) * Math.sin(y * 3.7 + seed) * Math.sin(z * 4.3 + seed * 1.7);
+}
+
+// ---------- the ground: a fine ball, green with lighter and darker patches, and a blade texture laid on it
+function bladeTexture(renderer) {
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d");
+  g.fillStyle = "#ffffff"; g.fillRect(0, 0, 256, 256);
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 6000; i++) {
+    const x = rnd() * 256, y = rnd() * 256, l = 55 + rnd() * 45;
+    g.strokeStyle = `hsl(0, 0%, ${l}%)`; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + (rnd() - 0.5) * 3, y - 2 - rnd() * 5); g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+function makeGround(R, renderer) {
+  const geometry = new THREE.SphereGeometry(R, 192, 128);
+  const pos = geometry.attributes.position, colours = new Float32Array(pos.count * 3), c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i) / R, y = pos.getY(i) / R, z = pos.getZ(i) / R;
+    const patch = noise3(x * 5, y * 5, z * 5, 3.1), broad = noise3(x * 2, y * 2, z * 2, 1.7);  // smooth: the fine look is the blades
+    c.setHSL(0.27 + 0.025 * patch, 0.42 + 0.05 * broad, 0.27 + 0.05 * patch + 0.02 * broad);
+    colours.set([c.r, c.g, c.b], i * 3);
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+  const blades = bladeTexture(renderer);
+  blades.repeat.set(Math.round(R * 4.4), Math.round(R * 2.2));  // about two tiles per unit of ground
+  return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true, map: blades, roughness: 1 }));
+}
+
+// ---------- rocks rising out of the grass, ponds a little sunk, trees in their forests
+function rockGeometry(seed) {
+  const geometry = new THREE.IcosahedronGeometry(1, 2), pos = geometry.attributes.position, w = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    w.fromBufferAttribute(pos, i);
+    w.multiplyScalar(1 + 0.25 * noise3(w.x * 1.6, w.y * 1.6, w.z * 1.6, seed));
+    if (w.y < 0) w.y *= 0.25;  // its flat foot sunk in the ground
+    pos.setXYZ(i, w.x, w.y, w.z);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
+function makeTerrain(terrain, R) {
+  const group = new THREE.Group();
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x8b847c, roughness: 0.95, flatShading: true });
+  const pondMat = new THREE.MeshStandardMaterial({ color: 0x2f6fb8, roughness: 0.15, metalness: 0.1 });
+  let seed = 1;
+  for (const o of terrain.obstacles || []) {
+    for (const cap of o.caps) {
+      const p = v3(cap), r = cap[3];
+      if (o.kind === "rock") {
+        const rock = new THREE.Mesh(rockGeometry(seed++), rockMat);
+        standOn(rock, p, R, -0.15 * r);
+        rock.scale.set(r, r * (0.8 + 0.5 * ((seed * 0.37) % 1)), r);
+        rock.rotateY(seed * 1.7);
+        group.add(rock);
+      } else {
+        const pond = new THREE.Mesh(new THREE.CircleGeometry(r, 40).rotateX(-Math.PI / 2), pondMat);
+        standOn(pond, p, R, 0.03);
+        group.add(pond);
+      }
+    }
+  }
+  const trees = terrain.trees || [];
+  if (trees.length) {
+    const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.24, 1.3, 7).translate(0, 0.65, 0),
+                                           new THREE.MeshStandardMaterial({ color: 0x5b3d22 }), trees.length);
+    const crowns = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1).translate(0, 2.1, 0),
+                                           new THREE.MeshStandardMaterial({ color: 0x2c5f2a, flatShading: true }), trees.length);
+    const o = new THREE.Object3D();
+    trees.forEach((t, i) => {
+      standOn(o, v3(t.p), R, 0); o.rotateY(i * 2.39); o.scale.setScalar(t.canopy / 1.5); o.updateMatrix();
+      trunks.setMatrixAt(i, o.matrix);
+      o.scale.set(t.canopy, t.canopy, t.canopy); o.updateMatrix(); crowns.setMatrixAt(i, o.matrix);
+    });
+    group.add(trunks, crowns);
+  }
+  return group;
+}
+
+// ---------- food: tan seeds, red berries (fruit), dark lumps (meat)
+const FOOD_KINDS = {
+  plant: { geometry: new THREE.OctahedronGeometry(1, 0), material: new THREE.MeshStandardMaterial({ color: 0xc9a46a, flatShading: true }) },
+  fruit: { geometry: new THREE.IcosahedronGeometry(1, 1), material: new THREE.MeshStandardMaterial({ color: 0xe0483b, roughness: 0.4 }) },
+  meat: { geometry: new THREE.DodecahedronGeometry(1, 0), material: new THREE.MeshStandardMaterial({ color: 0x7a1f1f, roughness: 0.6 }) },
+};
+const foodKind = (f) => (f.fruit ? "fruit" : f.meat ? "meat" : "plant");
+
+// ---------- making the planet
+export function makePlanet(container, { onPick } = {}) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  container.innerHTML = "";
+  container.appendChild(renderer.domElement);
+  renderer.domElement.style.width = "100%"; renderer.domElement.style.height = "100%"; renderer.domElement.style.display = "block";
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0d12);
+  scene.add(new THREE.HemisphereLight(0xdfefff, 0x3a2a1a, 0.9));
+  const sun = new THREE.DirectionalLight(0xfff3dd, 1.6); sun.position.set(90, 70, 110);
+  const camera = new THREE.PerspectiveCamera(45, 1, NEAR_FAR.near, NEAR_FAR.far);
+  camera.add(sun); scene.add(camera);  // the sun over the viewer's shoulder: the side in view is lit
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.enablePan = false; controls.zoomSpeed = 1.1; controls.rotateSpeed = 0.6;
+  state = { container, renderer, scene, camera, controls, onPick, R: null, terrainKey: null, ground: null, terrain: null,
+            food: {}, beasts: new THREE.Group(), marks: new THREE.Group(), follow: null, pov: false, picture: null,
+            dragged: false };
+  scene.add(state.beasts, state.marks);
+  const size = () => {
+    const w = container.clientWidth || 800, h = container.clientHeight || 500;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  };
+  new ResizeObserver(size).observe(container); size();
+  let down = null;
+  renderer.domElement.addEventListener("pointerdown", (e) => { down = [e.clientX, e.clientY]; });
+  renderer.domElement.addEventListener("pointerup", (e) => {
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;  // a drag spins; a click picks
+    pick(e);
+  });
+  return state;
+}
+
+function pick(event) {
+  if (state && state.onPick) state.onPick(creatureAt(event));
+}
+
+// ---------- each picture of the world
+export function updatePlanet(picture, before, t, options) {
+  if (!state) return;
+  const R = picture.radius;
+  state.picture = picture;
+  if (state.R !== R) {  // a new planet: its ground, and the camera out where the whole ball shows
+    if (state.ground) state.scene.remove(state.ground);
+    state.ground = makeGround(R, state.renderer); state.scene.add(state.ground);
+    state.R = R;
+    state.controls.minDistance = R + 2.5; state.controls.maxDistance = R * 7;  // closest: 2.5 above the ground
+    state.camera.position.set(0, R * 0.6, R * 3.0); state.controls.target.set(0, 0, 0);
+  }
+  const terrainKey = JSON.stringify((picture.terrain || {}).obstacles || []).length + ":" + ((picture.terrain || {}).trees || []).length;
+  if (state.terrainKey !== terrainKey) {
+    if (state.terrain) state.scene.remove(state.terrain);
+    state.terrain = makeTerrain(picture.terrain || { obstacles: [], trees: [] }, R); state.scene.add(state.terrain);
+    state.terrainKey = terrainKey;
+  }
+  const earlier = new Map((before ? before.creatures : []).map((c) => [c.id, c]));
+  const placed = picture.creatures.map((c) => {
+    const from = earlier.get(c.id) || c;
+    return { c, p: slerp(v3(from.p), v3(c.p), t), f: v3(c.facing) };
+  });
+  const followed = state.follow === null ? null : placed.find((x) => x.c.id === state.follow);
+  const sensed = followed && state.pov ? sensedBy(followed.c, picture) : null;
+  state.lastPlaced = placed;
+  drawFood(picture, R, sensed);
+  drawBeasts(placed, R, sensed, followed, options || {});
+  steer(followed, R);
+}
+
+function drawFood(picture, R, sensed) {
+  const lists = { plant: [], fruit: [], meat: [] };
+  picture.foods.forEach((f, i) => { if (!sensed || sensed.foods.has(i)) lists[foodKind(f)].push(f); });
+  const o = new THREE.Object3D();
+  for (const [kind, list] of Object.entries(lists)) {
+    let mesh = state.food[kind];
+    if (!mesh || mesh.count < list.length || mesh.instanceMatrix.count < list.length) {
+      if (mesh) state.scene.remove(mesh);
+      mesh = new THREE.InstancedMesh(FOOD_KINDS[kind].geometry, FOOD_KINDS[kind].material, Math.max(64, list.length * 2));
+      state.food[kind] = mesh; state.scene.add(mesh);
+    }
+    list.forEach((f, i) => {
+      const s = Math.max(0.12, f.radius) * (kind === "plant" ? 1.4 : 1.0);
+      standOn(o, v3(f.p), R, s * 0.6); o.scale.setScalar(s); o.updateMatrix(); mesh.setMatrixAt(i, o.matrix);
+    });
+    mesh.count = list.length; mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+function drawBeasts(placed, R, sensed, followed, options) {
+  const keep = new Set();
+  const shown = sensed ? placed.filter((x) => x === followed || sensed.sees.has(x.c.id)) : placed;
+  for (const x of shown) {
+    keep.add(x.c.id);
+    let body = state.beasts.children.find((b) => b.userData.id === x.c.id);
+    const key = look.key(x.c);
+    if (body && body.userData.key !== key) { state.beasts.remove(body); body = null; }
+    if (!body) {
+      body = look.make(x.c);
+      body.userData.id = x.c.id; body.userData.key = key;
+      state.beasts.add(body);
+    }
+    standOn(body, x.p, R, 0, x.f);
+    look.dress(body, x.c, { followed: x === followed, hovered: x.c.id === options.hover });
+  }
+  for (const b of [...state.beasts.children]) if (!keep.has(b.userData.id)) state.beasts.remove(b);
+  drawMarks(shown, R, sensed, followed, options);
+}
+
+// vision cones, call rings and the follow ring, flat on the ground
+const markMats = {
+  cone: new THREE.MeshBasicMaterial({ color: 0xfff2a8, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }),
+  call: new THREE.MeshBasicMaterial({ color: 0xf4d35e, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }),
+  ring: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, depthWrite: false }),
+  heard: new THREE.MeshBasicMaterial({ color: 0xa0b4ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }),
+};
+const coneCache = new Map();
+function coneGeometry(width) {  // a fan of the vision width, radius 1, lying flat, pointing along +x
+  const key = Math.round(width / 5) * 5;
+  if (!coneCache.has(key)) {
+    const half = (key / 2) * Math.PI / 180;
+    coneCache.set(key, new THREE.CircleGeometry(1, 24, -half, 2 * half).rotateX(-Math.PI / 2));
+  }
+  return coneCache.get(key);
+}
+function drawMarks(shown, R, sensed, followed, options) {
+  state.marks.clear();
+  const ground = (mesh, p, f, lift) => { standOn(mesh, p, R, lift, f); state.marks.add(mesh); };
+  for (const x of shown) {
+    const close = state.camera.position.length() < R * 1.6;  // from afar every cone would wash the grass out
+    const coned = sensed ? x === followed : (options.cones && close) || x.c.id === options.hover || x === followed;
+    if (coned) {
+      const cone = new THREE.Mesh(coneGeometry(x.c.vision_width), markMats.cone);
+      cone.scale.set(x.c.vision_reach, 1, x.c.vision_reach); ground(cone, x.p, x.f, 0.02);
+    }
+    if (x.c.call) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 48).rotateX(-Math.PI / 2), markMats.call);
+      ring.scale.setScalar(Math.max(x.c.call[1], 0.5)); ground(ring, x.p, x.f, 0.03);
+    }
+  }
+  if (followed) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.12, 40).rotateX(-Math.PI / 2), markMats.ring);
+    ring.scale.setScalar(Math.max(followed.c.radius * 3, 0.6)); ground(ring, followed.p, followed.f, 0.04);
+  }
+  if (sensed) for (const x of state.lastPlaced || []) {
+    if (!sensed.hears.has(x.c.id)) continue;  // a sound: a blur where it came from, never its size
+    const blur = new THREE.Mesh(new THREE.CircleGeometry(0.8, 24).rotateX(-Math.PI / 2), markMats.heard);
+    ground(blur, x.p, null, 0.05);
+  }
+}
+
+// ---------- the camera: free to spin and zoom; following keeps one creature in the middle; POV stands behind it
+function steer(followed, R) {
+  const { camera, controls } = state;
+  if (followed && state.pov) {
+    controls.enabled = false;
+    const n = followed.p.clone().normalize(), f = followed.f.clone().sub(n.clone().multiplyScalar(followed.f.dot(n))).normalize();
+    const size = Math.max(followed.c.radius * 4, 0.6);
+    const eye = n.clone().multiplyScalar(R + size * 1.6).add(f.clone().multiplyScalar(-size * 3));
+    camera.position.lerp(eye, 0.25); camera.up.copy(n);
+    camera.lookAt(n.clone().multiplyScalar(R + size * 0.6).add(f.clone().multiplyScalar(size * 6)));
+    return;
+  }
+  controls.enabled = true;
+  camera.up.set(0, 1, 0);
+  if (followed) {  // the ball turns under the camera: the creature stays in the middle, at the same height
+    const distance = camera.position.length();
+    const want = followed.p.clone().normalize().multiplyScalar(distance);
+    camera.position.lerp(want, 0.2);
+  }
+  controls.update();
+}
+
+export function followCreature(id) { if (state) state.follow = id; }
+export function zoomBy(factor) {  // the page's zoom buttons: nearer (factor > 1) or farther, within the controls' limits
+  if (!state) return;
+  const { camera, controls } = state, d = camera.position.distanceTo(controls.target);
+  const want = Math.max(controls.minDistance, Math.min(controls.maxDistance, d / factor));
+  camera.position.sub(controls.target).setLength(want).add(controls.target); controls.update();
+}
+export function creatureAt(event) {  // the creature under the pointer, or null
+  if (!state) return null;
+  const box = state.renderer.domElement.getBoundingClientRect();
+  const mouse = new THREE.Vector2(((event.clientX - box.left) / box.width) * 2 - 1, -((event.clientY - box.top) / box.height) * 2 + 1);
+  const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, state.camera);
+  for (const hit of ray.intersectObjects(state.beasts.children, true)) {
+    let o = hit.object;
+    while (o && o.userData.id === undefined) o = o.parent;
+    if (o) return o.userData.id;
+  }
+  return null;
+}
+export function pointOfView(on) { if (state) state.pov = on; }
+export function render() { if (state) state.renderer.render(state.scene, state.camera); }
+
+// frames drawn back to back, each one finished: how fast this machine draws the planet (no waiting on the page clock)
+export function bench(n = 30) {
+  if (!state) return null;
+  const gl = state.renderer.getContext(), times = [];
+  for (let i = 0; i < n; i++) {
+    const s = performance.now();
+    state.controls.update(); state.renderer.render(state.scene, state.camera); gl.finish();
+    times.push(performance.now() - s);
+  }
+  times.sort((a, b) => a - b);
+  const ms = times[Math.floor(n / 2)];
+  return { msPerFrame: +ms.toFixed(1), framesPerSecond: +(1000 / ms).toFixed(1), creatures: state.beasts.children.length };
+}
+
+// What `me` senses (the world's rules, src/senses.py): seen within its vision reach and inside its cone; heard when not
+// seen, within its hearing, and it moved last step. Distances along the ground; food is never heard.
+export function sensedBy(me, picture) {
+  const R = picture.radius, p = v3(me.p).normalize(), f = v3(me.facing);
+  const half = Math.cos((me.vision_width / 2) * Math.PI / 180);
+  const along = (q) => R * Math.atan2(new THREE.Vector3().crossVectors(p, q).length(), p.dot(q));
+  const ahead = (q) => { const t = q.clone().sub(p.clone().multiplyScalar(p.dot(q))); const l = t.length(); return l ? t.dot(f) / l : 1; };
+  const seen = (q) => { const d = along(q); return d === 0 || (d <= me.vision_reach && (me.vision_width >= 360 || ahead(q) >= half)); };
+  const sees = new Set(), hears = new Map(), foods = new Set();
+  for (const c of picture.creatures) {
+    if (c.id === me.id) continue;
+    const q = v3(c.p);
+    if (seen(q)) sees.add(c.id);
+    else if (c.moved && along(q) <= me.hearing) hears.set(c.id, along(q));
+  }
+  picture.foods.forEach((food, i) => { if (seen(v3(food.p))) foods.add(i); });
+  return { sees, hears, foods };
+}

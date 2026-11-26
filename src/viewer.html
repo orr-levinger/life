@@ -124,7 +124,7 @@
   #watch canvas { width: 100%; display: block; border-radius: 6px; background: var(--page); }
   #watch .zoom { display: inline-flex; align-items: center; gap: 4px; } #watch .zoom .act { padding: 2px 10px; }
   #watch .zoom output { min-width: 3.2em; text-align: center; font-variant-numeric: tabular-nums; }
-  #watch-canvas { touch-action: none; cursor: crosshair; }
+  #watch-planet { width: 100%; height: 64vh; min-height: 380px; border-radius: 6px; overflow: hidden; touch-action: none; cursor: grab; background: #0b0d12; }
   #watch-legend { width: 100%; display: block; margin-top: 8px; }
   .resume { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; margin-top: 8px; }
   .resume select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
@@ -174,7 +174,7 @@
     <div class="gene-boxes"></div>
     <button class="act" type="submit">Apply to this creature</button> <span class="error" id="genes-said"></span>
   </form>
-  <canvas id="watch-canvas" width="1000" height="600" aria-label="The world, seen from above"></canvas>
+  <div id="watch-planet" role="img" aria-label="The world: a planet you can spin (drag) and zoom (wheel or pinch); click a creature to follow it"></div>
   <canvas id="watch-legend" height="120" aria-label="What a creature's look means: point at a creature in the world to see its numbers"></canvas>
 </section>
 <section id="rules-page" hidden></section>
@@ -182,6 +182,11 @@
 <div id="charts"></div>
 <div id="tip" role="tooltip"></div>
 
+<script type="importmap">{ "imports": { "three": "/static/three.module.min.js" } }</script>
+<script type="module">
+import * as Planet from "/static/planet.js";
+window.Planet = Planet;  // the live view's 3D planet (src/static/planet.js)
+</script>
 <script>
 const PANELS = [
   { key: "level", title: "Difficulty", step: true,
@@ -925,18 +930,7 @@ async function fetchView() {
 
 // Hunger as a colour: red when empty, yellow at half, green from 70 % of a full tank (enough for a baby).
 const HUNGER = [[0, [226, 75, 74]], [0.35, [237, 161, 0]], [0.7, [27, 175, 122]]];
-const CALL_COLOURS = ["#f4d35e", "#ee964b", "#f95738", "#4ecdc4", "#a06cd5", "#5ab1ef", "#ff6fb5", "#9bc53d",
-                      "#e8e8e8", "#c3a995"];  // one per kind of call
-
-function drawCall(g, x, y, call, unit) {  // [kind, how far it carries]: a ring that far out, with the kind's number
-  const [kind, reach] = call, colour = CALL_COLOURS[kind % CALL_COLOURS.length];
-  g.save();
-  g.strokeStyle = colour; g.lineWidth = 2; g.setLineDash([6, 4]); g.globalAlpha = 0.8;
-  g.beginPath(); g.arc(x, y, Math.max(reach * unit, 6), 0, 2 * Math.PI); g.stroke();
-  g.setLineDash([]); g.globalAlpha = 1; g.fillStyle = colour; g.font = "bold 12px system-ui, sans-serif";
-  g.fillText(String(kind + 1), x + 6, y - 6);
-  g.restore();
-}
+// one per kind of call
 
 function meatColour(diet) {  // a creature's outline: green for a plant eater, dark red for a meat eater
   const d = Math.max(0, Math.min(1, diet));
@@ -1132,12 +1126,14 @@ function drawSenses(g, x, y, c, unit, strong, color, cone = camera.cones) {
 const ZOOMS = { least: 1, most: 12, follow: 4, step: 1.25 };
 const camera = { zoom: 1, x: null, y: null, follow: null, pov: false, cones: true };
 try { camera.cones = localStorage.getItem("life.cones") !== "off"; } catch (error) { /* no storage: shown */ }
-function zoomBy(factor) {
+function zoomBy(factor) {  // the zoom buttons: the camera nearer or farther (the wheel and a pinch do the same)
   camera.zoom = Math.max(ZOOMS.least, Math.min(ZOOMS.most, camera.zoom * factor));
+  if (window.Planet) Planet.zoomBy(factor);
   document.getElementById("zoom-shown").textContent = `${camera.zoom < 10 ? camera.zoom.toFixed(1) : Math.round(camera.zoom)}×`;
 }
 function follow(id, name) {
   camera.follow = id;
+  if (window.Planet) Planet.followCreature(id);
   if (id === null) pov(false);
   showGenes(false);
   document.getElementById("follow-note").hidden = id === null;
@@ -1146,41 +1142,13 @@ function follow(id, name) {
 
 function pov(on) {  // the followed creature's point of view: only what it senses is drawn
   camera.pov = on;
+  if (window.Planet) Planet.pointOfView(on);
   const button = document.getElementById("follow-pov");
   button.setAttribute("aria-pressed", String(on));
   button.textContent = on ? "POV: on" : "POV";
 }
 
 // What `me` senses in `picture`, as the world decides it (src/senses.py): seen when within its vision reach and inside
-// its cone; heard when not seen, within its hearing, and it moved in its last step. Food is never heard.
-function sensedBy(me, picture) {
-  const half = Math.cos(me.vision_width / 2 * Math.PI / 180), [fx, fy] = me.facing;
-  const away = (x, y) => Math.hypot(x - me.x, y - me.y);
-  const seen = (x, y) => {
-    const d = away(x, y);
-    return d === 0 || (d <= me.vision_reach && (me.vision_width >= 360 || ((x - me.x) * fx + (y - me.y) * fy) / d >= half));
-  };
-  const sees = new Set(), hears = new Map(), foods = new Set();
-  for (const c of picture.creatures) {
-    if (c.id === me.id) continue;
-    if (seen(c.x, c.y)) sees.add(c.id);
-    else if (c.moved && away(c.x, c.y) <= me.hearing) hears.set(c.id, away(c.x, c.y));
-  }
-  picture.foods.forEach((f, i) => { if (seen(f.x, f.y)) foods.add(i); });
-  return { sees, hears, foods };
-}
-
-function drawHeard(g, x, y, unit, distance, color) {  // a sound: a blur where it came from and how far, never its size
-  const r = unit * 0.5, blur = g.createRadialGradient(x, y, 0, x, y, r);
-  blur.addColorStop(0, "rgba(150, 160, 180, 0.6)");
-  blur.addColorStop(1, "rgba(150, 160, 180, 0)");
-  g.fillStyle = blur;
-  g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
-  g.fillStyle = color("--muted"); g.textAlign = "center";
-  g.font = `${12 * devicePixelRatio / camera.zoom}px system-ui, sans-serif`;
-  g.fillText(distance.toFixed(1), x, y - r - 2 * devicePixelRatio / camera.zoom);
-}
-
 // The genes the owner may change on the followed creature (as the world names them), with how many digits to show.
 const GENE_BOXES = [["size", "Size", 2], ["vision_width", "Vision width (degrees)", 0], ["vision_reach", "Sees how far", 2],
   ["hearing", "Hears how far", 2], ["fear_of_death", "Fear of death", 2], ["love_of_babies", "Love of babies", 2],
@@ -1214,186 +1182,26 @@ function showGenes(open) {
   if (c) drawGenes(c);
 }
 
-// The ground: grass as a fixed scatter of blades (drawn once into a pattern), rocks and ponds as their blobs, trees
-// as a trunk under a translucent crown (the crowns are drawn over the creatures: they hide under them).
-const GROUND = { grass: "#1f3a22", blade: "#2c5230", rock: "#6d6a63", rockEdge: "#8b877d", pond: "#2a5d8a",
-                 pondEdge: "#4d86b5", crown: "rgba(34, 92, 40, 0.55)", crownEdge: "rgba(70, 140, 70, 0.7)",
-                 trunk: "#5b3d22", fruit: "#e0483b" };
-let grassPattern = null;
-function grass(g) {
-  if (!grassPattern) {
-    const tile = document.createElement("canvas");
-    tile.width = tile.height = 64;
-    const t = tile.getContext("2d");
-    t.fillStyle = GROUND.grass; t.fillRect(0, 0, 64, 64);
-    t.strokeStyle = GROUND.blade; t.lineWidth = 1;
-    let seed = 7;  // the same blades every time
-    const next = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < 70; i++) {
-      const x = next() * 64, y = next() * 64, lean = (next() - 0.5) * 3;
-      t.beginPath(); t.moveTo(x, y); t.lineTo(x + lean, y - 2 - next() * 3); t.stroke();
-    }
-    grassPattern = g.createPattern(tile, "repeat");
-  }
-  return grassPattern;
-}
-
-function drawObstacles(g, terrain, unit, line) {
-  for (const o of terrain.obstacles) {
-    const pond = o.kind === "pond";
-    for (const pass of ["edge", "fill"]) {  // the blob's outline first, its body over it: one shape
-      g.fillStyle = pass === "edge" ? (pond ? GROUND.pondEdge : GROUND.rockEdge) : (pond ? GROUND.pond : GROUND.rock);
-      for (const [x, y, r] of o.circles) {
-        g.beginPath(); g.arc(x * unit, y * unit, r * unit + (pass === "edge" ? line : 0), 0, 2 * Math.PI); g.fill();
-      }
-    }
-  }
-}
-
-function drawTrunks(g, terrain, unit) {
-  g.fillStyle = GROUND.trunk;
-  for (const t of terrain.trees) { g.beginPath(); g.arc(t.x * unit, t.y * unit, Math.max(unit * 0.18, 2), 0, 2 * Math.PI); g.fill(); }
-}
-
-function drawCrowns(g, terrain, unit, line) {
-  for (const t of terrain.trees) {
-    g.fillStyle = GROUND.crown; g.strokeStyle = GROUND.crownEdge; g.lineWidth = line;
-    g.beginPath(); g.arc(t.x * unit, t.y * unit, t.canopy * unit, 0, 2 * Math.PI); g.fill(); g.stroke();
-  }
-}
-
+// The live view: each picture of the world handed to the planet (src/static/planet.js), which draws it in 3D.
 function paint() {
   if (!watching) return;
   requestAnimationFrame(paint);
   const picture = watching.cur;
-  if (!picture) return;
+  if (!picture || !window.Planet) return;
   const t = watching.prev ? Math.min(1, (performance.now() - watching.curAt) / watching.span) : 1;
-  const before = new Map((watching.prev ? watching.prev.creatures : []).map((c) => [c.id, c]));
-  const run = data.find((r) => r.name === watching.name), wanderers = run ? scores(run).wanderers : null;
-  const canvas = document.getElementById("watch-canvas"), ink = getComputedStyle(document.documentElement);
-  const color = (name) => ink.getPropertyValue(name).trim();
-  const worldW = picture.width || 50, worldH = picture.height || 30;
-  const width = canvas.clientWidth * devicePixelRatio, height = width * worldH / worldW;
-  if (canvas.width !== width || canvas.height !== Math.round(height)) { canvas.width = width; canvas.height = height; }
-  const unit = width / worldW, g = canvas.getContext("2d"), line = Math.max(1.2, unit * 0.06);
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.clearRect(0, 0, canvas.width, canvas.height);
-  const placed = picture.creatures.map((c) => {
-    const from = before.get(c.id) || c;  // a newborn appears where it is
-    return { c, x: (from.x + (c.x - from.x) * t) * unit, y: (from.y + (c.y - from.y) * t) * unit };
-  });
-  const followed = camera.follow === null ? null : placed.find((p) => p.c.id === camera.follow);
-  if (camera.follow !== null && !followed) follow(null);  // it died: the camera stays where it was
-  if (followed) { camera.x = followed.x / unit; camera.y = followed.y / unit; }
-  if (camera.x === null) { camera.x = worldW / 2; camera.y = worldH / 2; }
-  const halfW = worldW / 2 / camera.zoom, halfH = worldH / 2 / camera.zoom;  // keep the view inside the world
-  if (!followed) { camera.x = Math.max(halfW, Math.min(worldW - halfW, camera.x)); camera.y = Math.max(halfH, Math.min(worldH - halfH, camera.y)); }
-  const toScreen = (x, y) => [(x - camera.x * unit) * camera.zoom + canvas.width / 2, (y - camera.y * unit) * camera.zoom + canvas.height / 2];
-  watching.toWorld = (sx, sy) => [((sx * devicePixelRatio - canvas.width / 2) / camera.zoom + camera.x * unit) / unit,
-                                  ((sy * devicePixelRatio - canvas.height / 2) / camera.zoom + camera.y * unit) / unit];
-  g.setTransform(camera.zoom, 0, 0, camera.zoom, canvas.width / 2 - camera.x * unit * camera.zoom,
-                 canvas.height / 2 - camera.y * unit * camera.zoom);
-  const terrain = picture.terrain || { obstacles: [], trees: [] };
-  g.fillStyle = grass(g); g.fillRect(0, 0, worldW * unit, worldH * unit);  // the ground under everything
-  drawObstacles(g, terrain, unit, line);
-  drawTrunks(g, terrain, unit);
-  const sensed = followed && camera.pov ? sensedBy(followed.c, picture) : null;  // its point of view, when on
-  const shown = sensed ? placed.filter((p) => p === followed || sensed.sees.has(p.c.id)) : placed;
-  if (sensed) {  // what it cannot sense is not drawn; the world around is dimmed
-    g.fillStyle = "rgba(0, 0, 0, 0.35)"; g.fillRect(0, 0, worldW * unit, worldH * unit);
-    drawSenses(g, followed.x, followed.y, followed.c, unit, true, color, true);  // its own cone always shows in POV
-  } else {
-    for (const { c, x, y } of placed) drawSenses(g, x, y, c, unit, c.id === watching.hover, color);  // under everything
+  if (!planetMade) {
+    Planet.makePlanet(document.getElementById("watch-planet"), { onPick: (id) => {
+      const c = id === null || !watching || !watching.cur ? null : watching.cur.creatures.find((x) => x.id === id);
+      follow(c ? c.id : null, c ? `creature ${c.id} (generation ${c.generation})` : "");
+    } });
+    planetMade = true;
   }
-  for (const food of sensed ? picture.foods.filter((f, i) => sensed.foods.has(i)) : picture.foods) {
-    const x = food.x * unit, y = food.y * unit, d = Math.max(food.radius * unit, 2.5);
-    if (food.fruit) {  // fruit: a small red berry
-      g.fillStyle = GROUND.fruit; g.beginPath(); g.arc(x, y, d * 0.8, 0, 2 * Math.PI); g.fill();
-      continue;
-    }
-    if (food.meat) {  // meat: a dark red lump
-      g.fillStyle = "#7a1f1f"; g.beginPath(); g.arc(x, y, d, 0, 2 * Math.PI); g.fill();
-      continue;
-    }
-    g.fillStyle = FOOD_COLOUR;  // food: small tan diamonds
-    g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill();
-  }
-  watching.drawn = [];
-  if (sensed) for (const p of placed) if (sensed.hears.has(p.c.id)) drawHeard(g, p.x, p.y, unit, sensed.hears.get(p.c.id), color);
-  for (const { c, x, y } of shown) {
-    const r = Math.max(c.radius * unit, 4);  // size: its genes, never changes
-    const smart = drawCreature(g, x, y, r, c, wanderers, line, color);
-    const [sx, sy] = toScreen(x, y);
-    watching.drawn.push({ c, x: sx / devicePixelRatio, y: sy / devicePixelRatio, r: r * camera.zoom / devicePixelRatio, smart });
-  }
-  for (const { c, x, y } of shown) if (c.call) drawCall(g, x, y, c.call, unit);  // a call: a ring as wide as it carries
-  const where = new Map(watching.drawn.map((d) => [d.c.id, d]));
-  for (const { c, x, y } of shown) {  // attacking: strike lines, over the creatures
-    if (c.target === null || c.target === undefined || !where.has(c.target)) continue;
-    const to = placed.find((p) => p.c.id === c.target), r = Math.max(c.radius * unit, 4), tr = Math.max(to.c.radius * unit, 4);
-    drawStrike(g, { x, y, r }, { x: to.x, y: to.y, r: tr }, line, c.did === "ATTACK");
-  }
-  drawCrowns(g, terrain, unit, line);  // over the creatures: under a crown one is hard to see
-  for (const { c, x, y } of shown) {  // ran into an obstacle: a small burst
-    if (!c.bumped) continue;
-    const r = Math.max(c.radius * unit, 4) * 1.5;
-    g.strokeStyle = color("--warn"); g.lineWidth = line;
-    for (let k = 0; k < 6; k++) {
-      const a = k * Math.PI / 3;
-      g.beginPath(); g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r); g.lineTo(x + Math.cos(a) * r * 1.4, y + Math.sin(a) * r * 1.4); g.stroke();
-    }
-  }
-  if (followed) {  // the one it follows: a ring
-    g.strokeStyle = color("--ink"); g.lineWidth = line;
-    g.beginPath(); g.arc(followed.x, followed.y, Math.max(followed.c.radius * unit, 4) * 1.9, 0, 2 * Math.PI); g.stroke();
-  }
-  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (camera.follow !== null && !picture.creatures.some((c) => c.id === camera.follow)) follow(null);  // it died
+  Planet.updatePlanet(picture, watching.prev, t, { cones: camera.cones, hover: watching.hover });
+  Planet.render();
 }
+let planetMade = false;
 
-const watchCanvas = document.getElementById("watch-canvas");
-watchCanvas.addEventListener("wheel", (event) => {  // zoom toward the pointer (or the followed creature)
-  if (!watching || !watching.toWorld) return;
-  event.preventDefault();
-  const box = watchCanvas.getBoundingClientRect(), [wx, wy] = watching.toWorld(event.clientX - box.left, event.clientY - box.top);
-  const before = camera.zoom;
-  zoomBy(event.deltaY < 0 ? ZOOMS.step : 1 / ZOOMS.step);
-  if (camera.follow === null && camera.x !== null) {  // the point under the pointer stays under it
-    camera.x = wx - (wx - camera.x) * before / camera.zoom;
-    camera.y = wy - (wy - camera.y) * before / camera.zoom;
-  }
-}, { passive: false });
-const pointers = new Map();
-let dragged = false, pinchFrom = null;
-watchCanvas.addEventListener("pointerdown", (event) => {
-  pointers.set(event.pointerId, [event.clientX, event.clientY]);
-  dragged = false;
-  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchFrom = { gap: Math.hypot(a[0] - b[0], a[1] - b[1]), zoom: camera.zoom }; }
-});
-watchCanvas.addEventListener("pointermove", (event) => {
-  if (!pointers.has(event.pointerId) || !watching || !watching.toWorld) return;
-  const [px, py] = pointers.get(event.pointerId);
-  pointers.set(event.pointerId, [event.clientX, event.clientY]);
-  if (pointers.size === 2 && pinchFrom) {  // a pinch zooms
-    const [a, b] = [...pointers.values()];
-    zoomBy(pinchFrom.zoom * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinchFrom.gap / camera.zoom);
-    dragged = true;
-    return;
-  }
-  if (camera.follow === null && Math.hypot(event.clientX - px, event.clientY - py) > 0) {  // a drag moves the view
-    const [ax, ay] = watching.toWorld(px, py), [bx, by] = watching.toWorld(event.clientX, event.clientY);
-    camera.x -= bx - ax; camera.y -= by - ay;
-    dragged = dragged || Math.abs(event.movementX) + Math.abs(event.movementY) > 2;
-  }
-});
-const lift = (event) => { pointers.delete(event.pointerId); if (pointers.size < 2) pinchFrom = null; };
-watchCanvas.addEventListener("pointerup", lift);
-watchCanvas.addEventListener("pointercancel", lift);
-watchCanvas.addEventListener("click", (event) => {  // a creature: follow it; empty ground: stop following
-  if (dragged || !watching || !watching.drawn) return;
-  const box = watchCanvas.getBoundingClientRect(), mx = event.clientX - box.left, my = event.clientY - box.top;
-  const hit = watching.drawn.find((d) => Math.hypot(d.x - mx, d.y - my) <= Math.max(d.r * 1.6, 18));  // a generous target: they move
-  follow(hit ? hit.c.id : null, hit ? `creature ${hit.c.id} (generation ${hit.c.generation})` : "");
-});
 document.getElementById("zoom-in").addEventListener("click", () => zoomBy(ZOOMS.step));
 document.getElementById("zoom-out").addEventListener("click", () => zoomBy(1 / ZOOMS.step));
 document.getElementById("follow-stop").addEventListener("click", () => follow(null));
@@ -1421,14 +1229,14 @@ document.getElementById("genes-panel").addEventListener("submit", (event) => {  
 });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && camera.follow !== null) follow(null); });
 
-document.getElementById("watch-canvas").addEventListener("mousemove", (event) => {  // point at a creature: its numbers
+document.getElementById("watch-planet").addEventListener("mousemove", (event) => {  // point at a creature: its numbers
   const tip = document.getElementById("tip");
-  if (!watching || !watching.drawn) return;
-  const box = event.currentTarget.getBoundingClientRect(), mx = event.clientX - box.left, my = event.clientY - box.top;
-  const hit = watching.drawn.find((d) => Math.hypot(d.x - mx, d.y - my) <= Math.max(d.r, 6));
-  watching.hover = hit ? hit.c.id : null;
-  if (!hit) { tip.style.display = "none"; return; }
-  const c = hit.c, did = { EAT: "ate", EAT_MISS: "ate at nothing", ATTACK: "attacked", ATTACK_MISS: "attacked and missed",
+  if (!watching || !watching.cur || !window.Planet || event.buttons) { tip.style.display = "none"; return; }
+  const id = Planet.creatureAt(event), c = id === null ? null : watching.cur.creatures.find((x) => x.id === id);
+  watching.hover = c ? c.id : null;
+  if (!c) { tip.style.display = "none"; return; }
+  const run = data.find((r) => r.name === watching.name), hit = { smart: creatureSmarts(c, run ? scores(run).wanderers : null) };
+  const did = { EAT: "ate", EAT_MISS: "ate at nothing", ATTACK: "attacked", ATTACK_MISS: "attacked and missed",
     MOVE: "moved", HIT_BY_ATTACK: "was attacked" }[c.did] || "rested";
   tip.textContent = `Size ${c.size.toFixed(2)} (its genes) · energy ${Math.round(c.energy * 100)} % of full · ` +
     `age ${c.age.toLocaleString()} of its ${c.lifespan.toLocaleString()} steps · generation ${c.generation} · ` +
@@ -1443,7 +1251,7 @@ document.getElementById("watch-canvas").addEventListener("mousemove", (event) =>
   tip.style.left = `${Math.min(event.clientX + 12, innerWidth - tip.offsetWidth - 8)}px`;
   tip.style.top = `${event.clientY + 14}px`;
 });
-document.getElementById("watch-canvas").addEventListener("mouseleave", () => {
+document.getElementById("watch-planet").addEventListener("mouseleave", () => {
   document.getElementById("tip").style.display = "none";
   if (watching) watching.hover = null;
 });

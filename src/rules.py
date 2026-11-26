@@ -87,6 +87,10 @@ RULES = (
     Rule("pond_food_share", "world", "Share of new food that grows in ponds", 0.2, 0.0, 1.0),
     Rule("year_steps", "world", "A year lasts this many steps (food rises and falls over it)", 20000.0, 1000.0, 200000.0),
     Rule("season_depth", "world", "Seasons: food and fruit × (1 ± this) at the year's best and worst", 0.5, 0.0, 1.0),
+    Rule("forests", "world", "Trees of a new world grow in this many forests (0: anywhere)", 2.0, 0.0, 20.0),
+    Rule("forest_spread", "world", "A forest's trees stand within this of its centre", 12.0, 1.0, 40.0),
+    Rule("pond_edge_food", "world", "Food grows this many times as thick near a pond's edge", 2.0, 1.0, 10.0),
+    Rule("pond_edge_width", "world", "How far from a pond its rich edge reaches", 2.0, 0.1, 10.0),
     Rule("tree_canopy", "world", "A tree's crown: its radius", 1.5, 0.3, 5.0),
     Rule("fruit_spread", "world", "Fruit falls this far from its tree at most", 2.0, 0.5, 10.0),
     Rule("hide_reach", "senses", "Under a tree, a creature is seen only from this close", 1.0, 0.0, 10.0),
@@ -191,6 +195,11 @@ MEANS = {
                         "from 30 % as far.",
     "stealth_cost": "What stealth costs: its living cost × (1 + its stealth × this). 0.3: full stealth pays 30 % "
                     "more to stay alive.",
+    "forests": "How many forests a new world's trees grow in, with plains between; 0 scatters them anywhere.",
+    "forest_spread": "How far from its forest's centre a tree may stand: a small number makes a dense wood.",
+    "pond_edge_food": "How much thicker food grows on the land near a pond's edge than on open ground (2 = twice "
+                      "as thick).",
+    "pond_edge_width": "How far out from a pond's edge the rich ground reaches.",
     "year_steps": "How many steps a year lasts: food and fruit grow most a quarter into it and least three "
                   "quarters into it.",
     "season_depth": "How strong the seasons are: food and fruit grow × (1 + this × sin(2π × step ÷ year)). 0.5: "

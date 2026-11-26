@@ -24,6 +24,7 @@ if TYPE_CHECKING:  # the world never imports TensorFlow: a learner is handed to 
 
 Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
+FOOD_SPOT_TRIES = 50  # tries for a food spot by the pond edges' thickness
 FREE_SPOT_TRIES = 1000  # tries to find a newcomer a spot that no obstacle covers
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
          "layers", "neurons", "weights", "mutations", "mutation_size", "diet", "calls", "kin", "water", "stealth", "armour")  # a baby changes its parent's `mutations` of them
@@ -179,8 +180,8 @@ class World:
         extra = self.food_rng.random() < per_step - whole
         ponds = self.terrain.pond_circles.any()
         for _ in range(whole + extra):
-            x = self.food_rng.uniform(margin, self.width - margin)
-            y = self.food_rng.uniform(margin, self.height - margin)
+            x, y = self._land_spot(margin) if ponds else (self.food_rng.uniform(margin, self.width - margin),
+                                                          self.food_rng.uniform(margin, self.height - margin))
             energy = self.food_rng.uniform(*self.settings.food_energy)
             wet = ponds and self.food_rng.random() < self.rules["pond_food_share"]  # some grows in a pond
             if wet:
@@ -201,6 +202,17 @@ class World:
             if inside and len(self.foods) < int(self.settings.max_food) and self._fits(fruit):
                 self.foods.append(fruit)
                 self.foods_created_this_step.add(id(fruit))
+    def _land_spot(self, margin: float) -> tuple:
+        """A spot for new food on the land, food growing `pond_edge_food` times as thick near a pond's edge: a spot
+        away from the edges is kept 1 time in `pond_edge_food` (the same food a step, more of it by the water)."""
+        thicker, width = self.rules["pond_edge_food"], self.rules["pond_edge_width"]
+        for _ in range(FOOD_SPOT_TRIES):
+            x = self.food_rng.uniform(margin, self.width - margin)
+            y = self.food_rng.uniform(margin, self.height - margin)
+            if thicker <= 1.0 or self.terrain.near_pond(x, y, width) or self.food_rng.random() < 1.0 / thicker:
+                return x, y
+        return x, y
+
     def season(self) -> float:
         """How much food and fruit grow now, against the year's middle: 1 + depth × sin(2π step ÷ year). An exam world
         has no seasons."""

@@ -618,6 +618,24 @@ class TestSaves(unittest.TestCase):
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertEqual((loaded.rules["year_steps"], loaded.rules["season_depth"]), (20000.0, 0.5))
 
+    def test_a_format_24_save_gets_the_region_rules(self):
+        world = make_world(seed=21)
+        populate(world, 3)
+        regions = ("forests", "forest_spread", "pond_edge_food", "pond_edge_width")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 24
+            about["rules"] = {k: v for k, v in about["rules"].items() if k not in regions}
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({r: loaded.rules[r] for r in regions}, {r: rule(r).start for r in regions})
+        self.assertEqual(loaded.terrain.state(), world.terrain.state())  # its ground stays as it was
+
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)

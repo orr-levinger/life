@@ -1,6 +1,7 @@
 import math
 import random
 import unittest
+from unittest import mock
 from dataclasses import replace
 
 import numpy as np
@@ -30,6 +31,28 @@ class TestMakingTerrain(unittest.TestCase):
         self.assertTrue(all(not terrain.blocked(t.x, t.y, 0.0) for t in terrain.trees))
         sizes = {round(max(c[2] for c in o.circles), 2) for o in terrain.obstacles}
         self.assertGreater(len(sizes), 1)  # of random sizes
+
+    def test_trees_grow_together_in_forests(self):
+        rules = starting_rules()  # a new world: 46 trees in 2 forests of 12
+        terrain = make_terrain(rules, random.Random(4), 120.0, 72.0)
+        self.assertEqual(len(terrain.forest_centres), 2)
+        self.assertGreater(len(terrain.trees), 0.8 * rules["trees"])  # nearly all of them fit
+        for t in terrain.trees:
+            self.assertLessEqual(min(math.hypot(t.x - x, t.y - y) for x, y in terrain.forest_centres),
+                                 rules["forest_spread"] + 1e-9)
+
+    def test_pond_edges_grow_more_food_than_open_ground(self):
+        w = make_world(replace(NO_FOOD, max_food=10 ** 7, food_per_step=6.0, fruit_rate=0.0))
+        w.rules.update({"pond_food_share": 0.0, "pond_edge_food": 2.0, "pond_edge_width": 2.0, "season_depth": 0.0})
+        w.terrain = Terrain([Obstacle("pond", ((25.0, 15.0, 4.0),))], [])
+        with mock.patch.object(type(w), "_fits", lambda self, food, wet=False: not self.terrain.blocked(food.x, food.y, 0.0)):
+            for _ in range(1000):
+                w.spawn_food()
+        edge = sum(4.0 <= math.hypot(f.x - 25.0, f.y - 15.0) <= 6.0 for f in w.foods)
+        edge_area = math.pi * (6.0 ** 2 - 4.0 ** 2)
+        open_ground = len(w.foods) - edge
+        open_area = 50.0 * 30.0 - math.pi * 6.0 ** 2
+        self.assertGreater(edge / edge_area, 1.6 * open_ground / open_area)  # about twice as dense
 
     def test_the_terrain_round_trips(self):
         terrain = make_terrain(starting_rules(), random.Random(1), 50.0, 30.0)

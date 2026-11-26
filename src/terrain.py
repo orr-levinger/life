@@ -35,8 +35,10 @@ class Tree:
 
 
 class Terrain:
-    def __init__(self, obstacles: Sequence[Obstacle], trees: Sequence[Tree]) -> None:
+    def __init__(self, obstacles: Sequence[Obstacle], trees: Sequence[Tree],
+                 forest_centres: Sequence[Tuple[float, float]] = ()) -> None:
         self.obstacles, self.trees = list(obstacles), list(trees)
+        self.forest_centres = list(forest_centres)  # where a new world's forests grew from (not kept in a save)
         circles = [c for o in self.obstacles for c in o.circles]
         self._cx = np.array([c[0] for c in circles])
         self._cy = np.array([c[1] for c in circles])
@@ -65,6 +67,14 @@ class Terrain:
             return False
         inside = np.hypot(self._cx - x, self._cy - y) < self._cr
         return bool(np.any(inside & self.pond_circles))
+
+    def near_pond(self, x: float, y: float, width: float) -> bool:
+        """Whether (x, y) is on the land within `width` of a pond's edge."""
+        if not self.pond_circles.any():
+            return False
+        d = np.hypot(self._cx - x, self._cy - y)
+        ponds = self.pond_circles
+        return bool(np.any(ponds & (d <= self._cr + width)) and not np.any(ponds & (d < self._cr)))
 
     def pond_spot(self, rng) -> Optional[Tuple[float, float]]:
         """A random point inside a random pond circle (None when there is no pond)."""
@@ -143,14 +153,22 @@ def make_terrain(rules: Rules, rng: random.Random, width: float, height: float,
                 break
     rocks = Terrain(obstacles, [])
     trees: List[Tree] = []
-    canopy = rules["tree_canopy"]
+    canopy, spread = rules["tree_canopy"], rules["forest_spread"]
+    centres = [(rng.uniform(0.0, width), rng.uniform(0.0, height)) for _ in range(round(rules["forests"]))]
     for _ in range(round(rules["trees"])):
         for _ in range(PLACE_TRIES):
-            x, y = rng.uniform(canopy, width - canopy), rng.uniform(canopy, height - canopy)
-            if not rocks.blocked(x, y, canopy * 0.5) and all(math.hypot(x - t.x, y - t.y) > canopy * 2 for t in trees):
+            if centres:  # in a forest: within its spread of one of the centres
+                cx, cy = rng.choice(centres)
+                angle, away = rng.uniform(0.0, 2.0 * math.pi), spread * math.sqrt(rng.random())
+                x, y = cx + away * math.cos(angle), cy + away * math.sin(angle)
+            else:
+                x, y = rng.uniform(canopy, width - canopy), rng.uniform(canopy, height - canopy)
+            inside = canopy <= x <= width - canopy and canopy <= y <= height - canopy
+            if (inside and not rocks.blocked(x, y, canopy * 0.5)
+                    and all(math.hypot(x - t.x, y - t.y) > canopy * 2 for t in trees)):
                 trees.append(Tree(x, y, canopy))
                 break
-    return Terrain(obstacles, trees)
+    return Terrain(obstacles, trees, centres)
 
 
 def _clear(circle: Tuple[float, float, float], others: Sequence[Tuple[float, float, float]]) -> bool:

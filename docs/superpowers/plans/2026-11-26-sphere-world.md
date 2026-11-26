@@ -281,6 +281,13 @@ food 60 -> 100. Auto may go that easy too. New worlds still start at START (400,
   and START unchanged); RED; then the three numbers; GREEN; `python -m unittest tests.test_dial tests.test_viewer` OK.
 - [ ] **Step 2:** Commit "Food sliders reach 800 pieces, 20 a step, 100 energy".
 
+### Task 11e: Fruit slider reaches 1 (the owner, 2026-11-26: "Fruit a tree drops per step set max to 1")
+
+- [ ] **Step 1:** Test first `test_fruit_slider_reaches_one` (`tests/test_dial.py`: the fruit_rate knob's easiest end
+  is 1.0; START unchanged); RED; then the number; GREEN; `python -m unittest tests.test_dial tests.test_control
+  tests.test_viewer` OK.
+- [ ] **Step 2:** Commit "Fruit slider reaches 1 a step".
+
 ### Task 12: Final
 
 - [ ] **Step 1:** `python scripts/run_tests.py` → OK under 300 s.

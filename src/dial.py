@@ -37,7 +37,7 @@ KNOBS = (
     Knob("step_cost", +1, easiest=0.01, hardest=0.5),
     Knob("lifespan", -1, easiest=10000.0, hardest=625.0),
     Knob("food_per_step", -1, easiest=20.0, hardest=0.2),
-    Knob("fruit_rate", -1, easiest=0.2, hardest=0.002),
+    Knob("fruit_rate", -1, easiest=1.0, hardest=0.002),
 )
 
 

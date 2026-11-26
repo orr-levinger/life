@@ -106,6 +106,10 @@ class TestDial(unittest.TestCase):
         self.assertEqual((ends["max_food"], ends["food_per_step"], ends["food_energy"]), (800.0, 20.0, 100.0))
         self.assertEqual((START.max_food, START.food_per_step, START.food_energy), (400, 6.0, (20, 40)))  # starts as before
 
+    def test_fruit_slider_reaches_one(self):  # the owner, 2026-11-26
+        self.assertEqual({k.name: k.easiest for k in KNOBS}["fruit_rate"], 1.0)
+        self.assertEqual(START.fruit_rate, 0.02)  # a new world starts as before
+
     def test_starts_at_the_easy_start(self):
         dial = Dial()
         self.assertEqual((dial.level, dial.settings), (0, START))

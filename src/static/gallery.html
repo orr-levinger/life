@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Life: how genes look</title>
+<style>
+  html, body { margin: 0; background: #10141b; color: #f2f0e6; font: 14px system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 14px 16px 4px; } p { margin: 0 16px 10px; color: #a8b0c0; }
+  .row { margin: 8px 16px 18px; } .row h2 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .row canvas { width: 100%; height: 220px; display: block; border-radius: 8px; background: #151b25; }
+</style>
+<script type="importmap">{ "imports": { "three": "/static/three.module.min.js" } }</script>
+</head>
+<body>
+<h1>How genes look</h1>
+<p>Each row: one gene at its low, middle and high value on the same creature; everything else stays the same. On the planet a ring under
+each creature shows its hunger (green full, yellow half, red hungry).</p>
+<div id="rows"></div>
+<script type="module">
+import * as THREE from "three";
+import { beastModel } from "/static/beasts.js";
+
+const BASE = { size: 1, diet: 0, water: 0, love: 0.3, fear: 0, layers: 1, neurons: 0.25, learns: 0, learning: 0, width: 0.5,
+               reach: 0.5, hearing: 0.4, armour: 0, stealth: 0, calls: 0, kin: 0 };
+const ROWS = [
+  ["Plant eater · in between · meat eater (diet)", [{ diet: 0 }, { diet: 0.5 }, { diet: 1 }]],
+  ["Swimmers (water 1): plant eater · in between · meat eater", [{ water: 1 }, { water: 1, diet: 0.5 }, { water: 1, diet: 1 }]],
+  ["Water: land · half · full (a meat eater)", [{ diet: 1 }, { diet: 1, water: 0.5 }, { diet: 1, water: 1 }]],
+  ["Size", [{ size: 0.6 }, { size: 1.2 }, { size: 1.8 }]],
+  ["Love of babies → a rounder body", [{ love: 0 }, { love: 0.5 }, { love: 1 }]],
+  ["Fear of death → quills", [{ fear: 0.2 }, { fear: 0.6 }, { fear: 1 }]],
+  ["Brain layers → horn tines (a grazer) / a crest (a hunter)", [{ layers: 1, diet: 1 }, { layers: 2, diet: 1 }, { layers: 3, diet: 1 }]],
+  ["Neurons → head size", [{ neurons: 0 }, { neurons: 0.5 }, { neurons: 1 }]],
+  ["Learns from others → antennae", [{ learns: 0.1 }, { learns: 0.5 }, { learns: 1 }]],
+  ["Learning speed → bands on the coat", [{ learning: 0, diet: 1 }, { learning: 0.5, diet: 1 }, { learning: 1, diet: 1 }]],
+  ["Vision width → eyes to the sides · vision reach → eye size", [{ width: 0 }, { width: 1 }, { reach: 1 }]],
+  ["Hearing → ears", [{ hearing: 0.1 }, { hearing: 0.5 }, { hearing: 1 }]],
+  ["Armour → bone plates (a hunter)", [{ diet: 1, armour: 0.3 }, { diet: 1, armour: 0.65 }, { diet: 1, armour: 1 }]],
+  ["Stealth → a duller coat (a hunter)", [{ diet: 1, stealth: 0 }, { diet: 1, stealth: 0.5 }, { diet: 1, stealth: 1 }]],
+  ["Calls → a throat sac", [{ calls: 1 }, { calls: 5 }, { calls: 10 }]],
+  ["Care for kin → a pale blaze on the face", [{ kin: 0.2 }, { kin: 0.6 }, { kin: 1 }]],
+];
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+for (const [words, list] of ROWS) {
+  const row = document.createElement("div"); row.className = "row";
+  row.innerHTML = `<h2>${words}</h2><canvas></canvas>`;
+  document.getElementById("rows").appendChild(row);
+  const canvas = row.querySelector("canvas"), W = canvas.clientWidth, H = canvas.clientHeight;
+  canvas.width = W; canvas.height = H;
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x151b25);
+  scene.add(new THREE.HemisphereLight(0xe6f0ff, 0x40301c, 1.1));
+  const sun = new THREE.DirectionalLight(0xfff0d0, 2.0); sun.position.set(5, 10, 7); scene.add(sun);
+  list.forEach((genes, k) => {
+    const g = { ...BASE, ...genes }, body = beastModel(g, "near");
+    body.scale.setScalar(g.size); body.position.set(k * 4.2, 0, 0); body.rotation.y = -0.75; scene.add(body);
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(1.9, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x3f6b35 }));
+    ground.position.set(k * 4.2, -0.01, 0); scene.add(ground);
+  });
+  const camera = new THREE.PerspectiveCamera(32, W / H, 0.1, 100);
+  camera.position.set(4.2, 2.0, 7.4); camera.lookAt(4.2, 0.7, 0);
+  renderer.setSize(W, H, false); renderer.render(scene, camera);
+  canvas.getContext("2d").drawImage(renderer.domElement, 0, 0);
+}
+</script>
+</body>
+</html>

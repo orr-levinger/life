@@ -4,29 +4,14 @@
 // a creature to follow it; its point of view shows only what it senses (the world's own rules, src/senses.py).
 import * as THREE from "three";
 import { OrbitControls } from "/static/OrbitControls.js";
+import { BEASTS } from "/static/beasts.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
 const NEAR_FAR = { near: 0.05, far: 4000 };
 
 let state = null;  // the one planet on the page
 
-// How creatures look: a plain stand-in body until a fuller look is handed over (useLook).
-const PLAIN = {
-  key: () => "plain",
-  make(c) {
-    const group = new THREE.Group();
-    const colour = new THREE.Color().setRGB(0.55 - 0.1 * c.diet, 0.55 - 0.33 * c.diet, 0.3 - 0.16 * c.diet)
-      .lerp(new THREE.Color(0.18, 0.55, 0.62), (c.water || 0) * 0.8);
-    const mat = new THREE.MeshStandardMaterial({ color: colour, flatShading: true, roughness: 0.7 });
-    const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), mat); body.scale.set(1.2, 0.7, 0.8); body.position.y = 0.45;
-    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), mat); head.position.set(0.62, 0.6, 0);
-    group.add(body, head);
-    return group;
-  },
-  dress(body, c) { body.scale.setScalar(Math.max(c.size, 0.3)); },
-};
-let look = PLAIN;
-export function useLook(newLook) { look = newLook; if (state) state.beasts.clear(); }
+const look = BEASTS;  // how creatures look: their genes' bodies (src/static/beasts.js)
 
 // ---------- small helpers
 const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);

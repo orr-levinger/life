@@ -498,6 +498,21 @@ class TestControlRoom(unittest.TestCase):
             self.assertNotIn("http://", text.replace("http://www.w3.org/2000/svg", ""))  # an SVG name, not a download
             self.assertNotIn("https://", text)  # nothing from the internet
 
+    def test_page_has_the_creature_look(self):
+        with urllib.request.urlopen(self.server.base + "/static/beasts.js") as response:
+            beasts = response.read().decode("utf-8")
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            planet = response.read().decode("utf-8")
+        for gene in ("size", "love_of_babies", "energy", "diet", "water", "fear_of_death", "layers", "neurons",
+                     "learns_from_others", "learning_speed", "vision_width", "vision_reach", "hearing", "armour",
+                     "stealth", "calls", "kin"):
+            self.assertIn(f"c.{gene}", beasts, gene)  # each gene shows in the body
+        for words in ("export function beastModel(", "export const BEASTS", "THREE.LOD"):
+            self.assertIn(words, beasts)  # a full body near the camera, a simple one far away
+        self.assertIn('from "/static/beasts.js"', planet)
+        with urllib.request.urlopen(self.server.base + "/static/gallery.html") as response:
+            self.assertIn("beastModel", response.read().decode("utf-8"))  # each gene low, middle and high
+
     def test_static_files_are_served(self):
         with urllib.request.urlopen(self.server.base + "/static/three.module.min.js") as response:
             self.assertEqual(response.status, 200)

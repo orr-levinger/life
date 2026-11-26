@@ -21,16 +21,30 @@
 - **Grass:** the ground has texture — patches of lighter and darker green, fine noise, so the eye reads distance and
   movement; no flat colour.
 - **Trees:** as in the test — round crowns grouped in forests (the owner liked them), with a trunk under each crown.
-- **Creatures:** 3D bodies standing on the ground, facing where they go. Their genes still show, as today in 2D:
-  size → body size; love of babies → roundness; hunger → body colour (green full, yellow half, red hungry); diet → a
-  collar from green (plants) to dark red (meat); fear of death → quills on the back; brain layers → ridges; learning
-  from others → antennae; eyes on the front; armour → plates; stealth → paler, less shiny; water → fins. Cones, hearing
-  and call rings are drawn on the ground around them.
+- **Creatures** (shown to the owner in a gallery, 2026-11-26: "They look like pigs. I want predators to look more
+  predatorial … herbivores … more herbivory … sea creatures … some kind of aquatic look" → "Cool, much better"):
+  low-poly, flat-shaded 3D bodies standing on the ground, facing where they go, whose **body plan blends by genes**:
+  - diet 0 → a **grazer**: tall barrel body with a hump, long neck, long soft muzzle, curved horns, broad leaf ears,
+    eyes on the sides, straight legs with hooves, a short tufted tail; an earthy olive-tan coat with pale dapples;
+  - diet 1 → a **hunter**: low, long and lean, deep chest, short neck, wedge head with open jaws and fangs, a brow
+    ridge, forward amber eyes, pointed upright ears, crouched two-jointed clawed legs, a long tapering tail; a dark rust
+    coat with tiger stripes;
+  - water 1 → a **swimmer**: streamlined and tapered, short legs, a back fin, side fins, a tail fin, gill slits, webbed
+    feet; a glossy blue-green scaled skin; in between, the proportions and colours blend.
+  Other genes on top: size → body size; love of babies → rounder body; fear of death → rows of quills on the back
+  (longer the more it fears); brain layers → horn tines on a grazer, a purple crest on a hunter; neurons → head size;
+  learning from others → antennae with glowing tips; learning speed → dark bands on the coat; vision width → eyes set
+  further to the side; vision reach → eye size; hearing → ears; armour → bone plates down the back; stealth → a duller,
+  greyer coat; calls → a pink throat sac; care for kin → a pale blaze on the face.
+  **Hunger** is a ring on the ground under each creature (green full, yellow half, red hungry) — the body colour shows
+  its body plan now. Cones, hearing and call rings are drawn on the ground around them.
 - **Speed:** the test drew the full scene in 19 ms a frame on this box (52 a second); 3D creatures and rocks must keep a
   frame under 33 ms here (30 a second) with 600 alive, measured by drawing frames back to back. A look test with 3D
   creatures (body, head, eyes, legs, collar, quills as separate parts, ~1,150 triangles each) took 52–59 ms to draw and
-  50–80 ms to move: so each creature is one merged, low-detail model (about 150 triangles, its gene parts included),
-  and creatures are re-placed only when the world sends a new picture, not every frame.
+  50–80 ms to move: so each creature's parts are merged into one model per material, creatures are re-placed only
+  when the world sends a new picture (not every frame), and the gallery's full model (about 1,000 triangles) is drawn
+  only near the camera; farther away a simple version of the same body plan and colours (about 100 triangles) stands
+  in.
 
 ## Intent
 

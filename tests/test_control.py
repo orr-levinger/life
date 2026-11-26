@@ -46,8 +46,8 @@ class TestControl(unittest.TestCase):
             settings_from({"gravity": 1.0}, START)
 
     def test_value_outside_the_ends_is_refused(self):
-        with self.assertRaisesRegex(ValueError, "food_energy must be between 3 and 60, not 100"):
-            settings_from({"food_energy": 100}, START)
+        with self.assertRaisesRegex(ValueError, "food_energy must be between 3 and 100, not 120"):
+            settings_from({"food_energy": 120}, START)
         with self.assertRaisesRegex(ValueError, "must be a number"):
             settings_from({"lifespan": "long"}, START)
         with self.assertRaisesRegex(ValueError, "must be a number"):

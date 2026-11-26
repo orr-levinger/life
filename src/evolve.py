@@ -1,7 +1,7 @@
 """Run one living world, headless with zero delay, and keep its scoreboard.
 
     python -m src.evolve --seed 1 [--steps 100000 | --forever] --species learning|instinct [--mode auto|manual]
-                         [--inherit learned|inborn] [--level N] [--max-level M] [--window] [--out DIR]
+                         [--inherit learned|inborn] [--level N] [--max-level M] [--out DIR]
     python -m src.evolve --seed 1 --steps 20000 --policy random|rules [--level N]      (a yardstick world)
     python -m src.evolve --resume runs/<run>/saves/step-0016000.npz [--steps N | --forever] [--mode auto|manual]
     python -m src.evolve --resume runs/<run>/saves/step-0016000.npz --continue --out runs/<run>   (Update code: the
@@ -40,7 +40,6 @@ from .scoreboard import ROW_KEYS, Scoreboard, Value, migrate_scoreboard, read_ro
 from .rules import ROOM_SLOTS, starting_rules
 from .world import INHERIT, World
 
-WIDTH, HEIGHT = 50, 30
 DEFAULT_STEPS = 100000
 PAUSE_LOOK = 0.25  # seconds between two looks at the control file while paused
 NOW_EVERY = 25  # steps between two looks at whether now.json is due (the live page's every-second numbers)
@@ -67,7 +66,6 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser.add_argument("--max-level", type=int, default=None, help="Auto never makes the world harder than this")
     parser.add_argument("--inherit", choices=INHERIT, default=None,
                         help="what a learning baby gets: the parent's brain as it is now, or as the parent was born")
-    parser.add_argument("--window", action="store_true", help="draw every step (no added delay)")
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
     if args.continue_run and not args.resume:
@@ -101,14 +99,14 @@ def _exam_brains(world: World, sample: Sequence[Creature]) -> List[Any]:
 def world_view(world: World) -> Dict[str, Any]:
     """Where everything is, for the page's picture of a watched world."""
     return {
-        "step": world.step_count, "width": world.width, "height": world.height,
-        "creatures": [{"id": c.id, "x": round(c.x, 3), "y": round(c.y, 3), "radius": round(c.radius, 3), "size": round(c.size, 3),
+        "step": world.step_count, "radius": world.radius,
+        "creatures": [{"id": c.id, "p": [round(float(v), 6) for v in c.p], "radius": round(c.radius, 3), "size": round(c.size, 3),
                        "energy": round(max(c.energy, 0.0) / c.max_energy, 3),
                        "heading": [round(v, 3) for v in c.intended_vector], "did": c.last_action, "intent": c.intent,
                        "target": c.target, "baby": c.had_baby_at == world.step_count,
                        "generation": c.generation, "age": c.age, "lifespan": c.lifespan,
                        "earned": round(c.earned, 2), "spent": round(c.spent, 2),
-                       "facing": [round(v, 3) for v in c.facing], "vision_width": round(c.vision_width, 1),
+                       "facing": [round(float(v), 4) for v in c.facing], "vision_width": round(c.vision_width, 1),
                        "vision_reach": round(c.vision_reach, 2), "hearing": round(c.hearing, 2),
                        "fear_of_death": round(c.fear_of_death, 2), "love_of_babies": round(c.love_of_babies, 2),
                        "learns_from_others": round(c.learns_from_others, 3), "neurons": c.neurons,
@@ -117,7 +115,7 @@ def world_view(world: World) -> Dict[str, Any]:
                        "call": None if c.called is None else [c.called[0], round(c.called[1], 2)],
                        "brain": world.learner.brain_size(c.slot) if c.policy == "learner" else None,
                        "learning_speed": world.learner.lr(c.slot) if c.policy == "learner" else None} for c in world.creatures],
-        "foods": [{"x": round(f.x, 3), "y": round(f.y, 3), "radius": round(f.radius, 3), "fruit": f.fruit, "meat": f.meat}
+        "foods": [{"p": [round(float(v), 6) for v in f.p], "radius": round(f.radius, 3), "fruit": f.fruit, "meat": f.meat}
                   for f in world.foods],
         "terrain": world.terrain.state(),
     }
@@ -252,7 +250,6 @@ def run(args: argparse.Namespace) -> Path:
     recent = deque(maxlen=400)  # the latest rows; Auto measures its rates over the rules' last steps of them
     next_tick = time.perf_counter()  # while watched: when the next step may start
     now_written = -world.rules["now_seconds"]  # when now.json was last written
-    viz = _open_window() if args.window else None
 
     csv_path = out / "scoreboard.csv"
     with open(csv_path, "w", newline="") as f:
@@ -318,10 +315,6 @@ def run(args: argparse.Namespace) -> Path:
             if step % round(r["save_every"]) == 0:
                 save()
 
-            if viz is not None:
-                viz.render(world)
-                viz.fig.canvas.draw_idle()
-                viz.fig.canvas.flush_events()
 
     write_json(out / "now.json", world_now(world))  # its last numbers
     if world.step_count not in saved and (source is None or world.step_count > source["step"]):
@@ -332,8 +325,6 @@ def run(args: argparse.Namespace) -> Path:
             best.offer(brain, creature.food_eaten)
     best.save(out / "best")  # the brains of the living creatures that have eaten the most
     (out / "time.txt").write_text(f"{time.perf_counter() - started:.1f}\n")  # seconds the run took
-    if viz is not None:
-        _keep_window_open()
     return csv_path
 
 
@@ -352,7 +343,7 @@ def _new_world(args: argparse.Namespace, rules: Dict[str, float]) -> Tuple[World
                   np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
                   inherit=args.inherit)
     world.change_rules(rules)
-    world.terrain = make_terrain(world.rules, world.rng, world.width, world.height)  # its rocks, ponds and trees
+    world.terrain = make_terrain(world.rules, world.rng, world.radius)  # its rocks, ponds and trees
     for _ in range(round(world.rules["first_creatures"])):
         world.add_newcomer()
     return world, dial
@@ -368,24 +359,6 @@ def _history(old_run: Path, step: int) -> List[Dict[str, str]]:
     if rows and tuple(rows[0]) != ROW_KEYS:
         raise SaveError(f"the scoreboard of {old_run} has other columns than this code writes")
     return [row for row in rows if int(row["step"]) <= step]
-
-
-def _open_window():
-    import matplotlib.pyplot as plt
-
-    from .visualization import Visualizer
-
-    plt.ion()
-    viz = Visualizer(WIDTH, HEIGHT)
-    plt.show(block=False)
-    return viz
-
-
-def _keep_window_open() -> None:
-    import matplotlib.pyplot as plt
-
-    plt.ioff()
-    plt.show()
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

@@ -14,7 +14,22 @@ TINY = 1e-12  # below this a direction has no length: two points are the same or
 
 
 def _norm(v: np.ndarray) -> np.ndarray:
-    return np.linalg.norm(v, axis=-1)
+    return np.sqrt(np.sum(v * v, axis=-1))
+
+
+def cross(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """a × b over the last axis (np.cross's general machinery costs more than the sum for one point or a few)."""
+    return np.stack(np.broadcast_arrays(a[..., 1] * b[..., 2] - a[..., 2] * b[..., 1],
+                     a[..., 2] * b[..., 0] - a[..., 0] * b[..., 2],
+                     a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]), axis=-1)
+
+
+def _cross_length(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """|a × b| over the last axis, without building the cross product."""
+    x = a[..., 1] * b[..., 2] - a[..., 2] * b[..., 1]
+    y = a[..., 2] * b[..., 0] - a[..., 0] * b[..., 2]
+    z = a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]
+    return np.sqrt(x * x + y * y + z * z)
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
@@ -29,9 +44,21 @@ def random_point(rng: Any) -> np.ndarray:
     return np.array([s * math.cos(a), s * math.sin(a), z])
 
 
+def _one(*points: np.ndarray) -> bool:
+    """Whether every argument is a single point: then plain arithmetic is far quicker than array calls."""
+    return all(np.ndim(v) == 1 for v in points)
+
+
+def _cross3(a, b) -> Tuple[float, float, float]:
+    return a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]
+
+
 def arc(p: np.ndarray, q: np.ndarray, R: float) -> np.ndarray:
     """The distance from p to q along the surface (exact for tiny and for near-opposite distances)."""
-    return R * np.arctan2(_norm(np.cross(p, q)), np.sum(p * q, axis=-1))
+    if _one(p, q):
+        c = _cross3(p, q)
+        return R * math.atan2(math.sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]), p[0] * q[0] + p[1] * q[1] + p[2] * q[2])
+    return R * np.arctan2(_cross_length(p, q), np.sum(p * q, axis=-1))
 
 
 def tangent_toward(p: np.ndarray, q: np.ndarray) -> np.ndarray:
@@ -41,14 +68,22 @@ def tangent_toward(p: np.ndarray, q: np.ndarray) -> np.ndarray:
 
 def bearing(p: np.ndarray, f: np.ndarray, q: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Where q is, seen from p facing f: (ahead, left), the parts of the direction toward q along f and to its left."""
+    if _one(p, f, q):
+        d = p[0] * q[0] + p[1] * q[1] + p[2] * q[2]
+        t = (q[0] - p[0] * d, q[1] - p[1] * d, q[2] - p[2] * d)
+        n = math.sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2])
+        if n <= TINY:
+            return 0.0, 0.0
+        left = _cross3(p, f)
+        return ((t[0] * f[0] + t[1] * f[1] + t[2] * f[2]) / n, (t[0] * left[0] + t[1] * left[1] + t[2] * left[2]) / n)
     t = tangent_toward(p, q)
-    return np.sum(t * f, axis=-1), np.sum(t * np.cross(p, f), axis=-1)
+    return np.sum(t * f, axis=-1), np.sum(t * cross(p, f), axis=-1)
 
 
 def walk(p: np.ndarray, f: np.ndarray, ahead: float, left: float, d: float, R: float) -> Tuple[np.ndarray, np.ndarray]:
     """From p facing f, go d along the ground in the direction (ahead, left) of its own view; it then faces the way it
     went (that direction carried to where it arrived). No direction or no distance: it stays, facing as before."""
-    t = _unit(ahead * f + left * np.cross(p, f))
+    t = _unit(ahead * f + left * cross(p, f))
     if d <= 0.0 or float(_norm(t)) <= TINY:
         return p, f
     a = d / R
@@ -60,8 +95,8 @@ def walk(p: np.ndarray, f: np.ndarray, ahead: float, left: float, d: float, R: f
 def local_frame(p: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Two ground directions at p at right angles (e2 to the left of e1): any such pair, the same for the same p."""
     axis = np.array([0.0, 0.0, 1.0]) if abs(float(p[2])) < 0.9 else np.array([1.0, 0.0, 0.0])
-    e1 = _unit(np.cross(axis, p))
-    return e1, np.cross(p, e1)
+    e1 = _unit(cross(axis, p))
+    return e1, cross(p, e1)
 
 
 def exp_map(base: np.ndarray, e1: np.ndarray, e2: np.ndarray, x: float, y: float, R: float) -> np.ndarray:

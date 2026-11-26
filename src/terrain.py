@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from .rules import Rules
-from .sphere import arc, exp_map, local_frame, random_point
+from .sphere import cross, arc, exp_map, local_frame, random_point
 
 KINDS = ("rock", "pond")  # a rock stops everyone and hides what is behind it; a pond stops only who cannot swim
 CIRCLES = (3, 6)  # caps making one obstacle's blob
@@ -129,21 +129,21 @@ class Terrain:
 
 
 def _angle(p: np.ndarray, q: np.ndarray) -> np.ndarray:
-    return np.arctan2(np.linalg.norm(np.cross(p, q), axis=-1), np.sum(p * q, axis=-1))
+    return np.arctan2(np.linalg.norm(cross(p, q), axis=-1), np.sum(p * q, axis=-1))
 
 
 def _way_crosses(a: np.ndarray, b: np.ndarray, centres: np.ndarray, angles: np.ndarray) -> np.ndarray:
     """[pair]: whether the shortest way along the ground from a to b (pairs of points) comes within any cap's angle
     of its centre: the angle to the way's great circle where the centre's nearest point on it lies between a and b,
     else the angle to the nearer end."""
-    pole = np.cross(a, b)
+    pole = cross(a, b)
     length = np.linalg.norm(pole, axis=-1, keepdims=True)
     pole = np.where(length > 1e-12, pole / np.maximum(length, 1e-12), 0.0)  # 0 for a way of no length
     c = centres[None, :, :]
     off = np.sum(c * pole[:, None, :], axis=-1)  # the sine of the centre's angle from the great circle
     foot = c - pole[:, None, :] * off[..., None]  # its nearest point on that great circle (not normalised)
-    between = ((np.sum(np.cross(a[:, None, :], foot) * pole[:, None, :], axis=-1) >= 0)
-               & (np.sum(np.cross(foot, b[:, None, :]) * pole[:, None, :], axis=-1) >= 0) & (length > 1e-12))
+    between = ((np.sum(cross(a[:, None, :], foot) * pole[:, None, :], axis=-1) >= 0)
+               & (np.sum(cross(foot, b[:, None, :]) * pole[:, None, :], axis=-1) >= 0) & (length > 1e-12))
     to_way = np.where(between, np.arcsin(np.clip(np.abs(off), 0.0, 1.0)),
                       np.minimum(_angle(a[:, None, :], c), _angle(b[:, None, :], c)))
     return np.any(to_way < angles[None, :], axis=1)

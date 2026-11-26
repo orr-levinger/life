@@ -7,6 +7,9 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
+import numpy as np
+
+from .sphere import cross, bearing
 from .senses import Senses
 
 if TYPE_CHECKING:
@@ -110,16 +113,18 @@ class Scoreboard:
         moving = kind == "MOVE" and math.hypot(*param) > 0
         if moving:
             dx, dy = param
-            length = math.hypot(dx, dy)
-            self._unit_moves.append((dx / length, dy / length))
-            if senses.food is not None and (senses.food.x, senses.food.y) != (creature.x, creature.y):
-                self._toward_food.append(_cosine(dx, dy, senses.food.x - creature.x, senses.food.y - creature.y))
+            way = dx * np.asarray(creature.facing) + dy * cross(creature.p, creature.facing)
+            self._unit_moves.append(way / np.linalg.norm(way))  # the way it went, on the planet
+            if senses.food is not None:
+                ahead, left = bearing(creature.p, creature.facing, senses.food.p)
+                if float(ahead) or float(left):  # food on its own spot has no direction
+                    self._toward_food.append(_cosine(dx, dy, float(ahead), float(left)))
         other = senses.other  # any bigger one is a threat, any smaller one prey
         if other is not None and other.size > creature.size:
-            away = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) < 0
+            away = moving and _cosine(param[0], param[1], *map(float, bearing(creature.p, creature.facing, other.p))) < 0
             self._fled.append(1.0 if away else 0.0)
         if other is not None and other.size < creature.size:
-            toward = moving and _cosine(param[0], param[1], other.x - creature.x, other.y - creature.y) > 0
+            toward = moving and _cosine(param[0], param[1], *map(float, bearing(creature.p, creature.facing, other.p))) > 0
             self._chased.append(1.0 if toward else 0.0)
         if kind == "ATTACK":
             self._attacks += 1
@@ -128,10 +133,8 @@ class Scoreboard:
         now = {"bites": world.total_bites, "steps": world.creature_steps, "births": world.births,
                "newcomers": world.newcomers, "earned": world.energy_earned, "spent": world.energy_spent}
         window = {key: now[key] - self._seen[key] for key in now}
-        if self._unit_moves:
-            mean_x = sum(u[0] for u in self._unit_moves) / len(self._unit_moves)
-            mean_y = sum(u[1] for u in self._unit_moves) / len(self._unit_moves)
-            concentration: Optional[float] = math.hypot(mean_x, mean_y)
+        if self._unit_moves:  # how much the ways moved agree on the planet: 1 all one way, 0 every way
+            concentration: Optional[float] = float(np.linalg.norm(np.mean(self._unit_moves, axis=0)))
         else:
             concentration = None
         deaths = {cause: world.deaths[cause] - seen for cause, seen in self._deaths_seen.items()}

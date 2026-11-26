@@ -542,6 +542,34 @@ class TestControlRoom(unittest.TestCase):
         self.assertFalse((folder / "time.txt").exists())
         self.assertFalse(read_control(folder).stop)
 
+    def flat_save(self, folder, step):
+        """A save from before the sphere (format 26)."""
+        import numpy as np
+        (folder / "saves").mkdir(exist_ok=True)
+        path = folder / "saves" / f"step-{step:07d}.npz"
+        with open(path, "wb") as f:
+            np.savez(f, about=np.array(json.dumps({"format": 26, "step": step, "extra": {"seed": 1, "kind": "learning"}})))
+        return path
+
+    def test_a_flat_world_is_not_updated(self):
+        from src.saves import FLAT_WORLD
+        name = self.running_world()
+        folder = self.root / name
+        self.flat_save(folder, 100)
+        status, answer = self.server.post("/control", {"run": name, "update": True})
+        self.assertEqual(status, 409)
+        self.assertIn(FLAT_WORLD, answer["error"])
+        self.assertFalse(read_control(folder).stop)  # it keeps going
+
+    def test_a_flat_save_is_not_resumed(self):
+        from src.saves import FLAT_WORLD
+        name = self.saved_world()
+        self.flat_save(self.root / name, 4000)
+        status, answer = self.server.post("/start", {"from": {"run": name, "step": 4000}, "mode": "manual"})
+        self.assertEqual(status, 409)
+        self.assertIn(FLAT_WORLD, answer["error"])
+        self.assertEqual(self.recorder.launched, [])
+
     def test_update_keeps_the_owners_rule_changes(self):
         name = self.running_world()
         folder = self.root / name

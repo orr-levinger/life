@@ -174,6 +174,13 @@ the mean of all facings in 3D), `src/check_proof.py` (thresholds kept). Delete `
 - [ ] **Step 2:** FAIL → **Step 3:** implement → **Step 4:** `python scripts/run_tests.py` → OK (every module).
   Commit "Saves, runner and page data on the sphere".
 
+### Task 7b: Short test runs (the owner, 2026-11-26: "ok" to shortening test_evolve's whole-world runs)
+
+On the sphere a step costs 2-3× the flat one, so test_evolve passed 300 s. The test world's runner timings are 5×
+quicker (`SMALL_WORLD`: save_every 400, row_every 50, auto_every 100, auto_measure 200, exam_every 400, exam_steps
+100, control_every 5) and every step number in tests/test_evolve.py and the resume test in tests/test_saves.py is
+divided by 5. Proof: `python scripts/run_tests.py` → OK under 300 s; the same assertions, scaled.
+
 ### Task 8: The planet on the page
 
 **Files:** Modify `src/viewer.html` (the live view's canvas becomes a three.js scene; tiles, charts, Rules page

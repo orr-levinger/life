@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import math
+import random
 import tempfile
 import unittest
 import zipfile
@@ -14,35 +15,16 @@ import numpy as np
 from src.dial import Dial
 from src.evolve import parse_args, run
 from src.learner import Learner
-from src.saves import SAVE_FORMAT, SaveError, load_world, save_world, saves_of
+from src.saves import FLAT_WORLD, SAVE_FORMAT, SaveError, load_world, save_format, save_world, saves_of
 from src.rules import ROOM_SLOTS as MAX_CREATURES
 from src.settings import START
+from src.terrain import make_terrain
 from tests.helpers import at, add, make_world, populate, small_world
 from tests.test_learner import live
 from src.brain import N_SENSES
 from src.rules import rule
 
 TARGET_ALIVE = rule("auto_target").start
-
-
-def before_terrain(arrays):
-    """A save from before format 14: brains of 20 inputs (no obstacle in view, no tree overhead)."""
-    for name in list(arrays):
-        if name == "brain.w1" or (name.startswith("learner.") and name.split(".")[-1] in ("w1", "wh")):
-            arrays[name] = arrays[name][..., :20, :]
-
-
-def before_diet(arrays):
-    """A save from before format 18: brains of 25 inputs (no meat seen, no diet of its own)."""
-    for name in list(arrays):
-        if name == "brain.w1" or (name.startswith("learner.") and name.split(".")[-1] in ("w1", "wh")):
-            arrays[name] = arrays[name][..., :25, :]
-
-
-def before_rules(about):
-    """A save from before format 6: the world's size instead of its rules."""
-    rules = about.pop("rules")
-    return {**about, "width": rules["world_width"], "height": rules["world_height"]}
 
 
 def quiet_run(argv):
@@ -58,11 +40,11 @@ def rows_of(path: Path):
 def picture(world):
     """Everything about a world that a save must keep."""
     return {
-        "creatures": [(c.id, c.slot, c.x, c.y, c.size, c.policy, c.parent_id, c.generation, c.energy, c.age,
+        "creatures": [(c.id, c.slot, tuple(c.p), tuple(c.facing), c.size, c.policy, c.parent_id, c.generation, c.energy, c.age,
                        c.lifespan, c.food_eaten, c.last_action, tuple(c.intended_vector), c.earned, c.spent, c.moved,
                        None if c.brain is None else tuple(a.tobytes() for a in (c.brain.w1, c.brain.b1, c.brain.w2, c.brain.b2)))
                       for c in world.creatures],
-        "foods": [(f.x, f.y, f.energy, f.remaining_duration, f.radius) for f in world.foods],
+        "foods": [(tuple(f.p), f.energy, f.remaining_duration, f.radius) for f in world.foods],
         "counters": (world.step_count, world.births, world.newcomers, dict(world.deaths), world.total_bites,
                      world.energy_earned, world.energy_spent, world.creature_steps, world.next_id()),
         "settings": (world.settings, world.level, world.species, world.inherit),
@@ -89,9 +71,9 @@ class TestSaves(unittest.TestCase):
 
     def test_a_resumed_world_goes_on_as_the_old_one_did(self):
         with tempfile.TemporaryDirectory() as old, tempfile.TemporaryDirectory() as new:
-            whole = rows_of(quiet_run(["--seed", "4", "--steps", "4000", "--species", "instinct", "--out", old]))
-            save = Path(old) / "saves" / "step-0002000.npz"
-            resumed = rows_of(quiet_run(["--resume", str(save), "--steps", "4000", "--out", new]))
+            whole = rows_of(quiet_run(["--seed", "4", "--steps", "800", "--species", "instinct", "--out", old]))
+            save = Path(old) / "saves" / "step-0000400.npz"
+            resumed = rows_of(quiet_run(["--resume", str(save), "--steps", "800", "--out", new]))
         self.assertEqual(resumed, whole)  # the first 2,000 steps copied, the next 2,000 lived again the same way
 
     def test_learners_keep_what_they_learned(self):
@@ -159,483 +141,6 @@ class TestSaves(unittest.TestCase):
             self.assertEqual(saves_of(run_folder), [2000, 4000, 16000])
 
 
-    def test_a_format_1_save_is_converted(self):
-        world = make_world()
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 1
-            before_terrain(arrays)
-            about = before_rules(about)
-            del about["dial"]["hunters"]  # what a format 1 save held
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            _, dial, _ = load_world(path, learner_seed=0)
-        self.assertEqual(dial.state()["hunters"], None)
-
-    def test_a_format_2_save_is_converted(self):
-        world = make_world(seed=3)
-        populate(world, 5)
-        for _ in range(20):
-            world.step()
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 2
-            before_terrain(arrays)
-            about = before_rules(about)
-            for creature in about["creatures"]:  # what a format 2 save held
-                for key in ("earned", "spent", "vision_width", "vision_reach", "hearing", "facing", "fear_of_death",
-                            "love_of_babies", "learns_from_others", "hurt"):
-                    del creature[key]
-            arrays["about"] = np.array(json.dumps(about))
-            arrays["brain.w1"] = arrays["brain.w1"][:, :12, :]  # 12 inputs then
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({(c.earned, c.spent) for c in loaded.creatures}, {(0.0, 0.0)})
-        self.assertEqual([c.id for c in loaded.creatures], [c.id for c in world.creatures])
-
-    def test_a_format_3_save_gets_todays_senses(self):
-        for species in ("brain", "learner"):
-            learner = Learner(MAX_CREATURES, 0) if species == "learner" else None
-            world = make_world(seed=3, learner=learner, species=species)
-            populate(world, 5)
-            with tempfile.TemporaryDirectory() as tmp:
-                path = Path(tmp) / "step.npz"
-                save_world(path, world, Dial(), {})
-                with zipfile.ZipFile(path) as z:
-                    arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-                about = json.loads(str(arrays["about"]))
-                about["format"] = 3
-                before_terrain(arrays)
-                about = before_rules(about)
-                for creature in about["creatures"]:  # what a format 3 save held
-                    for key in ("vision_width", "vision_reach", "hearing", "facing", "fear_of_death", "love_of_babies",
-                                "learns_from_others", "hurt"):
-                        del creature[key]
-                arrays["about"] = np.array(json.dumps(about))
-                for name in list(arrays):  # 12 inputs then
-                    if name in ("brain.w1",) or name.split(".")[-1] in ("w1", "wh") and name.startswith("learner."):
-                        arrays[name] = arrays[name][..., :12, :]
-                old = {name: arrays[name] for name in arrays if name != "about"}
-                np.savez(path, **arrays)
-                loaded, _, _ = load_world(path, learner_seed=0)
-            for c in loaded.creatures:  # today's senses then, narrowed later to 120° seeing as much ground
-                self.assertEqual((c.vision_width, c.hearing), (120.0, 1.5))
-                self.assertAlmostEqual(c.vision_reach, 3.0 * math.sqrt(3.0))
-            if species == "learner":
-                for part in ("w1", "wh"):
-                    weights = loaded.learner.state()[f"params.{part}"]
-                    self.assertEqual(weights.shape[-2], N_SENSES)
-                    self.assertTrue(np.allclose(weights[..., 12:, :], 0.0))
-                    self.assertTrue(np.allclose(weights[..., :12, :], old[f"learner.params.{part}"]))
-
-    def test_a_format_4_save_gets_the_starting_values(self):
-        world = make_world(seed=6)
-        populate(world, 4)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 4
-            before_terrain(arrays)
-            about = before_rules(about)
-            for creature in about["creatures"]:  # what a format 4 save held
-                for key in ("fear_of_death", "love_of_babies", "learns_from_others", "hurt"):
-                    del creature[key]
-            arrays["about"] = np.array(json.dumps(about))
-            arrays["brain.w1"] = arrays["brain.w1"][:, :17, :]  # 17 inputs then
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({(c.fear_of_death, c.love_of_babies, c.learns_from_others) for c in loaded.creatures},
-                         {(10.0, 10.0, 0.5)})
-
-    def test_the_owners_world_converts(self):
-        world = make_world(seed=10)
-        populate(world, 4)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 6  # what a format 6 save held: cones to 360, one sense price, 21 inputs with a heard size
-            before_terrain(arrays)
-            rules = about["rules"]
-            sense = rules.pop("vision_cost")
-            del rules["hearing_cost"], rules["sprint_power"]
-            rules.update({"sense_cost": sense, "gene.vision_width.high": 360.0, "gene.vision_width.new_high": 360.0,
-                          "gene.vision_reach.high": 8.0, "gene.vision_reach.new_high": 8.0})
-            about["creatures"][0].update({"vision_width": 360.0, "vision_reach": 3.0})
-            about["creatures"][1].update({"vision_width": 100.0, "vision_reach": 4.0})
-            arrays["about"] = np.array(json.dumps(about))
-            w1 = arrays["brain.w1"]
-            old = np.concatenate([w1[:, :16], np.full((w1.shape[0], 1, w1.shape[2]), 0.7), w1[:, 16:]], axis=1)
-            arrays["brain.w1"] = old  # 21 inputs then: the heard size was input 17
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        first, second = loaded.creatures[0], loaded.creatures[1]
-        self.assertEqual(first.vision_width, 120.0)
-        self.assertAlmostEqual(first.vision_reach, 3.0 * math.sqrt(3.0))  # narrowed, it sees as much ground as before
-        self.assertEqual((second.vision_width, second.vision_reach), (100.0, 4.0))  # within 120: untouched
-        self.assertEqual(first.brain.w1.shape, (N_SENSES, 16))
-        self.assertTrue(np.allclose(first.brain.w1[:20], w1[0]))  # the heard size's weights gone, the rest kept
-        self.assertTrue(np.allclose(first.brain.w1[20:], 0.0))  # the terrain's, silent
-        self.assertEqual((loaded.rules["vision_cost"], loaded.rules["hearing_cost"]), (sense, sense))
-        self.assertEqual((loaded.rules["gene.vision_width.high"], loaded.rules["sprint_power"]), (120.0, 2.0))
-
-    def test_a_format_9_save_drops_the_threat_rule(self):
-        world = make_world(seed=3)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"], about["rules"]["threat_ratio"] = 9, 1.5
-            before_terrain(arrays)
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertNotIn("threat_ratio", loaded.rules)
-
-    def test_a_format_10_save_gets_one_reach(self):
-        world = make_world(seed=3)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            del about["rules"]["reach"]
-            about["format"], about["rules"]["eat_range"], about["rules"]["attack_range"] = 10, 2.5, 2.5
-            before_terrain(arrays)
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual(loaded.rules["reach"], 2.5)
-        self.assertFalse({"eat_range", "attack_range"} & set(loaded.rules))
-
-    def test_a_format_11_save_gets_the_mutation_genes(self):
-        world = make_world(seed=3)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 11
-            before_terrain(arrays)
-            for c in about["creatures"]:
-                del c["mutations"], c["mutation_size"]
-            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith(("gene.mutations", "gene.mutation_size"))}
-            about["rules"]["gene.size.change"] = 0.05
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({(c.mutations, c.mutation_size) for c in loaded.creatures}, {(1, 0.05)})
-        self.assertNotIn("gene.size.change", loaded.rules)
-        self.assertIn("gene.mutations.new_high", loaded.rules)
-
-    def test_a_format_12_save_draws_every_newcomer_gene(self):
-        world = make_world(seed=3)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 12
-            before_terrain(arrays)
-            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith("gene.fear.new_")}
-            about["rules"]["gene.fear.start"] = 10.0
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertNotIn("gene.fear.start", loaded.rules)
-        self.assertLess(loaded.rules["gene.fear.new_low"], loaded.rules["gene.fear.new_high"])
-
-    def test_a_format_7_save_gets_room_to_grow(self):
-        learner = Learner(MAX_CREATURES, 0)
-        world = make_world(seed=11, learner=learner, species="learner")
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 7  # a format 7 brain: 1 layer of 32, no room to grow, no brain genes
-            before_terrain(arrays)
-            about["rules"] = {k: v for k, v in about["rules"].items()
-                              if not k.startswith(("gene.neurons", "gene.layers", "neuron_cost", "brain_layer_share"))}
-            arrays["about"] = np.array(json.dumps(about))
-            for kind in ("params", "m", "v", "inborn"):
-                arrays[f"learner.{kind}.w1"] = arrays[f"learner.{kind}.w1"][..., :32]
-                arrays[f"learner.{kind}.b1"] = arrays[f"learner.{kind}.b1"][..., :32]
-                arrays[f"learner.{kind}.wc"] = arrays[f"learner.{kind}.wc"][..., :32, :]
-                arrays[f"learner.{kind}.wm"] = arrays[f"learner.{kind}.wm"][..., :32, :]
-                for name in ("w2", "b2", "s2", "w3", "b3", "s3"):
-                    del arrays[f"learner.{kind}.{name}"]
-            del arrays["learner.size"], arrays["learner.inborn_size"]
-            old_w1 = arrays["learner.params.w1"]
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        for c in loaded.creatures:
-            brain = loaded.learner.current(c.slot)
-            self.assertEqual(list(brain.size), [1, 32, 0, 0])
-            self.assertEqual(brain.w1.shape, (N_SENSES, 64))
-            self.assertTrue(np.allclose(brain.w1[:20, :32], old_w1[c.slot]))  # the old brain, room to grow beside it
-            self.assertTrue(np.allclose(brain.w1[:, 32:], 0.0))
-            self.assertEqual(c.neurons, 32)
-        self.assertEqual(loaded.rules["neuron_cost"], 0.0005)
-
-    def test_a_format_15_save_with_80_slots_gets_room_for_300(self):
-        learner = Learner(80, 0)  # a format 15 learner had a slot for each of 80 creatures
-        world = make_world(seed=12, learner=learner, species="learner")
-        populate(world, 3)
-        for creature in world.creatures:
-            live(learner, creature.slot, 65)
-        learner.update()
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 15
-            before_diet(arrays)
-            about["rules"] = {**about["rules"], "room": 80.0, "auto_target": 64.0, "world_width": 50.0,
-                              "world_height": 30.0}
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        before, after = learner.state(), loaded.learner.state()
-        self.assertEqual(loaded.learner.slots, 300)
-        for key in before:
-            if key == "generator":
-                continue
-            self.assertEqual(after[key].shape[0], 300, key)
-            if key.split(".")[-1] in ("w1", "wh"):  # the input weights it had then (25 inputs)
-                np.testing.assert_array_equal(after[key][:80, :25], before[key][:, :25], err_msg=key)
-            else:
-                np.testing.assert_array_equal(after[key][:80], before[key], err_msg=key)  # its 80 brains unchanged
-        self.assertTrue(after["free"][80:].all())  # the 220 new slots are empty and free
-        for c in world.creatures:
-            np.testing.assert_array_equal(loaded.learner.current(c.slot).w1[:25], learner.current(c.slot).w1[:25])
-        self.assertEqual({k: loaded.rules[k] for k in ("room", "auto_target", "world_width", "world_height")},
-                         {"room": 80.0, "auto_target": 64.0, "world_width": 50.0, "world_height": 30.0})
-
-    def test_a_format_16_save_gets_the_size_powers(self):
-        world = make_world(seed=13)
-        populate(world, 3)
-        powers = ("tank_power", "living_power", "speed_power", "lifespan_power", "heard_power", "seen_power")
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 16
-            before_diet(arrays)
-            about["rules"] = {k: v for k, v in about["rules"].items() if k not in powers}
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({p: loaded.rules[p] for p in powers}, {p: rule(p).start for p in powers})
-
-    def test_a_format_17_save_gets_a_diet_and_meat(self):
-        from src.food import Food
-        world = make_world(seed=14)
-        populate(world, 3)
-        world.foods = [Food(at(5.0, 5.0), remaining_duration=5, energy=8.0), Food(at(6.0, 6.0), remaining_duration=-1, energy=9.0)]
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 17
-            for c in about["creatures"]:
-                del c["diet"]
-            for f in about["foods"]:
-                del f["meat"]
-            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith("gene.diet") and k != "diet_bite"}
-            arrays["about"] = np.array(json.dumps(about))
-            arrays["brain.w1"] = arrays["brain.w1"][:, :25, :]  # 25 inputs then
-            old_w1 = arrays["brain.w1"]
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({c.diet for c in loaded.creatures}, {0.5})
-        self.assertEqual([f.meat for f in loaded.foods], [True, False])  # a food that runs out is a corpse
-        self.assertIn("gene.diet.high", loaded.rules)
-        for i, c in enumerate(loaded.creatures):
-            self.assertTrue(np.array_equal(c.brain.w1[:25], old_w1[i]))
-            self.assertTrue(np.all(c.brain.w1[25:] == 0.0))  # the two new senses start silent
-
-    def test_a_format_18_save_gets_calls_closed(self):
-        from src.learner import CALL_BIAS, CALL_FIRST
-        learner = Learner(MAX_CREATURES, 0)
-        world = make_world(seed=15, learner=learner, species="learner")
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 18
-            for c in about["creatures"]:
-                del c["calls"]
-            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith("gene.calls") and k != "call_reach"}
-            arrays["about"] = np.array(json.dumps(about))
-            for name in list(arrays):  # a format 18 brain: 27 inputs, 3 choices, a move of 2
-                if name.startswith("learner.") and name.split(".")[-1] in ("w1", "wh"):
-                    arrays[name] = arrays[name][..., :27, :]
-                for part, axis in (("wc", -1), ("bc", -1), ("wm", -1), ("bm", -1), ("log_std", -1)):
-                    if name.startswith("learner.") and name.endswith("." + part):
-                        keep = CALL_FIRST if part in ("wc", "bc") else 2
-                        arrays[name] = arrays[name][..., :keep]
-            old_wc = arrays["learner.params.wc"]
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({c.calls for c in loaded.creatures}, {0})
-        self.assertIn("call_reach", loaded.rules)
-        for c in loaded.creatures:
-            brain = loaded.learner.current(c.slot)
-            np.testing.assert_allclose(brain.wc[:, :CALL_FIRST], old_wc[c.slot])  # its choices as they were
-            np.testing.assert_allclose(brain.bc[CALL_FIRST:], CALL_BIAS)  # every call starts almost never chosen
-            self.assertEqual((brain.wm.shape[-1], brain.log_std.shape[-1]), (3, 3))  # and a volume
-
-    def test_a_format_19_save_gets_care_for_kin(self):
-        world = make_world(seed=16)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 19
-            for c in about["creatures"]:
-                del c["kin"]
-            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith("gene.kin")}
-            arrays["about"] = np.array(json.dumps(about))
-            arrays["brain.w1"] = arrays["brain.w1"][:, :44, :]  # 44 inputs then
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({c.kin for c in loaded.creatures}, {0.5})
-        self.assertIn("gene.kin.high", loaded.rules)
-        self.assertTrue(all(np.all(c.brain.w1[44:] == 0.0) for c in loaded.creatures))  # how alike: silent at first
-
-    def test_a_format_20_save_gets_water(self):
-        world = make_world(seed=17)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 20
-            for c in about["creatures"]:
-                del c["water"]
-            about["rules"] = {k: v for k, v in about["rules"].items()
-                              if not k.startswith("gene.water") and k not in ("land_penalty", "pond_food_share")}
-            arrays["about"] = np.array(json.dumps(about))
-            arrays["brain.w1"] = arrays["brain.w1"][:, :45, :]  # 45 inputs then
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({c.water for c in loaded.creatures}, {0.0})  # it cannot swim, as before
-        self.assertEqual((loaded.rules["land_penalty"], loaded.rules["pond_food_share"]), (0.7, 0.2))
-        self.assertTrue(all(np.all(c.brain.w1[45:] == 0.0) for c in loaded.creatures))
-
-    def test_a_format_21_save_gets_stealth(self):
-        world = make_world(seed=18)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 21
-            for c in about["creatures"]:
-                del c["stealth"]
-            about["rules"] = {k: v for k, v in about["rules"].items()
-                              if not k.startswith("gene.stealth") and k not in ("stealth_strength", "stealth_cost")}
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({c.stealth for c in loaded.creatures}, {0.0})  # seen and heard as before
-        self.assertEqual((loaded.rules["stealth_strength"], loaded.rules["stealth_cost"]), (0.7, 0.3))
-
-    def test_a_format_22_save_gets_armour(self):
-        world = make_world(seed=19)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 22
-            for c in about["creatures"]:
-                del c["armour"]
-            about["rules"] = {k: v for k, v in about["rules"].items()
-                              if not k.startswith("gene.armour") and k not in ("armour_strength", "armour_slow", "armour_cost")}
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({c.armour for c in loaded.creatures}, {0.0})  # as before
-        self.assertEqual(loaded.rules["armour_strength"], 0.7)
-
-    def test_a_format_23_save_gets_seasons(self):
-        world = make_world(seed=20)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 23
-            about["rules"] = {k: v for k, v in about["rules"].items() if k not in ("year_steps", "season_depth")}
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual((loaded.rules["year_steps"], loaded.rules["season_depth"]), (20000.0, 0.5))
-
-    def test_a_format_24_save_gets_the_region_rules(self):
-        world = make_world(seed=21)
-        populate(world, 3)
-        regions = ("forests", "forest_spread", "pond_edge_food", "pond_edge_width")
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 24
-            about["rules"] = {k: v for k, v in about["rules"].items() if k not in regions}
-            arrays["about"] = np.array(json.dumps(about))
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual({r: loaded.rules[r] for r in regions}, {r: rule(r).start for r in regions})
-        self.assertEqual(loaded.terrain.state(), world.terrain.state())  # its ground stays as it was
-
     def test_a_save_keeps_the_last_steps_calls(self):
         world = make_world(seed=22)
         caller, gone = add(world, 10, 10), add(world, 20, 10)
@@ -647,8 +152,42 @@ class TestSaves(unittest.TestCase):
             path = Path(tmp) / "step.npz"
             save_world(path, world, Dial(), {})
             loaded, _, _ = load_world(path, learner_seed=0)
-        kept = [(c.id, c.x, c.y, kind, volume) for c, kind, volume in loaded.calls]
-        self.assertEqual(kept, [(caller.id, 10.0, 10.0, 2, 0.5), (gone.id, 20.0, 10.0, 1, 1.0)])
+        kept = [(c.id, tuple(np.round(c.p, 12)), kind, volume) for c, kind, volume in loaded.calls]
+        self.assertEqual(kept, [(caller.id, tuple(np.round(caller.p, 12)), 2, 0.5), (gone.id, tuple(np.round(gone.p, 12)), 1, 1.0)])
+
+    def test_a_sphere_save_resumes_the_same_world(self):
+        world = make_world(replace(START, max_food=200), seed=23)
+        world.rules["planet_radius"] = 12.0
+        world.terrain = make_terrain({**world.rules, "obstacles": 6.0, "trees": 8.0, "forests": 2.0}, random.Random(2), 12.0)
+        populate(world, 25)
+        world.prefill_food()
+        for _ in range(30):
+            world.step()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            twin, _, _ = load_world(path, learner_seed=0)
+        for _ in range(50):
+            world.step()
+            twin.step()
+        self.assertEqual(picture(twin), picture(world))
+
+    def test_a_flat_save_is_refused_in_plain_words(self):
+        world = make_world(seed=24)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 26
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            with self.assertRaises(SaveError) as refused:
+                load_world(path, learner_seed=0)
+            self.assertIn(FLAT_WORLD, str(refused.exception))
+            self.assertEqual(save_format(path), 26)
 
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
@@ -660,79 +199,6 @@ class TestSaves(unittest.TestCase):
             loaded, _, _ = load_world(path, learner_seed=0)
         self.assertEqual((loaded.rules["eat_miss"], loaded.rules["gene.size.high"]), (0.7, 1.6))
         self.assertEqual(loaded.rules, world.rules)
-
-    def test_a_format_5_save_gets_the_starting_rules(self):
-        from src.rules import starting_rules
-        world = make_world(seed=9)
-        populate(world, 3)
-        world.rules["eat_miss"] = 0.7
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 5
-            before_terrain(arrays)
-            about = before_rules(about)
-            arrays["about"] = np.array(json.dumps(about))
-            arrays["brain.w1"] = np.insert(arrays["brain.w1"], 16, 0.0, axis=1)  # 21 inputs then: a heard size
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual(loaded.rules, {**starting_rules(), "world_width": 50.0, "world_height": 30.0})  # at its own size
-
-    def test_a_format_4_brain_gets_four_silent_pain_inputs(self):
-        world = make_world(seed=7)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 4
-            before_terrain(arrays)
-            about = before_rules(about)
-            for creature in about["creatures"]:  # what a format 4 save held
-                for key in ("fear_of_death", "love_of_babies", "learns_from_others", "hurt"):
-                    del creature[key]
-            arrays["about"] = np.array(json.dumps(about))
-            arrays["brain.w1"] = arrays["brain.w1"][:, :17, :]  # 17 inputs then
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        for i, creature in enumerate(loaded.creatures):
-            self.assertEqual(creature.brain.w1.shape, (N_SENSES, 16))
-            self.assertTrue(np.allclose(creature.brain.w1[16:], 0.0))  # pain and the terrain, silent
-            self.assertTrue(np.allclose(creature.brain.w1[:16], arrays["brain.w1"][i][:16]))  # the heard size left later
-            self.assertIsNone(creature.hurt)
-
-    def test_wider_brains_act_as_before_with_zero_new_weights(self):
-        world = make_world(seed=5)
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            with zipfile.ZipFile(path) as z:
-                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
-            about = json.loads(str(arrays["about"]))
-            about["format"] = 3
-            before_terrain(arrays)
-            about = before_rules(about)
-            for creature in about["creatures"]:
-                for key in ("vision_width", "vision_reach", "hearing", "facing", "fear_of_death", "love_of_babies",
-                                "learns_from_others", "hurt"):
-                    del creature[key]
-            arrays["about"] = np.array(json.dumps(about))
-            arrays["brain.w1"] = arrays["brain.w1"][:, :12, :]
-            np.savez(path, **arrays)
-            loaded, _, _ = load_world(path, learner_seed=0)
-        rng = np.random.default_rng(0)
-        for i, creature in enumerate(loaded.creatures):
-            x12 = rng.uniform(-1, 1, 12)
-            w1, b1, w2, b2 = (arrays[f"brain.{part}"][i] for part in ("w1", "b1", "w2", "b2"))
-            before = np.tanh(np.tanh(x12 @ w1 + b1) @ w2 + b2)
-            now = creature.brain.forward(np.concatenate([x12, rng.uniform(-1, 1, N_SENSES - 12)]))  # newer senses: no effect yet
-            self.assertTrue(np.allclose(before, now))
 
 
 if __name__ == "__main__":

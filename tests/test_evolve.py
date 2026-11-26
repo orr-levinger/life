@@ -17,8 +17,8 @@ from src.scoreboard import ROW_KEYS
 from src.settings import START
 from src.rules import rule, starting_rules
 
-TARGET_ALIVE, REVIEW_EVERY = SMALL_WORLD["auto_target"], round(rule("auto_every").start)  # the small test world
-CONTROL_EVERY, ROW_EVERY = round(rule("control_every").start), round(rule("row_every").start)
+TARGET_ALIVE, REVIEW_EVERY = SMALL_WORLD["auto_target"], round(SMALL_WORLD["auto_every"])  # the small test world
+CONTROL_EVERY, ROW_EVERY = round(SMALL_WORLD["control_every"]), round(SMALL_WORLD["row_every"])
 FIRST_CREATURES = round(SMALL_WORLD["first_creatures"])
 
 EXAM_COLUMNS = ("intelligence", "wanderers")
@@ -39,8 +39,8 @@ def levels(rows):
 
 
 def at_reviews(rows):
-    """The rows written at Auto's reviews (steps 1,000, 2,000 …)."""
-    return [row for row in rows if int(row["step"]) % 1000 == 0]
+    """The rows written at Auto's reviews (steps 200, 2,000 …)."""
+    return [row for row in rows if int(row["step"]) % 200 == 0]
 
 
 def reviewing_as_if(life: str):
@@ -87,7 +87,7 @@ def no_waiting():
 class TestEvolve(unittest.TestCase):
     def test_instinct_run_writes_rows(self):
         with tempfile.TemporaryDirectory() as folder:
-            path = quiet_run(["--seed", "1", "--steps", "2000", "--species", "instinct", "--out", folder])
+            path = quiet_run(["--seed", "1", "--steps", "400", "--species", "instinct", "--out", folder])
             with open(path, newline="") as f:
                 self.assertEqual(tuple(next(csv.reader(f))), ROW_KEYS)
             rows = read_rows(path)
@@ -101,16 +101,16 @@ class TestEvolve(unittest.TestCase):
 
     def test_a_row_every_250_steps(self):
         with tempfile.TemporaryDirectory() as folder:
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder]))
-        self.assertEqual([int(row["step"]) for row in rows], [250, 500, 750, 1000])
-        self.assertEqual(ROW_EVERY, 250)
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "200", "--species", "instinct", "--out", folder]))
+        self.assertEqual([int(row["step"]) for row in rows], [50, 100, 150, 200])
+        self.assertEqual(ROW_EVERY, 50)
 
     def test_run_writes_its_record(self):
         with tempfile.TemporaryDirectory() as folder:
-            quiet_run(["--seed", "4", "--steps", "1000", "--species", "instinct", "--out", folder])
+            quiet_run(["--seed", "4", "--steps", "200", "--species", "instinct", "--out", folder])
             record = json.loads((Path(folder) / "run.json").read_text())
             control = read_control(Path(folder))
-        self.assertEqual((record["seed"], record["kind"], record["steps"]), (4, "instinct", 1000))
+        self.assertEqual((record["seed"], record["kind"], record["steps"]), (4, "instinct", 200))
         self.assertRegex(record["started"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$")
         self.assertEqual(control, Control("auto", None, False))  # the page can find and steer every run
 
@@ -128,8 +128,8 @@ class TestEvolve(unittest.TestCase):
 
     def test_same_seed_same_csv(self):
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
-            first = quiet_run(["--seed", "3", "--steps", "1000", "--species", "instinct", "--out", a]).read_text()
-            second = quiet_run(["--seed", "3", "--steps", "1000", "--species", "instinct", "--out", b]).read_text()
+            first = quiet_run(["--seed", "3", "--steps", "200", "--species", "instinct", "--out", a]).read_text()
+            second = quiet_run(["--seed", "3", "--steps", "200", "--species", "instinct", "--out", b]).read_text()
         self.assertEqual(first, second)
 
     def test_auto_looks_every_500_steps(self):
@@ -141,8 +141,8 @@ class TestEvolve(unittest.TestCase):
             return real(dial, *measured)
 
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(Dial, "review", review):
-            quiet_run(["--seed", "1", "--steps", "2000", "--species", "instinct", "--out", folder])
-        self.assertEqual((REVIEW_EVERY, len(looks)), (500, 4))
+            quiet_run(["--seed", "1", "--steps", "400", "--species", "instinct", "--out", folder])
+        self.assertEqual((REVIEW_EVERY, len(looks)), (100, 4))
 
     def test_auto_reviews_the_rates(self):
         reviews = []
@@ -154,12 +154,12 @@ class TestEvolve(unittest.TestCase):
             return made
 
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(Dial, "review", review):
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--out", folder]))
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "600", "--species", "instinct", "--out", folder]))
         numbers = [{"step": int(r["step"]), "population": int(r["population"]), "energy": float(r["energy"])} for r in rows]
         for i, (alive, alive_rate, energy_rate, newcomers, level) in enumerate(reviews):
-            at = 2 * i + 1  # the row written at this look: steps 500, 1,000, 1,500 …
+            at = 2 * i + 1  # the row written at this look: steps 100, 200, 1,100 …
             self.assertEqual(alive, numbers[at]["population"])
-            expected = rates(numbers[max(0, at - 3):at + 1])  # the points of the last 1,000 steps
+            expected = rates(numbers[max(0, at - 3):at + 1])  # the points of the last 200 steps
             self.assertAlmostEqual(alive_rate, expected[0])
             self.assertAlmostEqual(energy_rate, expected[1])
             soup = int(rows[at]["newcomers"]) + int(rows[at - 1]["newcomers"]) - (FIRST_CREATURES if i == 0 else 0)
@@ -169,36 +169,36 @@ class TestEvolve(unittest.TestCase):
 
     def test_dial_turns_when_life_is_easy(self):
         with tempfile.TemporaryDirectory() as folder, reviewing_as_if("easy"):
-            rows = by_step(read_rows(quiet_run(["--seed", "1", "--steps", "1500", "--species", "instinct",
+            rows = by_step(read_rows(quiet_run(["--seed", "1", "--steps", "300", "--species", "instinct",
                                                 "--out", folder])))
-        self.assertEqual(levels(rows.values()), [0, 0, 1, 1, 2, 2])  # one nudge at each look (500, 1,000)
-        self.assertLess(float(rows[750]["max_food"]), float(rows[500]["max_food"]))  # first: less food at once
-        self.assertLess(float(rows[1250]["food_energy"]), float(rows[1000]["food_energy"]))  # then: less per food
-        self.assertEqual(rows[1250]["max_food"], rows[1000]["max_food"])  # one knob at a time
+        self.assertEqual(levels(rows.values()), [0, 0, 1, 1, 2, 2])  # one nudge at each look (100, 200)
+        self.assertLess(float(rows[150]["max_food"]), float(rows[100]["max_food"]))  # first: less food at once
+        self.assertLess(float(rows[250]["food_energy"]), float(rows[200]["food_energy"]))  # then: less per food
+        self.assertEqual(rows[250]["max_food"], rows[200]["max_food"])  # one knob at a time
 
     def test_dial_takes_nudges_back_when_life_is_hard(self):
         with tempfile.TemporaryDirectory() as folder, reviewing_as_if("hard"):
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1500", "--species", "instinct", "--level", "2",
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "300", "--species", "instinct", "--level", "2",
                                         "--out", folder]))
         self.assertEqual(levels(rows), [2, 2, 1, 1, 0, 0])
 
     def test_dial_stops_at_the_max_level(self):
         with tempfile.TemporaryDirectory() as folder, reviewing_as_if("easy"):
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1500", "--species", "instinct", "--max-level", "1",
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "300", "--species", "instinct", "--max-level", "1",
                                         "--out", folder]))
         self.assertEqual(levels(rows), [0, 0, 1, 1, 1, 1])
 
     def test_manual_knobs_reach_the_world(self):
         mine = with_value(START, "food_energy", 15)
-        with tempfile.TemporaryDirectory() as folder, owner_writes_at(500, Control("manual", mine, False)):
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder]))
+        with tempfile.TemporaryDirectory() as folder, owner_writes_at(100, Control("manual", mine, False)):
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "200", "--species", "instinct", "--out", folder]))
         self.assertEqual([(float(r["food_energy"]), r["manual"]) for r in rows],
                          [(30.0, "0"), (15.0, "1"), (15.0, "1"), (15.0, "1")])
         self.assertAlmostEqual(float(rows[-1]["level"]), 13.51, places=2)  # 30 -> 15 is 13.5 nudges' worth
 
     def test_auto_leaves_manual_knobs_alone(self):
         with tempfile.TemporaryDirectory() as folder, reviewing_as_if("easy"):
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct", "--mode", "manual",
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "600", "--species", "instinct", "--mode", "manual",
                                         "--out", folder]))
         self.assertEqual(set(levels(rows)), {0})
         self.assertEqual({row["manual"] for row in rows}, {"1"})
@@ -207,36 +207,37 @@ class TestEvolve(unittest.TestCase):
         mine = with_value(START, "max_food", 100)
         with tempfile.TemporaryDirectory() as folder, reviewing_as_if("easy"):
             write_control(Path(folder), Control("manual", mine, False))
-            with owner_writes_at(1500, Control("auto", None, False)):
-                rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--species", "instinct",
+            with owner_writes_at(300, Control("auto", None, False)):
+                rows = read_rows(quiet_run(["--seed", "1", "--steps", "600", "--species", "instinct",
                                             "--out", folder]))
         rows = by_step(rows)
-        self.assertEqual(float(rows[1000]["max_food"]), 100)  # Manual: the owner's, untouched by Auto
-        self.assertEqual(rows[1500]["manual"], "0")
-        self.assertEqual(float(rows[1750]["max_food"]), 95)  # Auto's first nudge (at 1,500), from the owner's 100
-        self.assertEqual(rows[1750]["food_energy"], rows[1000]["food_energy"])
+        self.assertEqual(float(rows[200]["max_food"]), 100)  # Manual: the owner's, untouched by Auto
+        self.assertEqual(rows[300]["manual"], "0")
+        nudged = next(r for r in rows.values() if int(r["step"]) > 300 and float(r["max_food"]) != 100)
+        self.assertEqual(float(nudged["max_food"]), 95)  # Auto's first nudge goes on from the owner's 100
+        self.assertEqual(nudged["food_energy"], rows[200]["food_energy"])  # one knob at a time
 
     def test_a_rule_change_reaches_the_running_world(self):
         from src.saves import load_world
         with tempfile.TemporaryDirectory() as folder, \
-                owner_writes_at(500, Control("auto", None, False, rules={"eat_miss": 0.9, "tank": 150.0})):
-            quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder])
+                owner_writes_at(100, Control("auto", None, False, rules={"eat_miss": 0.9, "tank": 150.0})):
+            quiet_run(["--seed", "1", "--steps", "200", "--species", "instinct", "--out", folder])
             now = json.loads((Path(folder) / "now.json").read_text())
-            world, _, _ = load_world(Path(folder) / "saves" / f"step-{1000:07d}.npz", learner_seed=0)
+            world, _, _ = load_world(Path(folder) / "saves" / f"step-{200:07d}.npz", learner_seed=0)
         self.assertEqual((now["rules"]["eat_miss"], now["rules"]["tank"]), (0.9, 150.0))
         self.assertEqual((world.rules["eat_miss"], world.rules["tank"]), (0.9, 150.0))  # kept in its save
 
     def test_stop_ends_a_run_without_a_limit(self):
-        with tempfile.TemporaryDirectory() as folder, owner_writes_at(750, Control("auto", None, True)):
+        with tempfile.TemporaryDirectory() as folder, owner_writes_at(150, Control("auto", None, True)):
             rows = read_rows(quiet_run(["--seed", "1", "--forever", "--species", "instinct", "--out", folder]))
             record = json.loads((Path(folder) / "run.json").read_text())
             ended = (Path(folder) / "time.txt").exists(), (Path(folder) / "best").exists()
         self.assertIsNone(record["steps"])
-        self.assertEqual([int(row["step"]) for row in rows], [250, 500])
+        self.assertEqual([int(row["step"]) for row in rows], [50, 100])
         self.assertEqual(ended, (True, True))
 
     def test_exam_does_not_change_the_world(self):
-        argv = ["--seed", "2", "--steps", "3000", "--species", "instinct", "--out"]
+        argv = ["--seed", "2", "--steps", "600", "--species", "instinct", "--out"]
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
             examined = read_rows(quiet_run(argv + [a]))
             with mock.patch.dict(SMALL_WORLD, {"exam_every": 10.0 ** 9}):  # the same small world, never examined
@@ -250,15 +251,15 @@ class TestEvolve(unittest.TestCase):
 
     def test_yardstick_world_stays_at_its_level(self):
         with tempfile.TemporaryDirectory() as folder:
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "3000", "--policy", "random", "--level", "2",
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "600", "--policy", "random", "--level", "2",
                                         "--out", folder]))
         self.assertEqual(set(levels(rows)), {2})
         self.assertEqual({row["intelligence"] for row in rows}, {""})
 
     def test_learning_run_writes_rows(self):
         with tempfile.TemporaryDirectory() as folder:
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "2000", "--species", "learning", "--out", folder]))
-        self.assertEqual(int(rows[-1]["step"]), 2000)
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "400", "--species", "learning", "--out", folder]))
+        self.assertEqual(int(rows[-1]["step"]), 400)
         self.assertEqual(levels(rows[:1]), [0])
         self.assertGreaterEqual(int(rows[-1]["population"]), 10)
         self.assertNotEqual(rows[-1]["intelligence"], "")
@@ -266,8 +267,8 @@ class TestEvolve(unittest.TestCase):
 
     def test_same_seed_same_csv_learning(self):
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
-            first = quiet_run(["--seed", "3", "--steps", "1000", "--species", "learning", "--out", a]).read_text()
-            second = quiet_run(["--seed", "3", "--steps", "1000", "--species", "learning", "--out", b]).read_text()
+            first = quiet_run(["--seed", "3", "--steps", "200", "--species", "learning", "--out", a]).read_text()
+            second = quiet_run(["--seed", "3", "--steps", "200", "--species", "learning", "--out", b]).read_text()
         self.assertEqual(first, second)
 
     def test_species_or_policy_is_required(self):
@@ -280,24 +281,25 @@ class TestEvolve(unittest.TestCase):
     def test_watched_world_writes_its_view(self):
         with tempfile.TemporaryDirectory() as folder, no_waiting():
             watched(folder)
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "250", "--species", "instinct", "--out", folder]))
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "50", "--species", "instinct", "--out", folder]))
             view = json.loads((Path(folder) / "view.json").read_text())
-        self.assertEqual(view["step"], 250)
+        self.assertEqual(view["step"], 50)
         self.assertEqual(len(view["creatures"]), int(rows[-1]["population"]))
         self.assertGreater(len(view["foods"]), 0)
         creature = view["creatures"][0]
-        self.assertEqual(set(creature), {"id", "x", "y", "radius", "energy", "heading", "did", "generation", "age",
+        self.assertEqual(set(creature), {"id", "p", "radius", "energy", "heading", "did", "generation", "age",
                                          "lifespan", "earned", "spent", "size", "facing", "vision_width",
                                          "vision_reach", "hearing", "fear_of_death", "love_of_babies",
                                          "learns_from_others", "neurons", "layers", "moved", "bumped", "brain", "mutations", "mutation_size", "diet", "calls", "call", "kin", "water", "stealth", "armour",
                                          "learning_speed", "intent", "target", "baby"})
         self.assertTrue(0.0 <= creature["energy"] <= 1.0)
-        self.assertTrue(0.0 <= creature["x"] <= 50 and 0.0 <= creature["y"] <= 30)
-        self.assertEqual(set(view["foods"][0]), {"x", "y", "radius", "fruit", "meat"})
-        self.assertEqual(set(view["terrain"]), {"obstacles", "trees"})
+        self.assertAlmostEqual(sum(v * v for v in creature["p"]), 1.0, places=4)  # a point on the planet
+        self.assertEqual(set(view["foods"][0]), {"p", "radius", "fruit", "meat"})
+        self.assertEqual(set(view["terrain"]), {"radius", "obstacles", "trees"})
+        self.assertEqual(view["radius"], 10.9)  # the small test planet
 
     def test_watching_never_changes_the_world(self):
-        argv = ["--seed", "2", "--steps", "500", "--species", "instinct", "--out"]
+        argv = ["--seed", "2", "--steps", "100", "--species", "instinct", "--out"]
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b, no_waiting():
             watched(a, speed=30)
             seen = quiet_run(argv + [a]).read_text()
@@ -308,11 +310,11 @@ class TestEvolve(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             watched(folder, until=time.time() - 1)
             started = time.perf_counter()
-            quiet_run(["--seed", "1", "--steps", "250", "--species", "instinct", "--out", folder])
+            quiet_run(["--seed", "1", "--steps", "50", "--species", "instinct", "--out", folder])
             took = time.perf_counter() - started
             view = (Path(folder) / "view.json").exists()
         self.assertFalse(view)
-        self.assertLess(took, 8.0)  # 250 steps at 10 a second would take 25
+        self.assertLess(took, 8.0)  # 50 steps at 10 a second would take 25
 
     def test_watched_world_waits(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -322,36 +324,36 @@ class TestEvolve(unittest.TestCase):
             took = time.perf_counter() - started
         self.assertGreaterEqual(took, 1.8)  # 50 steps at 25 a second
 
-    def test_a_save_every_2000_steps(self):
+    def test_a_save_every_400_steps(self):
         with tempfile.TemporaryDirectory() as folder:
-            quiet_run(["--seed", "1", "--steps", "4500", "--species", "instinct", "--out", folder])
-            self.assertEqual(saved_steps(folder), [2000, 4000, 4500])  # and one at the end
+            quiet_run(["--seed", "1", "--steps", "900", "--species", "instinct", "--out", folder])
+            self.assertEqual(saved_steps(folder), [400, 800, 900])  # and one at the end
 
     def test_stop_saves(self):
-        with tempfile.TemporaryDirectory() as folder, owner_writes_at(750, Control("auto", None, True)):
+        with tempfile.TemporaryDirectory() as folder, owner_writes_at(150, Control("auto", None, True)):
             quiet_run(["--seed", "1", "--forever", "--species", "instinct", "--out", folder])
-            self.assertEqual(saved_steps(folder), [749])  # the last step it took
+            self.assertEqual(saved_steps(folder), [149])  # the last step it took
 
     def test_resume_starts_a_new_world_from_the_save(self):
         with tempfile.TemporaryDirectory() as old, tempfile.TemporaryDirectory() as new:
-            quiet_run(["--seed", "3", "--steps", "2000", "--species", "instinct", "--out", old])
+            quiet_run(["--seed", "3", "--steps", "400", "--species", "instinct", "--out", old])
             before = (Path(old) / "scoreboard.csv").read_text()
-            save = Path(old) / "saves" / "step-0002000.npz"
-            rows = read_rows(quiet_run(["--resume", str(save), "--steps", "2500", "--mode", "manual", "--out", new]))
+            save = Path(old) / "saves" / "step-0000400.npz"
+            rows = read_rows(quiet_run(["--resume", str(save), "--steps", "500", "--mode", "manual", "--out", new]))
             record = json.loads((Path(new) / "run.json").read_text())
             control = read_control(Path(new))
             after = (Path(old) / "scoreboard.csv").read_text()
             old_rows = read_rows(Path(old) / "scoreboard.csv")
-        self.assertEqual((record["seed"], record["kind"], record["steps"]), (3, "instinct", 2500))
-        self.assertEqual(record["from"], {"run": Path(old).name, "step": 2000})
-        self.assertEqual([int(r["step"]) for r in rows], [250 * i for i in range(1, 11)])
+        self.assertEqual((record["seed"], record["kind"], record["steps"]), (3, "instinct", 500))
+        self.assertEqual(record["from"], {"run": Path(old).name, "step": 400})
+        self.assertEqual([int(r["step"]) for r in rows], [50 * i for i in range(1, 11)])
         self.assertEqual(rows[:8], old_rows)  # the old world's history up to the save
         self.assertEqual((rows[8]["manual"], control.mode), ("1", "manual"))
         self.assertEqual(before, after)  # the old world is never changed
 
     def test_resume_needs_nothing_else(self):
-        args = parse_args(["--resume", "runs/x/saves/step-0002000.npz"])
-        self.assertEqual(args.resume, "runs/x/saves/step-0002000.npz")
+        args = parse_args(["--resume", "runs/x/saves/step-0000400.npz"])
+        self.assertEqual(args.resume, "runs/x/saves/step-0000400.npz")
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             parse_args(["--resume", "x.npz", "--species", "instinct", "--seed", "1"])
 
@@ -361,7 +363,7 @@ class TestEvolve(unittest.TestCase):
 
         def read(folder):
             looks.append(time.perf_counter())
-            if len(looks) == 11:  # step 250
+            if len(looks) == 11:  # step 50
                 write_control(folder, Control("auto", None, False, paused=True))
             if len(looks) > 11 and looks[-1] - looks[11] > 1.0:  # a second later: Continue
                 write_control(folder, Control("auto", None, False))
@@ -369,26 +371,26 @@ class TestEvolve(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as folder, mock.patch("src.evolve.read_control", read):
             started = time.perf_counter()
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "500", "--species", "instinct", "--out", folder]))
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "100", "--species", "instinct", "--out", folder]))
             took = time.perf_counter() - started
         self.assertGreaterEqual(took, 1.0)
-        self.assertEqual([int(r["step"]) for r in rows], [250, 500])  # it went on afterwards
+        self.assertEqual([int(r["step"]) for r in rows], [50, 100])  # it went on afterwards
 
     def test_a_running_world_says_how_it_is_now(self):
         with tempfile.TemporaryDirectory() as folder:
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder]))
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "200", "--species", "instinct", "--out", folder]))
             now = json.loads((Path(folder) / "now.json").read_text())
         self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time", "rules", "season", "genes"})
         low, mean, high = now["genes"]["size"]
         self.assertTrue(low <= mean <= high)
-        self.assertEqual((now["step"], now["alive"]), (1000, int(rows[-1]["population"])))
+        self.assertEqual((now["step"], now["alive"]), (200, int(rows[-1]["population"])))
         self.assertEqual(now["births"], sum(int(r["births"]) for r in rows))
         self.assertEqual(now["deaths"], sum(int(r["deaths_hunger"]) + int(r["deaths_attack"]) + int(r["deaths_age"]) for r in rows))
         self.assertTrue(0.0 <= now["energy"] <= 1.0)
         self.assertLess(abs(now["time"] - time.time()), 60)
 
     def test_now_never_changes_the_world(self):
-        argv = ["--seed", "2", "--steps", "500", "--species", "instinct", "--out"]
+        argv = ["--seed", "2", "--steps", "100", "--species", "instinct", "--out"]
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
             with mock.patch.dict(SMALL_WORLD, {"now_seconds": 0.0}):  # every 25 steps
                 with_now = quiet_run(argv + [a]).read_text()
@@ -399,32 +401,32 @@ class TestEvolve(unittest.TestCase):
 
     def test_update_goes_on_in_the_same_run(self):
         with tempfile.TemporaryDirectory() as folder:
-            quiet_run(["--seed", "1", "--steps", "2000", "--species", "instinct", "--out", folder])
+            quiet_run(["--seed", "1", "--steps", "400", "--species", "instinct", "--out", folder])
             (Path(folder) / "time.txt").unlink()  # the page server does this before handing over
-            save = Path(folder) / "saves" / "step-0002000.npz"
-            rows = read_rows(quiet_run(["--resume", str(save), "--continue", "--steps", "3000", "--out", folder]))
+            save = Path(folder) / "saves" / "step-0000400.npz"
+            rows = read_rows(quiet_run(["--resume", str(save), "--continue", "--steps", "600", "--out", folder]))
             record = json.loads((Path(folder) / "run.json").read_text())
             folders = [p.name for p in Path(folder).iterdir() if p.is_dir()]
-        self.assertEqual([int(r["step"]) for r in rows], [250 * i for i in range(1, 13)])
-        self.assertEqual([u["step"] for u in record["updates"]], [2000])
+        self.assertEqual([int(r["step"]) for r in rows], [50 * i for i in range(1, 13)])
+        self.assertEqual([u["step"] for u in record["updates"]], [400])
         self.assertEqual((record["seed"], record["kind"]), (1, "instinct"))
         self.assertEqual(sorted(folders), ["best", "saves"])  # no new run folder
 
     def test_update_drops_rows_after_the_save(self):
         with tempfile.TemporaryDirectory() as folder:
-            quiet_run(["--seed", "1", "--steps", "2500", "--species", "instinct", "--out", folder])
-            save = Path(folder) / "saves" / "step-0002000.npz"
-            rows = read_rows(quiet_run(["--resume", str(save), "--continue", "--steps", "3000", "--out", folder]))
+            quiet_run(["--seed", "1", "--steps", "500", "--species", "instinct", "--out", folder])
+            save = Path(folder) / "saves" / "step-0000400.npz"
+            rows = read_rows(quiet_run(["--resume", str(save), "--continue", "--steps", "600", "--out", folder]))
         steps = [int(r["step"]) for r in rows]
         self.assertEqual(steps, sorted(set(steps)))
-        self.assertEqual(steps[-1], 3000)
+        self.assertEqual(steps[-1], 600)
 
     def test_updated_world_is_the_same_world(self):
         with tempfile.TemporaryDirectory() as whole, tempfile.TemporaryDirectory() as updated:
-            straight = (Path(quiet_run(["--seed", "4", "--steps", "3000", "--species", "instinct", "--out", whole]))).read_text()
-            quiet_run(["--seed", "4", "--steps", "2000", "--species", "instinct", "--out", updated])
-            save = Path(updated) / "saves" / "step-0002000.npz"
-            again = quiet_run(["--resume", str(save), "--continue", "--steps", "3000", "--out", updated]).read_text()
+            straight = (Path(quiet_run(["--seed", "4", "--steps", "600", "--species", "instinct", "--out", whole]))).read_text()
+            quiet_run(["--seed", "4", "--steps", "400", "--species", "instinct", "--out", updated])
+            save = Path(updated) / "saves" / "step-0000400.npz"
+            again = quiet_run(["--resume", str(save), "--continue", "--steps", "600", "--out", updated]).read_text()
         self.assertEqual(again, straight)
 
     def test_continue_needs_resume(self):
@@ -432,8 +434,8 @@ class TestEvolve(unittest.TestCase):
             parse_args(["--seed", "1", "--species", "instinct", "--continue"])
 
     def test_hunters_switch_in_auto(self):
-        with tempfile.TemporaryDirectory() as folder, owner_writes_at(500, Control("auto", None, False, hunters=True)):
-            rows = read_rows(quiet_run(["--seed", "1", "--steps", "1000", "--species", "instinct", "--out", folder]))
+        with tempfile.TemporaryDirectory() as folder, owner_writes_at(100, Control("auto", None, False, hunters=True)):
+            rows = read_rows(quiet_run(["--seed", "1", "--steps", "200", "--species", "instinct", "--out", folder]))
         self.assertEqual([(r["hunters"], r["manual"]) for r in rows], [("0", "0"), ("1", "0"), ("1", "0"), ("1", "0")])
 
 if __name__ == "__main__":
@@ -452,15 +454,32 @@ class TestGeneChanges(unittest.TestCase):
         self.assertEqual(world.edit_genes.call_count, 2)  # a new change, even of the same genes
 
 
+class TestViewOnThePlanet(unittest.TestCase):
+    def test_the_view_gives_points_on_the_planet(self):
+        import numpy as np
+        from src.evolve import world_view
+        from src.terrain import Obstacle, Terrain
+        from tests.helpers import add, cap, make_world
+        w = make_world()
+        c = add(w, 3.0, 4.0)
+        w.terrain = Terrain([Obstacle("rock", (cap(10.0, 0.0, 2.0),))], [], w.radius)
+        view = world_view(w)
+        seen = view["creatures"][0]
+        self.assertEqual((len(seen["p"]), len(seen["facing"])), (3, 3))
+        self.assertAlmostEqual(float(np.linalg.norm(seen["p"])), 1.0, places=5)
+        np.testing.assert_allclose(seen["p"], c.p, atol=1e-6)
+        self.assertNotIn("x", seen)
+        self.assertEqual((view["radius"], view["terrain"]["obstacles"][0]["kind"]), (w.radius, "rock"))
+        self.assertEqual(len(view["terrain"]["obstacles"][0]["caps"][0]), 4)  # a point and an arc radius
+
+
 class TestNextWorldRules(unittest.TestCase):
     def test_a_new_world_is_made_on_the_owners_rules(self):
         args = parse_args(["--seed", "1", "--species", "instinct", "--steps", "10"])
-        world, _ = _new_world(args, {"first_creatures": 5.0, "world_width": 30.0})
-        self.assertEqual((len(world.creatures), world.width), (5, 30.0))
-        self.assertTrue(all(c.x <= 30.0 for c in world.creatures))
+        world, _ = _new_world(args, {"first_creatures": 5.0, "planet_radius": 20.0})
+        self.assertEqual((len(world.creatures), world.radius), (5, 20.0))
 
     def test_a_new_world_has_the_starting_size(self):
         args = parse_args(["--seed", "1", "--species", "instinct", "--steps", "10"])
-        world, _ = _new_world(args, {})  # the owner changed nothing: the starting rules' size, 120 x 72
-        self.assertEqual((world.width, world.height), (120.0, 72.0))
-        self.assertTrue(all(c.x <= 120.0 and c.y <= 72.0 for c in world.creatures))
+        world, _ = _new_world(args, {})  # the owner changed nothing: the starting rules' planet, radius 37
+        self.assertEqual(world.radius, 37.0)

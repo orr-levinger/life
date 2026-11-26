@@ -72,6 +72,17 @@ class TestScoreboard(unittest.TestCase):
             board.observe(me, sense(me, w), ("MOVE", move))
         self.assertAlmostEqual(board.row(w, None, False)["direction_concentration"], 0.0)
 
+    def test_concentration_is_the_planets_not_each_ones_view(self):
+        from tests.helpers import face
+        w = make_world()
+        a, b = add(w, 0.0, 0.0), add(w, 5.0, 0.0)
+        face(a, 1.0, 0.0)
+        face(b, -1.0, 0.0)  # both walk "ahead", the opposite ways on the planet
+        board = Scoreboard()
+        for c in (a, b):
+            board.observe(c, sense(c, w), ("MOVE", (0.5, 0.0)))
+        self.assertAlmostEqual(board.row(w, None, False)["direction_concentration"], 0.0, places=4)
+
     def test_no_samples_is_none(self):
         row = Scoreboard().row(make_world(), None, False)
         for key in ("energy", "bites_per_creature_step", "toward_food", "flee", "direction_concentration",

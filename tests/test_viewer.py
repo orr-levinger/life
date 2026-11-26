@@ -471,6 +471,12 @@ class TestControlRoom(unittest.TestCase):
         for words in ('geneTile("water"', '["water", "Water'):
             self.assertIn(words, page)  # a tile and a box to change it
 
+    def test_page_shows_stealth(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('geneTile("stealth"', '["stealth", "Stealth'):
+            self.assertIn(words, page)  # a tile and a box to change it
+
     def test_page_shows_the_calls(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

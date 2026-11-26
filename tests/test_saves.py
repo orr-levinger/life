@@ -562,6 +562,26 @@ class TestSaves(unittest.TestCase):
         self.assertEqual((loaded.rules["land_penalty"], loaded.rules["pond_food_share"]), (0.7, 0.2))
         self.assertTrue(all(np.all(c.brain.w1[45:] == 0.0) for c in loaded.creatures))
 
+    def test_a_format_21_save_gets_stealth(self):
+        world = make_world(seed=18)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 21
+            for c in about["creatures"]:
+                del c["stealth"]
+            about["rules"] = {k: v for k, v in about["rules"].items()
+                              if not k.startswith("gene.stealth") and k not in ("stealth_strength", "stealth_cost")}
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({c.stealth for c in loaded.creatures}, {0.0})  # seen and heard as before
+        self.assertEqual((loaded.rules["stealth_strength"], loaded.rules["stealth_cost"]), (0.7, 0.3))
+
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)

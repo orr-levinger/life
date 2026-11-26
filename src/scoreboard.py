@@ -68,7 +68,8 @@ def last_steps(rows: List[Dict[str, str]], steps: int) -> List[Dict[str, str]]:
 
 
 def _cosine(ax: float, ay: float, bx: float, by: float) -> float:
-    return (ax * bx + ay * by) / (math.hypot(ax, ay) * math.hypot(bx, by))
+    lengths = math.hypot(ax, ay) * math.hypot(bx, by)
+    return (ax * bx + ay * by) / lengths if lengths > 0 else 0.0  # one on the same spot: no direction
 
 
 def _mean(values: List[float]) -> Optional[float]:

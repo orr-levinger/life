@@ -79,6 +79,7 @@ class Creature:
         self.diet = HAND_MADE["diet"]  # 0 lives on plants, 1 on meat: a gene
         self.calls = round(HAND_MADE["calls"])  # how many kinds of call it can make: a gene
         self.kin = HAND_MADE["kin"]  # how much what happens to those like it counts as its own: a gene
+        self.stealth = HAND_MADE["stealth"]  # how hard it is to notice: a gene
         self.water = HAND_MADE["water"]  # 0 cannot enter a pond; above 0 it swims at this share of its speed: a gene
         self.called: Optional[Tuple[int, float]] = None  # this step's call: its kind and how far it carries (display)
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
@@ -155,6 +156,7 @@ class Creature:
         else:
             raise ValueError(f"unknown action {kind!r}")
         living = (world.settings.step_cost * self.size ** self.rules["living_power"]  # a bigger body pays more, less than its size
+                  * (1.0 + self.stealth * self.rules["stealth_cost"])  # and stealth costs
                   + self.rules["vision_cost"] * self.vision_area() + self.rules["hearing_cost"] * self.hearing_area()
                   + self.rules["neuron_cost"] * self.neurons)  # and each neuron of its brain
         self.energy = min(self.energy - living, self.max_energy)

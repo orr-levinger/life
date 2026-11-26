@@ -78,6 +78,11 @@ class TestScoreboard(unittest.TestCase):
                     "efficiency", "intelligence", "wanderers", "generation"):
             self.assertIsNone(row[key], key)
 
+    def test_a_direction_to_one_on_the_same_spot_is_none(self):
+        from src.scoreboard import _cosine
+        self.assertEqual(_cosine(1.0, 0.0, 0.0, 0.0), 0.0)  # a baby born on its parent's spot: no direction
+        self.assertEqual(_cosine(0.0, 0.0, 1.0, 0.0), 0.0)
+
     def test_row_reports_efficiency_and_average_energy(self):
         w = make_world()
         half_full = add(w, 10, 10, size=1.0, energy=50.0)  # 50 of 100

@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from src.food import Food
 from src.senses import sense
-from tests.helpers import at, NO_FOOD, NO_FOOD_ATTACKS, add, make_world
+from tests.helpers import face, at, NO_FOOD, NO_FOOD_ATTACKS, add, make_world
 
 
 def quiet(world):
@@ -59,7 +59,8 @@ class TestDiet(unittest.TestCase):
     def test_it_senses_meat_and_its_own_diet(self):
         w = make_world(NO_FOOD)
         me = add(w, 10, 10)
-        me.vision_width, me.vision_reach, me.facing, me.diet = 120.0, 5.0, (1.0, 0.0), 0.7
+        me.vision_width, me.vision_reach, me.diet = 120.0, 5.0, 0.7
+        face(me, 1.0, 0.0)
         w.foods.append(Food(at(12.0, 10.0), remaining_duration=5, energy=8.0, meat=True))
         v = sense(me, w).vector
         self.assertEqual((v[25], v[26]), (1.0, 0.7))

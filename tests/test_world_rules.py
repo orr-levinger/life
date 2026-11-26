@@ -13,7 +13,7 @@ from src.learner import LEARNING_RATE, Learner, NetWeights
 from src.rules import ROOM_SLOTS as MAX_CREATURES, gene_limits, rule, starting_rules
 from src.settings import START
 BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, rule("eat_miss").start
-from tests.helpers import at, LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
+from tests.helpers import face, at, LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
 from tests.test_learner import live, same
 
 STAY = [0, 0, -1, -1]
@@ -789,9 +789,12 @@ class TestLearnersInWorld(unittest.TestCase):
         deaf = self.born(w, learner, 10, 13)
         for c in (actor, hearer, deaf):
             c.vision_width, c.vision_reach = 30.0, 3.0
-        hearer.facing, hearer.hearing = (1.0, 0.0), 3.0  # the actor behind it: unseen, heard
-        deaf.facing, deaf.hearing = (0.0, 1.0), 0.0  # the actor behind it: unseen, unheard
-        actor.facing, actor.hearing = (0.0, -1.0), 0.0
+        hearer.hearing = 3.0  # the actor behind it: unseen, heard
+        face(hearer, 1.0, 0.0)
+        deaf.hearing = 0.0  # the actor behind it: unseen, unheard
+        face(deaf, 0.0, 1.0)
+        actor.hearing = 0.0
+        face(actor, 0.0, -1.0)
         act = Creature.apply_action
 
         def acts_and_sounds(self, action, world):  # whatever the actor does, it makes a sound this step

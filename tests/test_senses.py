@@ -1,7 +1,6 @@
 import math
 import unittest
 
-from tests.helpers import at
 from types import SimpleNamespace
 
 import numpy as np
@@ -12,10 +11,14 @@ from src.brain import N_SENSES
 from src.rules import starting_rules
 from src.senses import display_intent, perceived, sense
 from src.terrain import Terrain
+from tests.helpers import TEST_RADIUS, at, face
 
 
 def creature(x: float, y: float, size: float = 1.25, id_: int = 1, parent_id: int = 0) -> Creature:
-    return Creature(id_, at(x, y), size, full_tank(size, starting_rules()) / 2, "random", parent_id=parent_id)  # half full
+    c = Creature(id_, at(x, y), size, full_tank(size, starting_rules()) / 2, "random", parent_id=parent_id)  # half full
+    c.rules = world().rules
+    face(c, 1.0, 0.0)  # east on the map
+    return c
 
 
 def food(x: float, y: float) -> Food:
@@ -23,7 +26,9 @@ def food(x: float, y: float) -> Food:
 
 
 def world(creatures=(), foods=()):
-    return SimpleNamespace(creatures=list(creatures), foods=list(foods), terrain=Terrain.empty(), rules=starting_rules())
+    rules = {**starting_rules(), "planet_radius": TEST_RADIUS}  # the tests' nearly flat planet
+    return SimpleNamespace(creatures=list(creatures), foods=list(foods), terrain=Terrain.empty(), rules=rules,
+                           radius=TEST_RADIUS)
 
 
 class TestSenses(unittest.TestCase):
@@ -42,7 +47,7 @@ class TestSenses(unittest.TestCase):
         me = creature(10, 10)
         f = food(11.5, 10)
         s = sense(me, world([me], [f]))
-        np.testing.assert_allclose(s.vector[3:7], [1.0, 0.5, 1.0, 0.0], atol=1e-12)
+        np.testing.assert_allclose(s.vector[3:7], [1.0, 0.5, 1.0, 0.0], atol=1e-4)  # the test map bends a little
         self.assertIs(s.food, f)
 
     def test_food_out_of_range(self):
@@ -92,11 +97,38 @@ class TestSenses(unittest.TestCase):
         prey = creature(12, 10, size=1.0, id_=2)
         s = sense(me, world([me, prey], [food(10, 12)]))
         self.assertEqual(display_intent(me, ("MOVE", (1.0, 0.0)), s), "CHASE")  # toward a smaller one
-        self.assertEqual(display_intent(me, ("MOVE", (0.0, 1.0)), s), "GO_TO_FOOD")
+        self.assertEqual(display_intent(me, ("MOVE", (-0.05, 1.0)), s), "GO_TO_FOOD")  # to the food, not toward the prey
+
+    def test_food_ahead_is_ahead_anywhere(self):
+        from src.sphere import local_frame, random_point, walk
+        import random
+        rng = random.Random(3)
+        for _ in range(30):
+            p = random_point(rng)
+            e1, e2 = local_frame(p)
+            turn = rng.uniform(0, 6.28)
+            me = Creature(1, p, 1.25, 60.0, "random", vision_width=90.0, vision_reach=5.0, hearing=0.0)
+            me.rules = world().rules
+            me.facing = math.cos(turn) * e1 + math.sin(turn) * e2
+            ahead, _ = walk(p, me.facing, 1.0, 0.0, 2.0, TEST_RADIUS)
+            v = sense(me, world([me], [Food(ahead, remaining_duration=-1, energy=10.0)])).vector
+            self.assertEqual(v[3], 1.0)
+            self.assertAlmostEqual(v[4], 2.0 / 5.0)
+            np.testing.assert_allclose(v[5:7], (1.0, 0.0), atol=1e-6)  # ahead of it, wherever it is
+
+    def test_a_call_from_the_left_is_heard_from_the_left(self):
+        me = self.eye(10, 10, width=90.0, reach=3.0, hearing=2.0)
+        caller = creature(10, 13, id_=2)  # 3 north: to its left (it faces east)
+        w = world([me, caller])
+        w.calls = [(caller, 0, 1.0)]
+        from src.senses import CALL_INPUTS, N_CALLS
+        v = sense(me, w).vector
+        np.testing.assert_allclose(v[CALL_INPUTS + N_CALLS + 1:CALL_INPUTS + N_CALLS + 3], (0.0, 1.0), atol=1e-4)
 
     def eye(self, x, y, width, reach, hearing, size=1.25):
         me = Creature(1, at(x, y), size, size * 50.0, "random", vision_width=width, vision_reach=reach, hearing=hearing)
-        me.facing = (1.0, 0.0)
+        me.rules = world().rules
+        face(me, 1.0, 0.0)
         return me
 
     def test_food_behind_the_cone_is_unseen(self):
@@ -104,7 +136,7 @@ class TestSenses(unittest.TestCase):
         self.assertEqual(sense(me, world([me], [food(8, 10)])).vector[3], 0.0)  # behind: unseen
         ahead = sense(me, world([me], [food(12, 10)])).vector
         self.assertEqual(ahead[3], 1.0)
-        self.assertAlmostEqual(ahead[4], 2.0 / 3.0)  # distance ÷ its own reach
+        self.assertAlmostEqual(ahead[4], 2.0 / 3.0, places=4)  # distance ÷ its own reach
         self.assertEqual(sense(me, world([me], [food(11, 12)])).vector[3], 0.0)  # 63° off its heading: outside a 90° cone
 
     def test_a_creature_behind_is_heard(self):
@@ -115,7 +147,7 @@ class TestSenses(unittest.TestCase):
         self.assertEqual(v.shape, (N_SENSES,))
         self.assertEqual(v[7], 0.0)  # not seen
         self.assertEqual(v[12], 1.0)  # heard
-        self.assertAlmostEqual(v[13], 0.5)  # distance ÷ its hearing radius
+        self.assertAlmostEqual(v[13], 0.5, places=4)  # distance ÷ its hearing radius
         self.assertAlmostEqual(v[14], -1.0)  # behind it: west
         self.assertAlmostEqual(v[15], 0.0, places=6)
         far = creature(7.0, 10, id_=3)

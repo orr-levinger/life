@@ -13,7 +13,7 @@ from src.sphere import exp_map, local_frame
 from src.settings import START, TODAY_SENSES, Settings
 from src.world import World
 
-TEST_RADIUS = 1000.0  # a test planet: nearly flat over the few units a test uses
+TEST_RADIUS = 1.0e6  # a test planet: flat to ~1e-11 over the few units a test uses (above the rule's highest, on purpose)
 SMALL_WORLD = {"planet_radius": TEST_RADIUS, "room": 80.0, "first_creatures": 30.0, "soup": 10.0,
                "obstacles": 6.0, "trees": 8.0, "auto_target": 64.0}  # a test world stays small and quick, whatever a
 # new world's starting rules are (the owner, 2026-11-26: "we should never run full life simulations as tests!")

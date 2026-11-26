@@ -55,7 +55,7 @@ class TestCalls(unittest.TestCase):
         caller.apply_action(("CALL", (1, 0.5)), w)  # carries 0.5 × 10 = 5
         v = heard(w, near)
         self.assertEqual(list(v[KIND:KIND + N_CALLS]), [0, 1] + [0] * (N_CALLS - 2))  # the second kind
-        self.assertAlmostEqual(v[LOUD], 1 - 4 / 5)  # how loud it arrived
+        self.assertAlmostEqual(v[LOUD], 1 - 4 / 5, places=4)  # how loud it arrived
         np.testing.assert_allclose(v[DIRECTION:DIRECTION + 2], [-1.0, 0.0], atol=1e-9)  # west of it
         self.assertFalse(heard(w, far)[KIND:LOUD].any())  # 6 away: beyond it
         self.assertFalse(heard(w, caller)[KIND:LOUD].any())  # never its own

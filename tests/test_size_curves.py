@@ -8,7 +8,7 @@ import numpy as np
 
 from src.senses import perceived, sense
 from src.settings import START
-from tests.helpers import NO_FOOD, add, make_world
+from tests.helpers import at, face, NO_FOOD, add, make_world
 
 SIZES = (0.5, 1.0, 2.0)
 
@@ -56,16 +56,17 @@ class TestSizeCurves(unittest.TestCase):
         mover = add(w, 12.5, 10.0, size=0.5)  # 2.5 away: within 4, beyond 4 × 0.5
         mover.moved = True
         self.assertIsNone(sense(listener, w).heard)
-        mover.x = 11.5  # 1.5 away: within 4 × 0.5 = 2
+        mover.p = at(11.5, 10.0)  # 1.5 away: within 4 × 0.5 = 2
         self.assertIsNotNone(sense(listener, w).heard)
 
     def test_a_small_body_is_seen_only_from_closer(self):
         w = make_world()
         looker = add(w, 10.0, 10.0)
-        looker.vision_width, looker.vision_reach, looker.facing, looker.hearing = 120.0, 4.0, (1.0, 0.0), 0.0
+        looker.vision_width, looker.vision_reach, looker.hearing = 120.0, 4.0, 0.0
+        face(looker, 1.0, 0.0)
         small = add(w, 13.2, 10.0, size=0.5)  # 3.2 away: within 4, beyond 4 × √0.5 ≈ 2.83
         self.assertFalse(perceived([looker], [small], w)[0, 0])
-        small.x = 12.5  # 2.5 away
+        small.p = at(12.5, 10.0)  # 2.5 away
         self.assertTrue(perceived([looker], [small], w)[0, 0])
         self.assertAlmostEqual(w.rules["seen_power"], 0.5)
         self.assertAlmostEqual(w.rules["heard_power"], 1.0)

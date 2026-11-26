@@ -3,18 +3,19 @@ import unittest
 from dataclasses import replace
 
 from src.senses import perceived, sense
-from tests.helpers import NO_FOOD, add, make_world
+from tests.helpers import at, face, NO_FOOD, add, make_world
 
 
 class TestStealth(unittest.TestCase):
     def test_a_stealthy_body_is_seen_only_from_closer(self):
         w = make_world(NO_FOOD)
         looker = add(w, 10.0, 10.0)
-        looker.vision_width, looker.vision_reach, looker.facing, looker.hearing = 120.0, 4.0, (1.0, 0.0), 0.0
+        looker.vision_width, looker.vision_reach, looker.hearing = 120.0, 4.0, 0.0
+        face(looker, 1.0, 0.0)
         hidden = add(w, 12.0, 10.0)  # 2 away: within 4, beyond 4 × (1 - 0.7)
         hidden.stealth = 1.0
         self.assertFalse(perceived([looker], [hidden], w)[0, 0])
-        hidden.x = 11.0  # 1 away: within 1.2
+        hidden.p = at(11.0, 10.0)  # 1 away: within 1.2
         self.assertTrue(perceived([looker], [hidden], w)[0, 0])
 
     def test_a_stealthy_mover_is_heard_only_from_closer(self):

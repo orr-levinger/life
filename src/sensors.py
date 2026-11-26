@@ -29,8 +29,8 @@ class ProximitySensor(Sensor):
 
     - type: "creature" or "food"
     - object: reference to the actual Creature or Food object
-    - distance: Euclidean distance from the sensing creature to the object
-    - angle: angle in radians from the sensing creature to the object (0 = east, π/2 = north)
+    - distance: along the ground from the sensing creature to the object
+    - angle: in radians, in the sensing creature's own view (0 = ahead, π/2 = to its left)
     """
 
     def __init__(self, sense_range: float = 3.0):
@@ -60,31 +60,24 @@ class ProximitySensor(Sensor):
             if other is creature:  # Skip self
                 continue
 
-            # Calculate distance
-            dx = other.x - creature.x
-            dy = other.y - creature.y
-            distance = math.sqrt(dx*dx + dy*dy)
-
-            # If within sensing range, add to sightings
+            distance, angle = _where(creature, other.p, world)
             if distance <= self.sense_range:
-                # Calculate angle (0 = east, π/2 = north)
-                angle = math.atan2(dy, dx)
                 sightings.append(("creature", other, distance, angle))
 
         # Loop over all food
         for food in world.foods:
-            # Calculate distance
-            dx = food.x - creature.x
-            dy = food.y - creature.y
-            distance = math.sqrt(dx*dx + dy*dy)
-
-            # If within sensing range, add to sightings
+            distance, angle = _where(creature, food.p, world)
             if distance <= self.sense_range:
-                # Calculate angle (0 = east, π/2 = north)
-                angle = math.atan2(dy, dx)
                 sightings.append(("food", food, distance, angle))
 
         # Sort by distance (closest first)
         sightings.sort(key=lambda x: x[2])
 
         return sightings
+
+
+def _where(creature: Creature, point, world: World) -> Tuple[float, float]:
+    """How far along the ground, and at which angle of the creature's own view (0 ahead, π/2 to its left)."""
+    from .sphere import arc, bearing
+    ahead, left = bearing(creature.p, creature.facing, point)
+    return float(arc(creature.p, point, world.rules["planet_radius"])), math.atan2(float(left), float(ahead))

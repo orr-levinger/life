@@ -10,7 +10,7 @@ from src.learner import Learner
 from src.rules import ROOM_SLOTS
 from src.senses import KIN_INPUT, sense
 from src.world import similarity
-from tests.helpers import NO_FOOD, NO_FOOD_ATTACKS, add, make_world
+from tests.helpers import at, face, NO_FOOD, NO_FOOD_ATTACKS, add, make_world
 
 
 def opposite(a, b, rules):
@@ -35,8 +35,9 @@ class TestKin(unittest.TestCase):
         learner = Learner(ROOM_SLOTS, 0)
         w = make_world(NO_FOOD, learner=learner, species="learner")
         watcher, other = w.add_newcomer(), w.add_newcomer()
-        watcher.x, watcher.y, other.x, other.y = 10.0, 10.0, 12.0, 10.0
-        watcher.facing, watcher.vision_width, watcher.vision_reach = (1.0, 0.0), 120.0, 5.0
+        watcher.p, other.p = at(10.0, 10.0), at(12.0, 10.0)
+        face(watcher, 1.0, 0.0)
+        watcher.vision_width, watcher.vision_reach = 120.0, 5.0
         for gene in ("size", "diet", "water", "vision_width", "vision_reach", "hearing"):
             setattr(other, gene, getattr(watcher, gene))
         if not alike:
@@ -86,7 +87,8 @@ class TestKin(unittest.TestCase):
     def test_family_is_seen_with_how_alike_it_is(self):
         w = make_world(NO_FOOD)
         parent = add(w, 10, 10)
-        parent.vision_width, parent.vision_reach, parent.facing = 120.0, 5.0, (1.0, 0.0)
+        parent.vision_width, parent.vision_reach = 120.0, 5.0
+        face(parent, 1.0, 0.0)
         child = add(w, 12, 10, parent_id=parent.id)
         seen = sense(parent, w)
         self.assertIs(seen.other, child)

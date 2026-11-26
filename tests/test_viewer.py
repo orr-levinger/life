@@ -483,6 +483,16 @@ class TestControlRoom(unittest.TestCase):
         for words in ('geneTile("armour"', '["armour", "Armour'):
             self.assertIn(words, page)  # a tile and a box to change it
 
+    def test_static_files_are_served(self):
+        with urllib.request.urlopen(self.server.base + "/static/three.module.min.js") as response:
+            self.assertEqual(response.status, 200)
+            self.assertTrue(response.headers["Content-Type"].startswith("text/javascript"))
+            self.assertIn(b"Copyright", response.read(400))  # three.js's licence comment
+        for wrong in ("/static/../viewer.py", "/static/nothing.js", "/static/%2e%2e/viewer.py"):
+            with self.assertRaises(urllib.error.HTTPError) as refused:
+                urllib.request.urlopen(self.server.base + wrong)
+            self.assertEqual(refused.exception.code, 404, wrong)
+
     def test_page_shows_the_season(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

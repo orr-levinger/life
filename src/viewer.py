@@ -20,7 +20,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run_folder, read_control,
                       settings_from, watch_speed_from, write_control, write_json)
@@ -32,6 +32,8 @@ from .scoreboard import OLDER_LAYOUTS, ROW_KEYS, read_rows
 from .settings import START, Settings
 
 PAGE = Path(__file__).with_name("viewer.html")
+STATIC = Path(__file__).with_name("static")  # three.js and the page's own scripts, served as they are
+STATIC_TYPES = {".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8", ".txt": "text/plain; charset=utf-8"}
 REPO = Path(__file__).resolve().parent.parent
 RUNNING_WITHIN = 180.0  # seconds: a run with no end that wrote its scoreboard this recently is still running
 MAX_RUNNING = 2  # the box has 4 cores
@@ -366,6 +368,13 @@ def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingH
                         self._send(200, controls.saves(name))
                 except Refused as refused:
                     self._send(refused.status, {"error": str(refused)})
+            elif self.path.startswith("/static/"):
+                name = unquote(urlparse(self.path).path[len("/static/"):])
+                path = STATIC / name
+                if "/" in name or "\\" in name or name.startswith(".") or not path.is_file() or path.suffix not in STATIC_TYPES:
+                    self._send(404, {"error": f"no such file: {name}"})  # only the files in src/static, never a path out of it
+                else:
+                    self._raw(200, path.read_bytes(), STATIC_TYPES[path.suffix])
             else:
                 body = PAGE.read_bytes()
                 self._raw(200, body, "text/html; charset=utf-8")

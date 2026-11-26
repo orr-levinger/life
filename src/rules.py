@@ -27,7 +27,7 @@ class Rule:
 # its newcomers draw every gene from its newcomer range, and babies copy their parents.
 HAND_MADE = {"fear": 10.0, "love": 10.0, "learns": 0.5, "learning_speed": 3e-4, "mutations": 1.0, "mutation_size": 0.05,
              "neurons": 32.0, "layers": 1.0, "diet": 0.0, "calls": 0.0,
-             "kin": 0.0, "water": 0.0, "stealth": 0.0}  # one made by hand eats plants, never calls, cares for nobody, cannot swim
+             "kin": 0.0, "water": 0.0, "stealth": 0.0, "armour": 0.0}  # one made by hand eats plants, never calls, cares for nobody, cannot swim
 
 
 def _gene(name: str, words: str, low: float, high: float, limits: tuple, new: tuple) -> tuple:
@@ -78,6 +78,9 @@ RULES = (
     Rule("obstacle_size_low", "world", "An obstacle's size: at least", 1.0, 0.3, 10.0),
     Rule("obstacle_size_high", "world", "An obstacle's size: at most", 4.0, 0.3, 10.0),
     Rule("trees", "world", "Trees a new world gets", 46.0, 0.0, 200.0),
+    Rule("armour_strength", "body", "A hit takes × (1 - armour × this) from an armoured body", 0.7, 0.0, 1.0),
+    Rule("armour_slow", "body", "Armour slows: speed × (1 - armour × this)", 0.3, 0.0, 1.0),
+    Rule("armour_cost", "body", "Armour costs: living × (1 + armour × this)", 0.3, 0.0, 3.0),
     Rule("stealth_strength", "body", "A stealthy body is seen and heard from × (1 - stealth × this)", 0.7, 0.0, 1.0),
     Rule("stealth_cost", "body", "Stealth costs: living × (1 + stealth × this)", 0.3, 0.0, 3.0),
     Rule("land_penalty", "body", "A swimmer walks slower on land: × (1 - water × this)", 0.7, 0.0, 1.0),
@@ -136,7 +139,8 @@ RULES = (
   + _gene("calls", "Calls it can make", 0.0, 10.0, (0.0, 10.0), new=(0.0, 0.0)) \
   + _gene("kin", "Care for kin", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("water", "Water (0 land, 1 swimmer)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
-  + _gene("stealth", "Stealth", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
+  + _gene("stealth", "Stealth", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
+  + _gene("armour", "Armour", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
 
 RULES += (
     Rule("gene_min_change", "genes", "A changed gene moves by at least up to this share of its range", 0.01, 0.0, 0.2),
@@ -177,6 +181,10 @@ MEANS = {
                    "the size is heard from half as far).",
     "seen_power": "How far a body is seen: the looker's reach × the body's size to this power (0.5: half the size is "
                   "seen from about 0.7 as far).",
+    "armour_strength": "How much armour turns a hit: a hit takes × (1 - armour × this). 0.7: full armour takes 30 % "
+                       "of a hit.",
+    "armour_slow": "How much armour slows: speed × (1 - armour × this). 0.3: full armour moves at 70 %.",
+    "armour_cost": "What armour costs: its living cost × (1 + armour × this). 0.3: full armour pays 30 % more.",
     "stealth_strength": "How much stealth hides: a body of stealth 1 is seen and heard from (1 - this) as far. 0.7: "
                         "from 30 % as far.",
     "stealth_cost": "What stealth costs: its living cost × (1 + its stealth × this). 0.3: full stealth pays 30 % "
@@ -274,6 +282,9 @@ GENE_MEANS = {
                      "way (0.05 = 5 %).",
     "neurons": "How many neurons each brain layer has. Each neuron costs energy every step.",
     "layers": "How many layers its brain has.",
+    "armour": "How well its body takes a hit: a hit takes × (1 - armour × the armour strength) from it; it moves "
+              "slower (× 1 - armour × the armour slowness) and pays more to stay alive (× 1 + armour × the armour "
+              "cost).",
     "stealth": "How hard it is to notice: others see and hear it only from (1 - stealth × the stealth strength) as "
                "far; it pays more to stay alive (× 1 + stealth × the stealth cost).",
     "water": "How much it is at home in water: 0 cannot enter a pond; above 0 it can, and swims at this share of "
@@ -331,7 +342,7 @@ def check(rules: Rules, name: str, value: float) -> Optional[str]:
 EDITABLE_GENES = {"size": "size", "vision_width": "vision_width", "vision_reach": "vision_reach", "hearing": "hearing",
                   "fear_of_death": "fear", "love_of_babies": "love", "learns_from_others": "learns",
                   "learning_speed": "learning_speed", "mutations": "mutations", "mutation_size": "mutation_size",
-                  "diet": "diet", "calls": "calls", "kin": "kin", "water": "water", "stealth": "stealth"}
+                  "diet": "diet", "calls": "calls", "kin": "kin", "water": "water", "stealth": "stealth", "armour": "armour"}
 
 
 def check_genes(rules: Rules, genes: object) -> Optional[str]:

@@ -80,6 +80,7 @@ class Creature:
         self.calls = round(HAND_MADE["calls"])  # how many kinds of call it can make: a gene
         self.kin = HAND_MADE["kin"]  # how much what happens to those like it counts as its own: a gene
         self.stealth = HAND_MADE["stealth"]  # how hard it is to notice: a gene
+        self.armour = HAND_MADE["armour"]  # how well it takes a hit, slower and dearer to keep: a gene
         self.water = HAND_MADE["water"]  # 0 cannot enter a pond; above 0 it swims at this share of its speed: a gene
         self.called: Optional[Tuple[int, float]] = None  # this step's call: its kind and how far it carries (display)
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
@@ -102,12 +103,16 @@ class Creature:
     @property
     def velocity(self) -> float:
         """Cruising speed: small ones are faster."""
-        return self.rules["cruise_speed"] / self.size ** self.rules["speed_power"]
+        return self.rules["cruise_speed"] / self.size ** self.rules["speed_power"] * self._armoured()
 
     @property
     def top_speed(self) -> float:
         """Sprinting: big ones are faster, for a price; never below cruising."""
-        return max(self.velocity, self.rules["sprint_speed"] * math.sqrt(self.size))
+        return max(self.velocity, self.rules["sprint_speed"] * math.sqrt(self.size) * self._armoured())
+
+    def _armoured(self) -> float:
+        """Its speed's share for its armour: 1 - armour × the armour slowness."""
+        return 1.0 - self.armour * self.rules["armour_slow"]
 
     @property
     def attack_damage(self) -> float:
@@ -157,6 +162,7 @@ class Creature:
             raise ValueError(f"unknown action {kind!r}")
         living = (world.settings.step_cost * self.size ** self.rules["living_power"]  # a bigger body pays more, less than its size
                   * (1.0 + self.stealth * self.rules["stealth_cost"])  # and stealth costs
+                  * (1.0 + self.armour * self.rules["armour_cost"])  # and armour costs
                   + self.rules["vision_cost"] * self.vision_area() + self.rules["hearing_cost"] * self.hearing_area()
                   + self.rules["neuron_cost"] * self.neurons)  # and each neuron of its brain
         self.energy = min(self.energy - living, self.max_energy)
@@ -235,7 +241,7 @@ class Creature:
                 or math.hypot(target.x - self.x, target.y - self.y) > reach):
             self.last_action = "ATTACK_MISS"
             return
-        taken = min(target.energy, self.attack_damage)
+        taken = min(target.energy, self.attack_damage * (1.0 - target.armour * self.rules["armour_strength"]))
         target.energy -= taken
         dx, dy = self.x - target.x, self.y - target.y
         distance = math.hypot(dx, dy)

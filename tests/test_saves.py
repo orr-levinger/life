@@ -582,6 +582,26 @@ class TestSaves(unittest.TestCase):
         self.assertEqual({c.stealth for c in loaded.creatures}, {0.0})  # seen and heard as before
         self.assertEqual((loaded.rules["stealth_strength"], loaded.rules["stealth_cost"]), (0.7, 0.3))
 
+    def test_a_format_22_save_gets_armour(self):
+        world = make_world(seed=19)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 22
+            for c in about["creatures"]:
+                del c["armour"]
+            about["rules"] = {k: v for k, v in about["rules"].items()
+                              if not k.startswith("gene.armour") and k not in ("armour_strength", "armour_slow", "armour_cost")}
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({c.armour for c in loaded.creatures}, {0.0})  # as before
+        self.assertEqual(loaded.rules["armour_strength"], 0.7)
+
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)

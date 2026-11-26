@@ -15,7 +15,7 @@ from tests.helpers import NO_FOOD, NO_FOOD_ATTACKS, add, make_world
 
 def opposite(a, b, rules):
     """`b` as unlike `a` as the genes allow."""
-    for gene, attr in (("size", "size"), ("diet", "diet"), ("water", "water"), ("stealth", "stealth"), ("vision_width", "vision_width"),
+    for gene, attr in (("size", "size"), ("diet", "diet"), ("water", "water"), ("stealth", "stealth"), ("armour", "armour"), ("vision_width", "vision_width"),
                        ("vision_reach", "vision_reach"), ("hearing", "hearing")):
         low, high = rules[f"gene.{gene}.low"], rules[f"gene.{gene}.high"]
         setattr(a, attr, low)

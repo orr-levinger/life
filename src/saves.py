@@ -29,7 +29,7 @@ from .terrain import Terrain, make_terrain
 from .settings import START, TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 22  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 23  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
@@ -41,7 +41,8 @@ SAVE_FORMAT = 22  # 2: Auto's state keeps the owner's hunters switch; 3: each cr
 # gene, meat (a corpse), the senses of meat seen and of its own diet (27 inputs); 19: calls (a gene, 10 kinds
 # closed above it, a volume), the heard call (44 inputs); 20: care for kin (a gene), family seen and attacked like
 # anyone, how alike the one it sees is (45 inputs); 21: water (a gene; ponds let swimmers in, grow food, hide
-# nothing), the senses of being in water and of water ahead (47 inputs), whether each moved last step; 22: stealth
+# nothing), the senses of being in water and of water ahead (47 inputs), whether each moved last step; 22: stealth;
+# 23: armour
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -103,7 +104,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                        "vision_reach": c.vision_reach, "hearing": c.hearing, "facing": list(c.facing),
                        "fear_of_death": c.fear_of_death, "love_of_babies": c.love_of_babies,
                        "learns_from_others": c.learns_from_others, "mutations": c.mutations,
-                       "mutation_size": c.mutation_size, "diet": c.diet, "calls": c.calls, "kin": c.kin, "water": c.water, "moved": c.moved, "stealth": c.stealth,
+                       "mutation_size": c.mutation_size, "diet": c.diet, "calls": c.calls, "kin": c.kin, "water": c.water, "moved": c.moved, "stealth": c.stealth, "armour": c.armour,
                        "hurt": None if c.hurt is None else list(c.hurt)}
                       for c, brain in zip(world.creatures, brain_of)],
         "foods": [{"x": f.x, "y": f.y, "energy": f.energy, "remaining_duration": f.remaining_duration, "fruit": f.fruit,
@@ -189,6 +190,10 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         new = [r for r in RULES if r.name.startswith("gene.stealth") or r.name in ("stealth_strength", "stealth_cost")]
         about = {**about, "format": 22, "rules": {**about["rules"], **{r.name: r.start for r in new}},
                  "creatures": [{**c, "stealth": 0.0} for c in about["creatures"]]}  # seen and heard as before
+    if about.get("format") == 22:
+        new = [r for r in RULES if r.name.startswith("gene.armour") or r.name.startswith("armour_")]
+        about = {**about, "format": 23, "rules": {**about["rules"], **{r.name: r.start for r in new}},
+                 "creatures": [{**c, "armour": 0.0} for c in about["creatures"]]}  # hit, fast and fed as before
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -451,7 +456,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.mutations, creature.mutation_size = saved["mutations"], saved["mutation_size"]
         creature.diet, creature.calls, creature.kin = saved["diet"], saved["calls"], saved["kin"]
         creature.water, creature.moved = saved["water"], saved["moved"]  # a mover is heard next step
-        creature.stealth = saved["stealth"]
+        creature.stealth, creature.armour = saved["stealth"], saved["armour"]
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])
         world.add_creature(creature)
     world.foods = [_food(f) for f in about["foods"]]

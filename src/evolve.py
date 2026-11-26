@@ -113,7 +113,7 @@ def world_view(world: World) -> Dict[str, Any]:
                        "fear_of_death": round(c.fear_of_death, 2), "love_of_babies": round(c.love_of_babies, 2),
                        "learns_from_others": round(c.learns_from_others, 3), "neurons": c.neurons,
                        "layers": c.layers, "moved": c.moved, "bumped": c.bumped, "mutations": c.mutations,
-                       "mutation_size": round(c.mutation_size, 4), "diet": round(c.diet, 3), "calls": c.calls, "kin": round(c.kin, 3), "water": round(c.water, 3), "stealth": round(c.stealth, 3),
+                       "mutation_size": round(c.mutation_size, 4), "diet": round(c.diet, 3), "calls": c.calls, "kin": round(c.kin, 3), "water": round(c.water, 3), "stealth": round(c.stealth, 3), "armour": round(c.armour, 3),
                        "call": None if c.called is None else [c.called[0], round(c.called[1], 2)],
                        "brain": world.learner.brain_size(c.slot) if c.policy == "learner" else None,
                        "learning_speed": world.learner.lr(c.slot) if c.policy == "learner" else None} for c in world.creatures],
@@ -136,7 +136,7 @@ def world_now(world: World) -> Dict[str, Any]:
 
 
 GENE_TILES = ("size", "neurons", "vision_width", "vision_reach", "hearing", "fear_of_death", "love_of_babies",
-              "learns_from_others", "mutations", "mutation_size", "diet", "calls", "kin", "water", "stealth")
+              "learns_from_others", "mutations", "mutation_size", "diet", "calls", "kin", "water", "stealth", "armour")
 
 
 def _spread(values: List[float]) -> Optional[List[float]]:

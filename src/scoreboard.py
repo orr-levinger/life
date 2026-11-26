@@ -24,13 +24,16 @@ ROW_KEYS = (
     "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost", "step_cost", "lifespan",
     "hunters", "manual", "chase", "attacks", "vision_width", "vision_reach", "hearing", "fear_of_death",
     "love_of_babies", "learns_from_others", "neurons", "layers", "fruit_rate",
+    "sprint_power", "eat_miss", "attack_cost", "attack_damage", "bump_cost", "vision_cost", "hearing_cost", "neuron_cost",
+    "stealth_cost", "armour_cost",
 )
-BEFORE_FRUIT = ROW_KEYS[:-1]  # the columns of scoreboards written before trees dropped fruit (2026-11-25)
+BEFORE_COSTS = ROW_KEYS[:-10]  # the columns of scoreboards written before every cost was a knob (2026-11-26)
+BEFORE_FRUIT = BEFORE_COSTS[:-1]  # the columns of scoreboards written before trees dropped fruit (2026-11-25)
 BEFORE_BRAIN = BEFORE_FRUIT[:-2]  # the columns of scoreboards written before the brain's size was a gene (2026-11-24)
 BEFORE_VALUES = BEFORE_BRAIN[:-3]  # the columns of scoreboards written before values were genes (2026-11-24)
 BEFORE_SENSES = BEFORE_VALUES[:-3]  # the columns of scoreboards written before senses were genes (2026-11-24)
 BEFORE_HUNTING = BEFORE_SENSES[:-2]  # the columns of scoreboards written before the chase and attacks columns
-OLDER_LAYOUTS = (BEFORE_FRUIT, BEFORE_BRAIN, BEFORE_VALUES, BEFORE_SENSES, BEFORE_HUNTING)  # read with the columns they lack empty
+OLDER_LAYOUTS = (BEFORE_COSTS, BEFORE_FRUIT, BEFORE_BRAIN, BEFORE_VALUES, BEFORE_SENSES, BEFORE_HUNTING)  # read with the columns they lack empty
 DEATH_CAUSES = ("hunger", "attack", "age")
 Value = Union[int, float, None]
 
@@ -176,6 +179,16 @@ class Scoreboard:
             "neurons": _mean([c.neurons for c in world.creatures if c.layers]),  # learners: the ones whose brains grow
             "layers": _mean([c.layers for c in world.creatures if c.layers]),
             "fruit_rate": settings.fruit_rate,
+            "sprint_power": settings.sprint_power,
+            "eat_miss": settings.eat_miss,
+            "attack_cost": settings.attack_cost,
+            "attack_damage": settings.attack_damage,
+            "bump_cost": settings.bump_cost,
+            "vision_cost": settings.vision_cost,
+            "hearing_cost": settings.hearing_cost,
+            "neuron_cost": settings.neuron_cost,
+            "stealth_cost": settings.stealth_cost,
+            "armour_cost": settings.armour_cost,
         }
         self._clear_samples()
         self._seen = now

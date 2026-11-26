@@ -14,7 +14,7 @@ from tests.helpers import NO_FOOD, NO_FOOD_ATTACKS, add, at, make_world
 def quiet(world):
     """Nothing costs anything but moving: only what a move takes is left."""
     world.settings = replace(world.settings, step_cost=0.0)
-    world.rules.update({"vision_cost": 0.0, "hearing_cost": 0.0, "neuron_cost": 0.0})
+    world.settings = replace(world.settings, vision_cost=0.0, hearing_cost=0.0, neuron_cost=0.0)
     return world
 
 

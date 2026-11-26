@@ -23,6 +23,15 @@ def brains(n: int, seed: int = 0):
 
 
 class TestExam(unittest.TestCase):
+    def test_the_exam_pays_todays_costs(self):  # the living world's cost knobs never reach the exam
+        import math
+        exam = exam_settings(starting_rules())
+        today = {"sprint_power": 2.0, "eat_miss": 0.2, "attack_cost": 1.0, "attack_damage": 5.0, "bump_cost": 0.5,
+                 "vision_cost": 0.05 / (math.pi * 9.0), "hearing_cost": 0.05 / (math.pi * 9.0), "neuron_cost": 0.0005,
+                 "stealth_cost": 0.3, "armour_cost": 0.3}
+        for name, now in today.items():
+            self.assertAlmostEqual(getattr(exam, name), now, msg=name)
+
     def test_the_exam_planet_stays_as_it_was(self):
         from src.exam import _exam_world
         from src.rules import starting_rules

@@ -22,7 +22,8 @@ class TestCalls(unittest.TestCase):
     def world(self):
         w = make_world(NO_FOOD)
         w.settings = replace(w.settings, step_cost=0.0)
-        w.rules.update({"vision_cost": 0.0, "hearing_cost": 0.0, "neuron_cost": 0.0, "call_reach": 10.0})
+        w.settings = replace(w.settings, vision_cost=0.0, hearing_cost=0.0, neuron_cost=0.0)
+        w.rules.update({"call_reach": 10.0})
         return w
 
     def test_a_creature_without_calls_cannot_call(self):

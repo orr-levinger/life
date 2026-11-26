@@ -1,7 +1,8 @@
+import math
 import unittest
 from dataclasses import fields, replace
 
-from src.dial import (KNOBS, Dial, difficulty, rates, slope, step_for, value,
+from src.dial import (KNOBS, Dial, difficulty, knob_named, rates, slope, step_for, value,
                       with_value)
 from src.settings import START, Settings
 
@@ -101,6 +102,38 @@ class TestStep(unittest.TestCase):
 
 
 class TestDial(unittest.TestCase):
+    def test_every_cost_is_a_knob(self):  # the owner, 2026-11-26: anything that costs, Auto can turn, from 0
+        import math
+        seeing = 0.05 / (math.pi * 3.0 ** 2)
+        today = {"move_cost": (0.5, 3.0), "step_cost": (0.05, 0.5), "sprint_power": (2.0, 4.0), "eat_miss": (0.2, 2.0),
+                 "attack_cost": (1.0, 5.0), "attack_damage": (5.0, 25.0), "bump_cost": (0.5, 3.0),
+                 "vision_cost": (seeing, 10 * seeing), "hearing_cost": (seeing, 10 * seeing),
+                 "neuron_cost": (0.0005, 0.005), "stealth_cost": (0.3, 3.0), "armour_cost": (0.3, 3.0)}
+        knobs = {k.name: k for k in KNOBS}
+        for name, (now, hardest) in today.items():
+            self.assertEqual(knobs[name].easiest, 0.0, name)
+            self.assertAlmostEqual(knobs[name].hardest, hardest, msg=name)
+            self.assertAlmostEqual(getattr(START, name), now / 10.0, msg=name)  # a new world: a tenth of today's
+            default = Settings.__dataclass_fields__[name].default
+            if name not in ("move_cost", "step_cost"):  # every save holds those two; the others default to today's
+                self.assertAlmostEqual(default, now, msg=name)
+
+    def test_auto_lifts_a_cost_from_zero(self):
+        dial = Dial(with_value(START, "eat_miss", 0.0))
+        self.assertTrue(math.isfinite(dial.level))
+        dial._next_harder = [k.name for k in KNOBS].index("eat_miss")
+        dial.review(*EASY)  # one harder nudge
+        self.assertAlmostEqual(dial.settings.eat_miss, 0.01 * 2.0)  # 1 % of its range
+
+    def test_a_nudge_is_at_least_a_hundredth_of_the_range(self):
+        knob = knob_named("max_food")
+        small, large = with_value(START, "max_food", 30.0), with_value(START, "max_food", 700.0)
+        for settings, want in ((small, 30.0 - 0.01 * (800 - 20)), (large, 700.0 * 0.95)):
+            dial = Dial(replace(settings, attacks=True))  # hunters on: the nudge goes to a knob
+            dial._next_harder = [k.name for k in KNOBS].index("max_food")
+            dial.review(*EASY)
+            self.assertAlmostEqual(dial.settings.max_food, max(want, knob.hardest))
+
     def test_food_sliders_reach_further(self):  # the owner, 2026-11-26: tops 800 pieces, 20 a step, 100 energy
         ends = {k.name: k.easiest for k in KNOBS}
         self.assertEqual((ends["max_food"], ends["food_per_step"], ends["food_energy"]), (800.0, 20.0, 100.0))

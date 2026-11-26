@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from src.rules import RULES, check, starting_rules
 from tests.helpers import LIVING, add, make_world
@@ -15,9 +16,9 @@ class TestRules(unittest.TestCase):
 
     def test_a_value_outside_its_range_is_refused(self):
         rules = starting_rules()
-        self.assertIsNone(check(rules, "eat_miss", 0.3))
-        self.assertIn("at most 5", check(rules, "eat_miss", 6.0))
-        self.assertIn("at least 0", check(rules, "eat_miss", -1.0))
+        self.assertIsNone(check(rules, "diet_bite", 0.3))
+        self.assertIn("at most 5", check(rules, "diet_bite", 6.0))
+        self.assertIn("at least 0", check(rules, "diet_bite", -1.0))
         self.assertIn("lowest", check(rules, "gene.size.low", 3.0))  # above the gene's highest (2)
         self.assertIsNone(check(rules, "gene.size.low", 1.0))
         self.assertIn("unknown", check(rules, "no_such_rule", 1.0))
@@ -105,7 +106,7 @@ class TestRules(unittest.TestCase):
     def test_the_world_reads_its_rules(self):
         w = make_world()
         c = add(w, 10, 10)
-        w.rules["eat_miss"] = 1.0
+        w.settings = replace(w.settings, eat_miss=1.0)  # a cost: the world's knob
         before = c.energy
         c.apply_action(("EAT", None), w)  # nothing within reach
         self.assertAlmostEqual(before - c.energy, 1.0 + LIVING)

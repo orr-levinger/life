@@ -1,7 +1,7 @@
 """Shared setup for the world, policy and visualization tests."""
 import math
 import random
-from dataclasses import replace
+from dataclasses import MISSING, fields, replace
 from typing import Optional, Sequence
 
 import numpy as np
@@ -46,11 +46,13 @@ def face(creature: Creature, fx: float, fy: float) -> None:
     creature.facing = d / np.linalg.norm(d)
 
 
-NO_FOOD = replace(START, max_food=0, food_per_step=0)  # the easy start with nothing to eat
+TODAY_COSTS = dict(move_cost=0.5, step_cost=0.05, **{f.name: f.default for f in fields(Settings)
+                                                     if f.default is not MISSING})  # every cost at today's value
+NO_FOOD = replace(START, max_food=0, food_per_step=0, **TODAY_COSTS)  # hand-made worlds: nothing to eat, today's costs
 NO_FOOD_ATTACKS = replace(NO_FOOD, attacks=True)
 WIDTH, REACH, HEARING = TODAY_SENSES
-SENSES = (rule("vision_cost").start * WIDTH / 360.0 * math.pi * REACH ** 2
-          + rule("hearing_cost").start * math.pi * HEARING ** 2)  # a step of today's senses
+SENSES = (NO_FOOD.vision_cost * WIDTH / 360.0 * math.pi * REACH ** 2  # the senses at the start knobs
+          + NO_FOOD.hearing_cost * math.pi * HEARING ** 2)  # a step of today's senses
 LIVING = NO_FOOD.step_cost + SENSES  # a step alive, size 1, today's senses
 
 

@@ -194,7 +194,7 @@ class TestEvolve(unittest.TestCase):
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "200", "--species", "instinct", "--out", folder]))
         self.assertEqual([(float(r["food_energy"]), r["manual"]) for r in rows],
                          [(30.0, "0"), (15.0, "1"), (15.0, "1"), (15.0, "1")])
-        self.assertAlmostEqual(float(rows[-1]["level"]), 13.51, places=2)  # 30 -> 15 is 13.5 nudges' worth
+        self.assertAlmostEqual(float(rows[-1]["level"]), 13.03, places=2)  # 30 -> 15: 8.5 nudges of 5 %, then 4.5 of 1 % of the range
 
     def test_auto_leaves_manual_knobs_alone(self):
         with tempfile.TemporaryDirectory() as folder, reviewing_as_if("easy"):
@@ -214,18 +214,18 @@ class TestEvolve(unittest.TestCase):
         self.assertEqual(float(rows[200]["max_food"]), 100)  # Manual: the owner's, untouched by Auto
         self.assertEqual(rows[300]["manual"], "0")
         nudged = next(r for r in rows.values() if int(r["step"]) > 300 and float(r["max_food"]) != 100)
-        self.assertEqual(float(nudged["max_food"]), 95)  # Auto's first nudge goes on from the owner's 100
+        self.assertAlmostEqual(float(nudged["max_food"]), 92.2)  # Auto's first nudge from the owner's 100: 1 % of the range (7.8) beats 5 % (5)
         self.assertEqual(nudged["food_energy"], rows[200]["food_energy"])  # one knob at a time
 
     def test_a_rule_change_reaches_the_running_world(self):
         from src.saves import load_world
         with tempfile.TemporaryDirectory() as folder, \
-                owner_writes_at(100, Control("auto", None, False, rules={"eat_miss": 0.9, "tank": 150.0})):
+                owner_writes_at(100, Control("auto", None, False, rules={"diet_bite": 0.9, "tank": 150.0})):
             quiet_run(["--seed", "1", "--steps", "200", "--species", "instinct", "--out", folder])
             now = json.loads((Path(folder) / "now.json").read_text())
             world, _, _ = load_world(Path(folder) / "saves" / f"step-{200:07d}.npz", learner_seed=0)
-        self.assertEqual((now["rules"]["eat_miss"], now["rules"]["tank"]), (0.9, 150.0))
-        self.assertEqual((world.rules["eat_miss"], world.rules["tank"]), (0.9, 150.0))  # kept in its save
+        self.assertEqual((now["rules"]["diet_bite"], now["rules"]["tank"]), (0.9, 150.0))
+        self.assertEqual((world.rules["diet_bite"], world.rules["tank"]), (0.9, 150.0))  # kept in its save
 
     def test_stop_ends_a_run_without_a_limit(self):
         with tempfile.TemporaryDirectory() as folder, owner_writes_at(150, Control("auto", None, True)):

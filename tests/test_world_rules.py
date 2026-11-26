@@ -13,8 +13,8 @@ from src.learner import LEARNING_RATE, Learner, NetWeights
 from src.rules import ROOM_SLOTS as MAX_CREATURES, gene_limits, rule, starting_rules
 from src.settings import START
 from src.sphere import arc
-BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, rule("eat_miss").start
 from tests.helpers import face, at, LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
+BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, NO_FOOD.eat_miss  # eating at nothing: the start knob
 from tests.test_learner import live, same
 
 STAY = [0, 0, -1, -1]
@@ -113,7 +113,7 @@ class TestCosts(unittest.TestCase):
 
 class TestSenseGenes(unittest.TestCase):
     def test_senses_cost_by_area(self):
-        SENSE_COST = rule("vision_cost").start
+        SENSE_COST = NO_FOOD.vision_cost
         w = make_world()
         today = add(w, 10, 10)
         today.vision_width, today.vision_reach, today.hearing = 360.0, 3.0, 0.0
@@ -132,7 +132,7 @@ class TestSenseGenes(unittest.TestCase):
         small, big = add(w, 10, 10, size=1.0), add(w, 20, 10, size=2.0, energy=150.0)
         for c in (small, big):
             c.vision_width, c.vision_reach, c.hearing = 30.0, 1.0, 0.0
-        senses = lambda c: w.rules["vision_cost"] * c.sense_area()
+        senses = lambda c: w.settings.vision_cost * c.sense_area()
         spent = []
         for c in (small, big):
             before = c.energy
@@ -146,7 +146,7 @@ class TestSenseGenes(unittest.TestCase):
         w = make_world()
         c = add(w, 10, 10)
         c.vision_width, c.vision_reach, c.hearing = 90.0, 4.0, 2.0
-        w.rules["vision_cost"], w.rules["hearing_cost"] = 0.0, 0.01
+        w.settings = replace(w.settings, vision_cost=0.0, hearing_cost=0.01)
         before = c.energy
         c.apply_action(("MOVE", (0.0, 0.0)), w)
         self.assertAlmostEqual(before - c.energy, NO_FOOD.step_cost + 0.01 * math.pi * 2.0 ** 2)  # hearing alone
@@ -155,11 +155,11 @@ class TestSenseGenes(unittest.TestCase):
         w = make_world()
         c = add(w, 10, 10, size=1.0)
         c.vision_width, c.vision_reach, c.hearing = 30.0, 1.0, 0.0
-        w.rules["sprint_power"] = 1.0
+        w.settings = replace(w.settings, sprint_power=1.0)
         before = c.energy
         c.apply_action(("MOVE", (0.4, 0.0)), w)
         sprint = 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 1.0
-        self.assertAlmostEqual(before - c.energy, NO_FOOD.step_cost + sprint + w.rules["vision_cost"] * c.sense_area())
+        self.assertAlmostEqual(before - c.energy, NO_FOOD.step_cost + sprint + w.settings.vision_cost * c.sense_area())
 
     def test_a_baby_changes_one_gene(self):
         genes = ("size", "vision_width", "vision_reach", "hearing", "fear_of_death", "love_of_babies", "learns_from_others",
@@ -243,8 +243,8 @@ class TestSenseGenes(unittest.TestCase):
             before = c.energy
             c.apply_action(("MOVE", (0.0, 0.0)), w)
             spent.append(before - c.energy)
-        self.assertAlmostEqual(spent[1] - spent[0], 32 * w.rules["neuron_cost"])
-        self.assertEqual(w.rules["neuron_cost"], 0.0005)
+        self.assertAlmostEqual(spent[1] - spent[0], 32 * w.settings.neuron_cost)
+        self.assertEqual(w.settings.neuron_cost, 0.0005)
 
     def test_babies_inherit_senses_in_the_limits(self):
         limits = lambda gene: (rule(f"gene.{gene}.low").start, rule(f"gene.{gene}.high").start)
@@ -287,7 +287,7 @@ class TestEating(unittest.TestCase):
         self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 2 * LIVING)
         mover = add(w, 20, 5, size=1.0)
         mover.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * LIVING + 0.8 * NO_FOOD.move_cost * (0.8 / 0.25) ** 2)  # a full sprint
+        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * LIVING + 0.8 * NO_FOOD.move_cost * (0.8 / 0.25) ** NO_FOOD.sprint_power)  # a full sprint
 
     def test_each_creature_counts_its_own_energy(self):
         w = make_world()

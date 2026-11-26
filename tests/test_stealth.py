@@ -31,13 +31,13 @@ class TestStealth(unittest.TestCase):
     def test_stealth_costs_more_to_keep(self):
         w = make_world(NO_FOOD)
         w.settings = replace(w.settings, step_cost=0.1)
-        w.rules.update({"vision_cost": 0.0, "hearing_cost": 0.0, "neuron_cost": 0.0, "eat_miss": 0.0})
+        w.settings = replace(w.settings, vision_cost=0.0, hearing_cost=0.0, neuron_cost=0.0, eat_miss=0.0)
         plain, stealthy = add(w, 10, 10, energy=20.0), add(w, 20, 10, energy=20.0)
         stealthy.stealth = 1.0
         for c in (plain, stealthy):
             c.apply_action(("EAT", None), w)
-        self.assertAlmostEqual(20.0 - stealthy.energy, (20.0 - plain.energy) * (1 + w.rules["stealth_cost"]))
-        self.assertEqual((w.rules["stealth_strength"], w.rules["stealth_cost"]), (0.7, 0.3))
+        self.assertAlmostEqual(20.0 - stealthy.energy, (20.0 - plain.energy) * (1 + w.settings.stealth_cost))
+        self.assertEqual((w.rules["stealth_strength"], w.settings.stealth_cost), (0.7, 0.3))
 
     def test_newcomers_draw_their_stealth(self):
         w = make_world(seed=7)

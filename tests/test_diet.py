@@ -10,7 +10,7 @@ from tests.helpers import face, at, NO_FOOD, NO_FOOD_ATTACKS, add, make_world
 def quiet(world):
     """No price for living, senses or neurons: only what eating and hitting give is left."""
     world.settings = replace(world.settings, step_cost=0.0)
-    world.rules.update({"vision_cost": 0.0, "hearing_cost": 0.0, "neuron_cost": 0.0, "attack_cost": 0.0})
+    world.settings = replace(world.settings, vision_cost=0.0, hearing_cost=0.0, neuron_cost=0.0, attack_cost=0.0)
     return world
 
 
@@ -43,8 +43,8 @@ class TestDiet(unittest.TestCase):
         hunter = add(w, 10, 10, energy=20.0)
         prey = add(w, 11, 10, energy=50.0)
         hunter.diet = 0.5
-        damage = hunter.attack_damage
-        self.assertAlmostEqual(damage, hunter.size * w.rules["attack_damage"] * (1 + 0.5 * w.rules["diet_bite"]))
+        damage = hunter.attack_damage(w.settings)
+        self.assertAlmostEqual(damage, hunter.size * w.settings.attack_damage * (1 + 0.5 * w.rules["diet_bite"]))
         hunter.apply_action(("ATTACK", prey), w)
         self.assertAlmostEqual(prey.energy, 50.0 - damage)
         self.assertAlmostEqual(hunter.energy, 20.0 + w.rules["hunter_share"] * damage * 0.5)

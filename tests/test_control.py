@@ -32,8 +32,8 @@ class TestControl(unittest.TestCase):
 
     def test_rule_changes_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write_control(Path(tmp), Control("auto", None, False, rules={"eat_miss": 0.5, "tank": 120.0}))
-            self.assertEqual(read_control(Path(tmp)).rules, {"eat_miss": 0.5, "tank": 120.0})
+            write_control(Path(tmp), Control("auto", None, False, rules={"diet_bite": 0.5, "tank": 120.0}))
+            self.assertEqual(read_control(Path(tmp)).rules, {"diet_bite": 0.5, "tank": 120.0})
             write_control(Path(tmp), Control("auto", None, False))
             self.assertIsNone(read_control(Path(tmp)).rules)
 

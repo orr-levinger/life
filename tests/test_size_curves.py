@@ -15,7 +15,7 @@ SIZES = (0.5, 1.0, 2.0)
 
 def quiet(world):
     """No price for senses, neurons or a missed bite: only the body's own living cost is left."""
-    world.rules.update({"vision_cost": 0.0, "hearing_cost": 0.0, "neuron_cost": 0.0, "eat_miss": 0.0})
+    world.settings = replace(world.settings, vision_cost=0.0, hearing_cost=0.0, neuron_cost=0.0, eat_miss=0.0)
     return world
 
 

@@ -155,6 +155,25 @@ class TestSaves(unittest.TestCase):
         kept = [(c.id, tuple(np.round(c.p, 12)), kind, volume) for c, kind, volume in loaded.calls]
         self.assertEqual(kept, [(caller.id, tuple(np.round(caller.p, 12)), 2, 0.5), (gone.id, tuple(np.round(gone.p, 12)), 1, 1.0)])
 
+    def test_an_old_save_keeps_its_costs(self):  # saved before every cost was a knob: its costs from its rules
+        world = make_world(seed=3)
+        populate(world, 5)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "old.npz"
+            save_world(path, world, Dial(), {})
+            with np.load(path) as data:
+                arrays = {name: data[name] for name in data.files}
+            about = json.loads(str(arrays["about"]))
+            for state in (about["settings"], about["dial"]["settings"], *about["dial"]["taken"]):
+                for name in ("sprint_power", "eat_miss", "attack_cost", "attack_damage", "bump_cost", "vision_cost", "hearing_cost", "neuron_cost", "stealth_cost", "armour_cost"):
+                    state.pop(name, None)
+            about["rules"]["eat_miss"] = 0.7  # the owner had changed it, when it was a rule
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez_compressed(path, **arrays)
+            loaded, dial, _ = load_world(path, learner_seed=0)
+        self.assertEqual((loaded.settings.eat_miss, dial.settings.eat_miss), (0.7, 0.7))
+        self.assertEqual((loaded.settings.sprint_power, loaded.settings.bump_cost), (2.0, 0.5))  # today's
+
     def test_a_sphere_save_resumes_the_same_world(self):
         world = make_world(replace(START, max_food=200), seed=23)
         world.rules["planet_radius"] = 12.0
@@ -192,12 +211,12 @@ class TestSaves(unittest.TestCase):
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)
-        world.rules["eat_miss"], world.rules["gene.size.high"] = 0.7, 1.6
+        world.rules["diet_bite"], world.rules["gene.size.high"] = 0.7, 1.6
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "step.npz"
             save_world(path, world, Dial(), {})
             loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual((loaded.rules["eat_miss"], loaded.rules["gene.size.high"]), (0.7, 1.6))
+        self.assertEqual((loaded.rules["diet_bite"], loaded.rules["gene.size.high"]), (0.7, 1.6))
         self.assertEqual(loaded.rules, world.rules)
 
 

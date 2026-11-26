@@ -187,24 +187,24 @@ class TestControlRoom(unittest.TestCase):
         name = self.running_world()
         answer = self.server.get(f"/rules?run={name}")
         self.assertEqual([r["name"] for r in answer["rules"]], [r.name for r in RULES])
-        eat = next(r for r in answer["rules"] if r["name"] == "eat_miss")
-        self.assertEqual((eat["group"], eat["value"], eat["start"], eat["low"], eat["high"]), ("costs", 0.2, 0.2, 0.0, 5.0))
+        eat = next(r for r in answer["rules"] if r["name"] == "diet_bite")
+        self.assertEqual((eat["group"], eat["value"], eat["start"], eat["low"], eat["high"]), ("senses", 1.0, 1.0, 0.0, 5.0))
         (self.root / name / "now.json").write_text(json.dumps({"step": 9, "rules": {**{r.name: r.start for r in RULES},
-                                                                                     "eat_miss": 0.4}}))
+                                                                                     "diet_bite": 0.4}}))
         answer = self.server.get(f"/rules?run={name}")
-        self.assertEqual(next(r for r in answer["rules"] if r["name"] == "eat_miss")["value"], 0.4)  # the world's own
+        self.assertEqual(next(r for r in answer["rules"] if r["name"] == "diet_bite")["value"], 0.4)  # the world's own
 
     def test_a_rule_change_out_of_range_is_refused(self):
         name = self.running_world()
-        status, answer = self.server.post("/control", {"run": name, "rules": {"eat_miss": 9}})
-        self.assertEqual((status, answer["error"]), (400, "Eating at nothing can be at most 5"))
+        status, answer = self.server.post("/control", {"run": name, "rules": {"diet_bite": 9}})
+        self.assertEqual((status, answer["error"]), (400, "A meat eater's hit takes more: × (1 + diet × this) can be at most 5"))
         status, answer = self.server.post("/control", {"run": name, "rules": {"gene.size.low": 3}})
         self.assertEqual(status, 400)
         self.assertIsNone(read_control(self.root / name).rules)
-        status, answer = self.server.post("/control", {"run": name, "rules": {"eat_miss": 0.5}})
+        status, answer = self.server.post("/control", {"run": name, "rules": {"diet_bite": 0.5}})
         self.assertEqual(status, 200)
         status, answer = self.server.post("/control", {"run": name, "rules": {"tank": 150}})
-        self.assertEqual(read_control(self.root / name).rules, {"eat_miss": 0.5, "tank": 150.0})  # changes add up
+        self.assertEqual(read_control(self.root / name).rules, {"diet_bite": 0.5, "tank": 150.0})  # changes add up
 
     def test_page_has_costs_values_and_genes(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
@@ -258,6 +258,11 @@ class TestControlRoom(unittest.TestCase):
         status, answer = self.server.post("/next-rules", {"rules": {"first_creatures": 9999}})
         self.assertEqual(status, 400)
         self.assertIn("at most", answer["error"])
+
+    def test_an_old_next_world_rule_that_is_now_a_knob_is_dropped(self):  # eat_miss is a knob now (2026-11-26)
+        (self.root / "next_world.json").write_text(json.dumps({"rules": {"eat_miss": 0.5, "tank": 120.0}}))
+        status, answer = self.server.post("/next-rules", {"rules": {"tank": 130.0}})
+        self.assertEqual((status, answer["rules"]), (200, {"tank": 130.0}))
 
     def test_a_new_world_starts_on_the_next_worlds_rules(self):
         self.server.post("/next-rules", {"rules": {"first_creatures": 12}})
@@ -647,12 +652,14 @@ class TestControlRoom(unittest.TestCase):
         for words in ("export function sensedBy(", "hears.set(", "c.moved"):  # only what it senses: seen, or a sound's blur
             self.assertIn(words, planet)
 
-    def test_world_card_has_the_senses_costs(self):
+    def test_world_card_has_every_cost(self):  # every cost a knob, in the Costs group (2026-11-26)
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ("Cost of seeing", "Cost of hearing", '"vision_cost"', '"hearing_cost"', "sense-cost",
-                      '["Costs", ["move_cost", "step_cost", "vision_cost", "hearing_cost"]]'):
-            self.assertIn(words, page)
+        self.assertIn('["Costs", ["move_cost", "step_cost", "sprint_power", "eat_miss", "attack_cost", "attack_damage", '
+                      '"bump_cost",', page)
+        labels = {k["name"]: k["label"] for k in self.server.get("/knobs")["knobs"]}
+        self.assertEqual((labels["vision_cost"][:14], labels["hearing_cost"][:15], labels["sprint_power"][:17]),
+                         ("Cost of seeing", "Cost of hearing", "Cost of sprinting"))
 
     def test_page_lets_the_owner_change_a_creatures_genes(self):
         with urllib.request.urlopen(self.server.base + "/") as response:

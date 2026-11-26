@@ -1,4 +1,7 @@
+import csv
+import tempfile
 import unittest
+from pathlib import Path
 
 from src.exam import ExamResult
 from src.food import Food
@@ -133,6 +136,8 @@ class TestScoreboard(unittest.TestCase):
             "deaths_hunger", "deaths_attack", "deaths_age", "max_food", "food_energy", "food_per_step", "move_cost",
             "step_cost", "lifespan", "hunters", "manual", "chase", "attacks", "vision_width", "vision_reach", "hearing",
             "fear_of_death", "love_of_babies", "learns_from_others", "neurons", "layers", "fruit_rate",
+            "sprint_power", "eat_miss", "attack_cost", "attack_damage", "bump_cost", "vision_cost", "hearing_cost",
+            "neuron_cost", "stealth_cost", "armour_cost",  # every cost a knob (2026-11-26)
         ))
         w, me = food_world()
         me.generation = 4
@@ -171,6 +176,19 @@ class TestScoreboard(unittest.TestCase):
         first = board.row(w, None, False)
         self.assertEqual(first["attacks"], 2)
         self.assertEqual(board.row(w, None, False)["attacks"], 0)
+
+    def test_an_old_scoreboard_goes_on(self):  # written before every cost was a knob: the new columns come empty
+        from src.scoreboard import BEFORE_COSTS, ROW_KEYS, migrate_scoreboard, read_rows
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "scoreboard.csv"
+            with open(path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=BEFORE_COSTS)
+                writer.writeheader()
+                writer.writerow({key: "1" for key in BEFORE_COSTS})
+            self.assertTrue(migrate_scoreboard(path))
+            row = read_rows(path)[0]
+        self.assertEqual(tuple(row), ROW_KEYS)
+        self.assertEqual((row["step"], row["eat_miss"]), ("1", ""))
 
     def test_scoreboard_has_the_senses(self):
         import csv

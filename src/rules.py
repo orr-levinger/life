@@ -40,15 +40,7 @@ def _gene(name: str, words: str, low: float, high: float, limits: tuple, new: tu
 
 
 RULES = (
-    Rule("eat_miss", "costs", "Eating at nothing", 0.2, 0.0, 5.0),
-    Rule("attack_cost", "costs", "An attack, hit or miss, × size", 1.0, 0.0, 10.0),
-    Rule("attack_damage", "costs", "Being hit: energy lost, × the attacker's size", 5.0, 0.0, 50.0),
     Rule("baby_share", "costs", "Having a baby: the share of its energy given to the baby", 0.4, 0.05, 0.9),
-    Rule("sprint_power", "costs", "Sprinting: faster than cruising costs the move × (speed ÷ cruising) to this power", 2.0,
-         1.0, 4.0),
-    Rule("neuron_cost", "costs", "Each neuron, each step", 0.0005, 0.0, 0.01),
-    Rule("vision_cost", "costs", "Vision, per square unit seen, each step", 0.05 / (math.pi * 3.0 ** 2), 0.0, 0.01),
-    Rule("hearing_cost", "costs", "Hearing, per square unit heard, each step", 0.05 / (math.pi * 3.0 ** 2), 0.0, 0.01),
     Rule("planet_radius", "world", "A new planet's radius", 37.0, 5.0, 2000.0),
     Rule("room", "world", "Room for this many creatures (births pause when full)", 600.0, 10.0, 600.0),
     Rule("soup", "world", "Random newcomers appear while fewer than this many live", 80.0, 0.0, 600.0),
@@ -85,9 +77,7 @@ RULES = (
     Rule("trees", "world", "Trees a new world gets", 92.0, 0.0, 400.0),
     Rule("armour_strength", "body", "A hit takes × (1 - armour × this) from an armoured body", 0.7, 0.0, 1.0),
     Rule("armour_slow", "body", "Armour slows: speed × (1 - armour × this)", 0.3, 0.0, 1.0),
-    Rule("armour_cost", "body", "Armour costs: living × (1 + armour × this)", 0.3, 0.0, 3.0),
     Rule("stealth_strength", "body", "A stealthy body is seen and heard from × (1 - stealth × this)", 0.7, 0.0, 1.0),
-    Rule("stealth_cost", "body", "Stealth costs: living × (1 + stealth × this)", 0.3, 0.0, 3.0),
     Rule("land_penalty", "body", "A swimmer walks slower on land: × (1 - water × this)", 0.7, 0.0, 1.0),
     Rule("pond_food_share", "world", "Share of new food that grows in ponds", 0.2, 0.0, 1.0),
     Rule("year_steps", "world", "A year lasts this many steps (food rises and falls over it)", 20000.0, 1000.0, 200000.0),
@@ -99,7 +89,6 @@ RULES = (
     Rule("tree_canopy", "world", "A tree's crown: its radius", 1.5, 0.3, 5.0),
     Rule("fruit_spread", "world", "Fruit falls this far from its tree at most", 2.0, 0.5, 10.0),
     Rule("hide_reach", "senses", "Under a tree, a creature is seen only from this close", 1.0, 0.0, 10.0),
-    Rule("bump_cost", "costs", "Bumping into an obstacle", 0.5, 0.0, 10.0),
     Rule("bite", "body", "A bite of food: the most it eats in one step", 1.0, 0.1, 20.0),
     Rule("learn_rollout", "learning", "Steps of its own life between two learning rounds", 64.0, 8.0, 1024.0),
     Rule("learn_passes", "learning", "Passes over those steps in a round", 4.0, 1.0, 20.0),
@@ -116,6 +105,7 @@ RULES = (
     Rule("auto_measure", "auto", "It measures the rates over this many last steps", 1000.0, 250.0, 10000.0),
     Rule("auto_nudge", "auto", "One nudge changes a knob by this share (changing it rescales the difficulty number)", 0.05,
          0.01, 0.3),
+    Rule("auto_least_nudge", "auto", "One nudge changes a knob by at least this share of its whole range", 0.01, 0.0, 0.2),
     Rule("exam_every", "exam", "The exam every this many steps (changing the exam makes older scores incomparable)", 2000.0,
          250.0, 20000.0),
     Rule("exam_radius", "exam", "The exam planet's radius", 10.9, 3.0, 100.0),
@@ -171,16 +161,7 @@ ROOM_SLOTS = int(_BY_NAME["room"].high)  # a learner keeps a slot for each creat
 
 # What each rule means, in plain words (the "What it means" column of the Rules page).
 MEANS = {
-    "eat_miss": "Energy lost when it tries to eat with no food in reach.",
-    "attack_cost": "Energy the attacker spends on each attack, hit or miss. A bigger attacker pays more.",
-    "attack_damage": "Energy the creature being hit loses. A bigger attacker hits harder.",
     "baby_share": "When it has a baby, this share of its energy goes into the baby (0.4 = 40 %).",
-    "sprint_power": "Going faster than its normal speed costs extra: at 2, twice its normal speed costs 4 times as much.",
-    "neuron_cost": "Energy each neuron of its brain costs every step. A bigger brain costs more.",
-    "vision_cost": "Energy seeing costs every step, for each square unit of its vision cone. Seeing wider or further "
-                   "costs more.",
-    "hearing_cost": "Energy hearing costs every step, for each square unit of its hearing circle. Hearing further costs "
-                    "more.",
     "tank_power": "How much more energy a bigger body holds: its tank is the tank × size to this power (1.3: twice the "
                   "size holds about 2.5 times the energy).",
     "living_power": "How much more a bigger body pays to stay alive: the living cost × size to this power (0.75: twice "
@@ -196,11 +177,8 @@ MEANS = {
     "armour_strength": "How much armour turns a hit: a hit takes × (1 - armour × this). 0.7: full armour takes 30 % "
                        "of a hit.",
     "armour_slow": "How much armour slows: speed × (1 - armour × this). 0.3: full armour moves at 70 %.",
-    "armour_cost": "What armour costs: its living cost × (1 + armour × this). 0.3: full armour pays 30 % more.",
     "stealth_strength": "How much stealth hides: a body of stealth 1 is seen and heard from (1 - this) as far. 0.7: "
                         "from 30 % as far.",
-    "stealth_cost": "What stealth costs: its living cost × (1 + its stealth × this). 0.3: full stealth pays 30 % "
-                    "more to stay alive.",
     "forests": "How many forests a new world's trees grow in, with plains between; 0 scatters them anywhere.",
     "forest_spread": "How far from its forest's centre a tree may stand: a small number makes a dense wood.",
     "pond_edge_food": "How much thicker food grows on the land near a pond's edge than on open ground (2 = twice "
@@ -251,7 +229,6 @@ MEANS = {
     "tree_canopy": "How wide a tree's crown is (its radius): the area where a creature hides.",
     "fruit_spread": "How far from its trunk a tree's fruit can fall.",
     "hide_reach": "A creature under a tree's crown is seen only by those this close; hunters can wait there.",
-    "bump_cost": "Energy lost when a move runs into an obstacle (the move does not happen).",
     "bite": "The most food energy it can eat in one step.",
     "learn_rollout": "It learns from its own life every this many steps.",
     "learn_passes": "How many times it goes over those steps when it learns.",
@@ -274,6 +251,7 @@ MEANS = {
     "auto_max_nudges": "The most nudges Auto makes in one check.",
     "auto_measure": "Auto judges how things are going over this many last steps.",
     "auto_nudge": "How much one nudge changes the costs and the food (0.05 = 5 %).",
+    "auto_least_nudge": "The least one nudge changes a knob, as a share of its range from easiest to hardest (0.01 = 1 %): a knob at 0 still moves.",
     "exam_every": "How often some creatures take a test in a fixed world, so scores compare over time.",
     "exam_brains": "How many creatures take each test.",
     "exam_steps": "How many steps one test lasts.",

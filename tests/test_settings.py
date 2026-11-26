@@ -1,3 +1,4 @@
+import math
 import unittest
 from dataclasses import FrozenInstanceError
 
@@ -11,8 +12,12 @@ TEST_WORLD = exam_settings(starting_rules())
 
 class TestSettings(unittest.TestCase):
     def test_the_start_is_the_easy_start_of_the_design(self):
-        self.assertEqual(START, Settings(max_food=400, food_energy=(20, 40), food_per_step=6.0, move_cost=0.5,
-                                         step_cost=0.05, lifespan=(4000, 6000), attacks=False, fruit_rate=0.02))
+        seeing = 0.05 / (math.pi * 9.0)  # every cost a tenth of today's (the owner, 2026-11-26)
+        self.assertEqual(START, Settings(max_food=400, food_energy=(20, 40), food_per_step=6.0, move_cost=0.05,
+                                         step_cost=0.005, lifespan=(4000, 6000), attacks=False, fruit_rate=0.02,
+                                         sprint_power=0.2, eat_miss=0.02, attack_cost=0.1, attack_damage=0.5,
+                                         bump_cost=0.05, vision_cost=seeing / 10.0, hearing_cost=seeing / 10.0,
+                                         neuron_cost=0.00005, stealth_cost=0.03, armour_cost=0.03))
 
     def test_the_start_is_easier_than_the_test_world(self):
         self.assertGreater(START.max_food, TEST_WORLD.max_food)

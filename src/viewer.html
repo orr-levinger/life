@@ -454,17 +454,11 @@ function message(title, detail) {
   document.getElementById("charts").innerHTML = `<div class="nothing"><b>${title}</b>${detail}</div>`;
 }
 
-// The senses' prices: rules of the world, so they can be changed in Auto too. Each says what the average creature pays.
-const SENSE_COSTS = [
-  ["vision_cost", "Cost of seeing (per square unit of its cone, per step)",
-   (g) => g.vision_width[1] / 360 * Math.PI * g.vision_reach[1] ** 2],
-  ["hearing_cost", "Cost of hearing (per square unit of its circle, per step)", (g) => Math.PI * g.hearing[1] ** 2],
-];
-
-// The world card's sliders in groups: each of Auto's knobs and each senses price named in exactly one.
+// The world card's sliders in groups: each of Auto's knobs named in exactly one (every cost is a knob, 2026-11-26).
 const KNOB_GROUPS = [
   ["Food", ["max_food", "food_energy", "food_per_step", "fruit_rate"]],
-  ["Costs", ["move_cost", "step_cost", "vision_cost", "hearing_cost"]],
+  ["Costs", ["move_cost", "step_cost", "sprint_power", "eat_miss", "attack_cost", "attack_damage", "bump_cost",
+             "vision_cost", "hearing_cost", "neuron_cost", "stealth_cost", "armour_cost"]],
   ["Life", ["lifespan"]],
 ];
 
@@ -550,33 +544,6 @@ function makeCard(run) {
     slider.addEventListener("change", () => { state.dragging = null; change(knob.name, +slider.value); });
     groupOf(knob.name).append(row);
   }
-  const changeRule = (name, value) => {
-    state.pending[name] = { value, until: Date.now() + PENDING_FOR };
-    send("/control", { run: state.run.name, rules: { [name]: value } })
-      .then(() => tell(null), (problem) => { delete state.pending[name]; tell(problem); updateCard(state); });
-  };
-  for (const [name, label] of SENSE_COSTS) {
-    const row = document.createElement("div");
-    row.className = "knob sense-cost";
-    row.dataset.rule = name;
-    row.innerHTML = `<label for="${run.name}-${name}">${label}</label><output></output>
-      <input type="range" id="${run.name}-${name}" disabled>
-      <small><span class="low"></span><span class="pays"></span><span class="high"></span></small>`;
-    const slider = row.querySelector("input"), shown = row.querySelector("output");
-    slider.addEventListener("pointerdown", () => { state.dragging = name; });
-    slider.addEventListener("input", () => { shown.textContent = numberText(+slider.value); });
-    slider.addEventListener("change", () => { state.dragging = null; changeRule(name, +slider.value); });
-    groupOf(name).append(row);
-  }
-  fetch(`/rules?run=${encodeURIComponent(run.name)}`, { cache: "no-store" }).then((r) => r.json()).then((answer) => {
-    for (const row of box.querySelectorAll(".sense-cost")) {  // each slider's range is its rule's allowed range
-      const rule = answer.rules.find((r) => r.name === row.dataset.rule), slider = row.querySelector("input");
-      Object.assign(slider, { min: rule.low, max: rule.high, step: (rule.high - rule.low) / 1000, disabled: false });
-      row.querySelector(".low").textContent = `${numberText(rule.low)} · cheaper`;
-      row.querySelector(".high").textContent = `dearer · ${numberText(rule.high)}`;
-    }
-    updateCard(state);
-  }, tell);
   const hunters = card.querySelector("[data-hunters]");
   hunters.addEventListener("change", () => change("hunters", hunters.checked));
   return state;
@@ -612,16 +579,6 @@ function updateCard(state) {
   });
   const hunters = card.querySelector("[data-hunters]");
   hunters.checked = shownValue("hunters", last ? !!last.hunters : false, (a, b) => a === b);
-  const live = state.now && state.now.rules ? state.now : null;
-  card.querySelectorAll(".sense-cost").forEach((row) => {  // the senses' prices, from the world's live numbers
-    const [name, , area] = SENSE_COSTS.find(([n]) => n === row.dataset.rule), slider = row.querySelector("input");
-    if (!live || state.dragging === name) return;
-    const value = shownValue(name, live.rules[name], (a, b) => Math.abs(a - b) <= +slider.step);
-    slider.value = value;
-    row.querySelector("output").textContent = numberText(value);
-    row.querySelector(".pays").textContent = live.genes && live.genes.vision_width
-      ? `the average creature pays ${numberText(value * area(live.genes))} a step` : "";
-  });
 }
 
 function drawWorlds(running) {
@@ -1469,8 +1426,6 @@ const WORKS_OUT = {
   body_radius: (v, s) => `${(2 * v * s).toFixed(2)} wide`,
   cruise_speed: (v, s, r) => `moves ${(v / s ** r.speed_power).toFixed(2)} a step`,
   sprint_speed: (v, s, r) => `bursts up to ${Math.max(r.cruise_speed / s ** r.speed_power, v * Math.sqrt(s)).toFixed(2)} a step`,
-  attack_cost: (v, s) => `pays ${(v * s).toFixed(2)} an attack`,
-  attack_damage: (v, s) => `takes ${(v * s).toFixed(1)} from the one it hits`,
   corpse_energy: (v, s) => `leaves ${(v * s).toFixed(1)} food when it dies`,
   step_cost: (v, s, r) => `pays ${(v * s ** r.living_power).toFixed(3)} a step`,
   move_cost: (v, s) => `pays ${(v * s).toFixed(3)} a unit moved`,

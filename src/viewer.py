@@ -49,6 +49,16 @@ KNOB_LABELS = {  # what the page calls each knob, and how far one notch of its s
     "move_cost": ("Cost of moving (per unit)", 0.01),
     "step_cost": ("Cost of living (per step)", 0.005),
     "lifespan": ("Lifespan (steps)", 50.0),
+    "sprint_power": ("Cost of sprinting (power of speed ÷ cruising)", 0.01),
+    "eat_miss": ("Cost of eating at nothing", 0.005),
+    "attack_cost": ("Cost of an attack (× size)", 0.01),
+    "attack_damage": ("Damage of a hit (× the hitter's size)", 0.05),
+    "bump_cost": ("Cost of bumping into a rock", 0.005),
+    "vision_cost": ("Cost of seeing (per square unit, per step)", 0.00001),
+    "hearing_cost": ("Cost of hearing (per square unit, per step)", 0.00001),
+    "neuron_cost": ("Cost of each neuron (per step)", 0.00001),
+    "stealth_cost": ("Cost of stealth (living × 1 + stealth × this)", 0.005),
+    "armour_cost": ("Cost of armour (living × 1 + armour × this)", 0.005),
 }
 Launch = Callable[[List[str], Path], object]  # starts a world: its command and its folder; returns its process
 
@@ -193,7 +203,8 @@ class Controls:
     def _next_rules(self) -> Dict[str, float]:
         """The owner's changes to the rules of the next new world (kept in the runs folder)."""
         path = self.folder / NEXT_WORLD
-        return json.loads(path.read_text())["rules"] if path.exists() else {}
+        known = starting_rules()  # a rule that has since become a knob (a cost, 2026-11-26) is dropped
+        return {name: value for name, value in json.loads(path.read_text())["rules"].items() if name in known} if path.exists() else {}
 
     def next_rules(self, body: Dict) -> Dict:
         """Changes the rules the next new world starts on, each checked like a running world's."""

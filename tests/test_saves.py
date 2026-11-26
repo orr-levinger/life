@@ -602,6 +602,22 @@ class TestSaves(unittest.TestCase):
         self.assertEqual({c.armour for c in loaded.creatures}, {0.0})  # as before
         self.assertEqual(loaded.rules["armour_strength"], 0.7)
 
+    def test_a_format_23_save_gets_seasons(self):
+        world = make_world(seed=20)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 23
+            about["rules"] = {k: v for k, v in about["rules"].items() if k not in ("year_steps", "season_depth")}
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual((loaded.rules["year_steps"], loaded.rules["season_depth"]), (20000.0, 0.5))
+
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)

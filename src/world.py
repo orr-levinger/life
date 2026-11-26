@@ -173,8 +173,10 @@ class World:
     def spawn_food(self) -> None:
         """The same number of candidates every step, so two worlds with the same food seed draw the same food."""
         margin = self.FOOD_RADIUS_MARGIN
-        whole = int(self.settings.food_per_step)  # e.g. 2.4 per step: 2 every step and a third 40 % of the time
-        extra = self.food_rng.random() < self.settings.food_per_step - whole
+        season = self.season()
+        per_step = self.settings.food_per_step * season
+        whole = int(per_step)  # e.g. 2.4 per step: 2 every step and a third 40 % of the time
+        extra = self.food_rng.random() < per_step - whole
         ponds = self.terrain.pond_circles.any()
         for _ in range(whole + extra):
             x = self.food_rng.uniform(margin, self.width - margin)
@@ -190,7 +192,7 @@ class World:
                 self.foods.append(food)
                 self.foods_created_this_step.add(id(food))
         for tree in self.terrain.trees:  # each tree drops a fruit now and then, near its trunk
-            if self.food_rng.random() >= self.settings.fruit_rate:
+            if self.food_rng.random() >= self.settings.fruit_rate * season:
                 continue
             angle, away = self.food_rng.uniform(0.0, 2.0 * math.pi), self.food_rng.uniform(0.0, self.rules["fruit_spread"])
             x, y = tree.x + away * math.cos(angle), tree.y + away * math.sin(angle)
@@ -199,6 +201,13 @@ class World:
             if inside and len(self.foods) < int(self.settings.max_food) and self._fits(fruit):
                 self.foods.append(fruit)
                 self.foods_created_this_step.add(id(fruit))
+    def season(self) -> float:
+        """How much food and fruit grow now, against the year's middle: 1 + depth × sin(2π step ÷ year). An exam world
+        has no seasons."""
+        if not self.evolving:
+            return 1.0
+        return 1.0 + self.rules["season_depth"] * math.sin(2.0 * math.pi * self.step_count / self.rules["year_steps"])
+
     def prefill_food(self) -> None:
         for _ in range(self.PREFILL_STEPS):
             self.spawn_food()

@@ -85,6 +85,8 @@ RULES = (
     Rule("stealth_cost", "body", "Stealth costs: living × (1 + stealth × this)", 0.3, 0.0, 3.0),
     Rule("land_penalty", "body", "A swimmer walks slower on land: × (1 - water × this)", 0.7, 0.0, 1.0),
     Rule("pond_food_share", "world", "Share of new food that grows in ponds", 0.2, 0.0, 1.0),
+    Rule("year_steps", "world", "A year lasts this many steps (food rises and falls over it)", 20000.0, 1000.0, 200000.0),
+    Rule("season_depth", "world", "Seasons: food and fruit × (1 ± this) at the year's best and worst", 0.5, 0.0, 1.0),
     Rule("tree_canopy", "world", "A tree's crown: its radius", 1.5, 0.3, 5.0),
     Rule("fruit_spread", "world", "Fruit falls this far from its tree at most", 2.0, 0.5, 10.0),
     Rule("hide_reach", "senses", "Under a tree, a creature is seen only from this close", 1.0, 0.0, 10.0),
@@ -189,6 +191,10 @@ MEANS = {
                         "from 30 % as far.",
     "stealth_cost": "What stealth costs: its living cost × (1 + its stealth × this). 0.3: full stealth pays 30 % "
                     "more to stay alive.",
+    "year_steps": "How many steps a year lasts: food and fruit grow most a quarter into it and least three "
+                  "quarters into it.",
+    "season_depth": "How strong the seasons are: food and fruit grow × (1 + this × sin(2π × step ÷ year)). 0.5: "
+                    "half again as much in the best season, half as much in the worst; 0: no seasons.",
     "land_penalty": "How much slower a swimmer walks on land: its land speed × (1 - its water × this). 0.7: a "
                     "full swimmer walks at 30 % of its speed.",
     "pond_food_share": "The share of new food that grows inside ponds, where only swimmers reach it.",

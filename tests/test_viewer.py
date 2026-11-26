@@ -483,6 +483,11 @@ class TestControlRoom(unittest.TestCase):
         for words in ('geneTile("armour"', '["armour", "Armour'):
             self.assertIn(words, page)  # a tile and a box to change it
 
+    def test_page_shows_the_season(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        self.assertIn('["season", "Season"]', page)  # a tile: how much food grows now against the year's middle
+
     def test_page_shows_the_calls(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

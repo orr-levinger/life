@@ -640,7 +640,7 @@ function drawWorlds(running) {
 const NOW_EVERY_MS = 1000, SAMPLES_KEPT = 300;  // one look a second; the energy line covers the last 5 minutes
 const TILES = [
   ["step", "Step"], ["alive", "Alive"], ["energy", "Average energy"], ["smart", "Intelligence × random"],
-  ["hardest", "Difficulty"], ["steer", "Steers to food"], ["born", "Born"], ["died", "Died"], ["generation", "Generation"],
+  ["hardest", "Difficulty"], ["season", "Season"], ["steer", "Steers to food"], ["born", "Born"], ["died", "Died"], ["generation", "Generation"],
   ["flee", "Flees bigger"], ["chase", "Chases smaller"], ["size", "Size"], ["brain", "Brain (neurons)"],
   ["vision", "Sees (degrees)"], ["reach", "Sees how far"], ["hearing", "Hears how far"], ["fear", "Fear of death"],
   ["love", "Love of babies"], ["learns", "Learns from others"], ["mutations", "Genes a baby changes"],
@@ -721,6 +721,11 @@ function updateTiles(state) {
   set("alive", n.alive === null ? "-" : n.alive, `of ${room} room`,
       `${n.alive} creatures are alive. The world has room for ${room}; when it is full, no more babies are born until someone dies.`,
       n.alive !== null && n.alive < 30 ? "bad" : "");
+  const season = state.now && state.now.season != null ? state.now.season : null;
+  set("season", season === null ? "-" : `${Math.round(season * 100)} %`, "food now, of an average step",
+      season === null ? "No numbers yet." : `Food and fruit grow at ${Math.round(season * 100)} % of the year's average now: ` +
+      "most a quarter into a year, least three quarters into it (Rules: year, seasons).",
+      season === null ? "" : season >= 1 ? "good" : "bad");
   set("energy", n.fed === null ? "-" : `${n.fed} %`, n.fedBefore === null ? "of a full tank" : `${n.fed >= n.fedBefore ? "up" : "down"} from ${n.fedBefore} %`,
       `On average each creature has ${n.fed} % of a full tank of energy. At 70 % a creature has a baby; past its lifespan, ` +
       `below 30 % it dies. Auto makes the world harder while most are well fed (50 % or more) and easier below 35 %.`,

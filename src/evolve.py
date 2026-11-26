@@ -130,7 +130,7 @@ def world_now(world: World) -> Dict[str, Any]:
         "step": world.step_count, "alive": len(alive),
         "energy": sum(max(c.energy, 0.0) / c.max_energy for c in alive) / len(alive) if alive else None,
         "food": len(world.foods), "births": world.births, "deaths": sum(world.deaths.values()), "time": time.time(),
-        "rules": dict(world.rules),
+        "rules": dict(world.rules), "season": world.season(),
         "genes": {key: _spread([getattr(c, key) for c in alive if key != "neurons" or c.layers]) for key in GENE_TILES},
     }
 

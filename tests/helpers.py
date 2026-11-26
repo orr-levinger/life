@@ -26,6 +26,17 @@ def at(x: float, y: float, R: float = TEST_RADIUS) -> np.ndarray:
     return exp_map(BASE, EAST, NORTH, x, y, R)
 
 
+def cap(x: float, y: float, r: float, R: float = TEST_RADIUS) -> tuple:
+    """A round patch of ground of arc radius r centred at the map's (x, y): one cap of an obstacle."""
+    return tuple(map(float, at(x, y, R))), float(r)
+
+
+def tree(x: float, y: float, canopy: float, R: float = TEST_RADIUS):
+    """A tree at the map's (x, y)."""
+    from src.terrain import Tree
+    return Tree(tuple(map(float, at(x, y, R))), float(canopy))
+
+
 def face(creature: Creature, fx: float, fy: float) -> None:
     """Turn a creature to the map direction (fx, fy) at its place."""
     d = fx * EAST + fy * NORTH

@@ -6,20 +6,24 @@ from dataclasses import replace
 from src.food import Food
 from src.senses import IN_WATER, WATER_SEEN, sense
 from src.terrain import Obstacle, Terrain
-from tests.helpers import at, NO_FOOD, add, make_world
+import numpy as np
+
+from src.sphere import arc
+from tests.helpers import NO_FOOD, add, at, cap, face, make_world
 
 
 def pond_world():
     """A pond around (20, 10) of radius 3, a rock around (20, 20) of radius 3."""
     w = make_world(NO_FOOD)
-    w.terrain = Terrain([Obstacle("pond", ((20.0, 10.0, 3.0),)), Obstacle("rock", ((20.0, 20.0, 3.0),))], [])
+    w.terrain = Terrain([Obstacle("pond", (cap(20.0, 10.0, 3.0),)), Obstacle("rock", (cap(20.0, 20.0, 3.0),))], [], w.radius)
     return w
 
 
 def moved(w, c, dx):
-    x = c.x
+    """How far a move of dx ahead took it, along the ground."""
+    start = c.p.copy()
     c.apply_action(("MOVE", (dx, 0.0)), w)
-    return c.x - x
+    return float(arc(start, c.p, w.radius))
 
 
 class TestWater(unittest.TestCase):
@@ -49,28 +53,30 @@ class TestWater(unittest.TestCase):
         w.settings = replace(w.settings, food_per_step=5.0, max_food=10 ** 6)
         for _ in range(400):
             w.spawn_food()
-        in_pond = sum(w.terrain.in_pond(f.x, f.y) for f in w.foods)
+        in_pond = sum(w.terrain.in_pond(f.p) for f in w.foods)
         self.assertGreater(in_pond, 0)
-        self.assertFalse(any(w.terrain.blocked(f.x, f.y, 0.0, swims=True) for f in w.foods))  # never on a rock
+        self.assertFalse(any(w.terrain.blocked(f.p, 0.0, swims=True) for f in w.foods))  # never on a rock
 
     def test_a_pond_does_not_hide_food_but_a_rock_does(self):
         w = pond_world()
         looker = add(w, 15.0, 10.0)
-        looker.vision_width, looker.vision_reach, looker.facing = 120.0, 12.0, (1.0, 0.0)
+        looker.vision_width, looker.vision_reach = 120.0, 12.0
         w.foods.append(Food(at(25.0, 10.0), remaining_duration=-1, energy=10.0))  # beyond the pond
         self.assertIsNotNone(sense(looker, w).food)
-        looker.y, w.foods[0].y = 20.0, 20.0  # beyond the rock
+        looker.p, w.foods[0].p = at(15.0, 20.0), at(25.0, 20.0)  # beyond the rock
+        face(looker, 1.0, 0.0)
         self.assertIsNone(sense(looker, w).food)
 
     def test_it_senses_being_in_water_and_water_ahead(self):
         w = pond_world()
         c = add(w, 15.0, 10.0)
-        c.vision_width, c.vision_reach, c.facing = 120.0, 6.0, (1.0, 0.0)
+        c.vision_width, c.vision_reach = 120.0, 6.0
         v = sense(c, w).vector
         self.assertEqual((v[IN_WATER], v[WATER_SEEN]), (0.0, 1.0))  # on land, a pond ahead
-        c.x = 20.0
+        c.p = at(20.0, 10.0)
         self.assertEqual(sense(c, w).vector[IN_WATER], 1.0)
-        c.x, c.y = 15.0, 20.0
+        c.p = at(15.0, 20.0)
+        face(c, 1.0, 0.0)
         self.assertEqual(sense(c, w).vector[WATER_SEEN], 0.0)  # a rock ahead
 
     def test_newcomers_draw_their_water(self):

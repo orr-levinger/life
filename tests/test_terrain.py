@@ -1,80 +1,88 @@
 import math
 import random
 import unittest
-from unittest import mock
 from dataclasses import replace
+from unittest import mock
 
 import numpy as np
 
 from src.food import Food
 from src.rules import starting_rules
 from src.senses import N_SENSES, sense
+from src.sphere import arc, exp_map, local_frame, random_point
 from src.terrain import Obstacle, Terrain, Tree, make_terrain
-from tests.helpers import at, NO_FOOD, add, make_world
+from tests.helpers import NO_FOOD, add, at, cap, face, make_world, tree
 
-ROCK = Obstacle("rock", ((20.0, 10.0, 2.0),))  # one round rock: x 18-22 at y 10
+ROCK = Obstacle("rock", (cap(20.0, 10.0, 2.0),))  # one round rock: x 18-22 at y 10 on the map
 
 
 def walled(world, obstacles=(ROCK,), trees=()):
-    world.terrain = Terrain(list(obstacles), list(trees))
+    world.terrain = Terrain(list(obstacles), list(trees), world.radius)
     return world
+
+
+def map_distance(p, x, y, R):
+    return float(arc(np.asarray(p), at(x, y, R), R))
 
 
 class TestMakingTerrain(unittest.TestCase):
     def test_a_world_gets_its_obstacles_and_trees_none_on_another(self):
-        rules = {**starting_rules(), "obstacles": 5.0, "trees": 6.0}
-        terrain = make_terrain(rules, random.Random(3), 50.0, 30.0, keep_clear=[(10.0, 10.0, 1.0)])
+        rules = {**starting_rules(), "obstacles": 5.0, "trees": 6.0, "forests": 0.0}
+        clear = at(10.0, 10.0, 37.0)
+        terrain = make_terrain(rules, random.Random(3), 37.0, keep_clear=[(clear, 1.0)])
         self.assertEqual((len(terrain.obstacles), len(terrain.trees)), (5, 6))
-        circles = [c for o in terrain.obstacles for c in o.circles]
-        self.assertTrue(all(0 <= x <= 50 and 0 <= y <= 30 for x, y, _ in circles))
-        self.assertFalse(terrain.blocked(10.0, 10.0, 1.0))  # the spot kept clear
-        self.assertTrue(all(not terrain.blocked(t.x, t.y, 0.0) for t in terrain.trees))
-        sizes = {round(max(c[2] for c in o.circles), 2) for o in terrain.obstacles}
+        self.assertFalse(terrain.blocked(clear, 1.0))  # the spot kept clear
+        self.assertTrue(all(not terrain.blocked(np.array(t.p), 0.0) for t in terrain.trees))
+        sizes = {round(max(c[1] for c in o.caps), 2) for o in terrain.obstacles}
         self.assertGreater(len(sizes), 1)  # of random sizes
 
-    def test_trees_grow_together_in_forests(self):
-        rules = starting_rules()  # a new world: 46 trees in 2 forests of 12
-        terrain = make_terrain(rules, random.Random(4), 120.0, 72.0)
-        self.assertEqual(len(terrain.forest_centres), 2)
+    def test_a_new_planet_has_its_forests(self):
+        rules = {**starting_rules(), "forests": 4.0}
+        terrain = make_terrain(rules, random.Random(4), 37.0)
+        self.assertEqual(len(terrain.forest_centres), 4)
         self.assertGreater(len(terrain.trees), 0.8 * rules["trees"])  # nearly all of them fit
         for t in terrain.trees:
-            self.assertLessEqual(min(math.hypot(t.x - x, t.y - y) for x, y in terrain.forest_centres),
-                                 rules["forest_spread"] + 1e-9)
+            self.assertLessEqual(min(float(arc(np.array(t.p), np.array(c), 37.0)) for c in terrain.forest_centres),
+                                 rules["forest_spread"] + 1e-6)
 
     def test_pond_edges_grow_more_food_than_open_ground(self):
         w = make_world(replace(NO_FOOD, max_food=10 ** 7, food_per_step=6.0, fruit_rate=0.0))
-        w.rules.update({"pond_food_share": 0.0, "pond_edge_food": 2.0, "pond_edge_width": 2.0, "season_depth": 0.0})
-        w.terrain = Terrain([Obstacle("pond", ((25.0, 15.0, 4.0),))], [])
-        with mock.patch.object(type(w), "_fits", lambda self, food, wet=False: not self.terrain.blocked(food.x, food.y, 0.0)):
+        w.rules.update({"planet_radius": 12.0, "pond_food_share": 0.0, "pond_edge_food": 2.0, "pond_edge_width": 2.0,
+                        "season_depth": 0.0})
+        centre = at(0.0, 0.0, 12.0)
+        w.terrain = Terrain([Obstacle("pond", ((tuple(centre), 4.0),))], [], 12.0)
+        with mock.patch.object(type(w), "_fits", lambda self, food, wet=False: not self.terrain.blocked(food.p, 0.0)):
             for _ in range(1000):
                 w.spawn_food()
-        edge = sum(4.0 <= math.hypot(f.x - 25.0, f.y - 15.0) <= 6.0 for f in w.foods)
-        edge_area = math.pi * (6.0 ** 2 - 4.0 ** 2)
-        open_ground = len(w.foods) - edge
-        open_area = 50.0 * 30.0 - math.pi * 6.0 ** 2
-        self.assertGreater(edge / edge_area, 1.6 * open_ground / open_area)  # about twice as dense
+        d = np.array([float(arc(centre, f.p, 12.0)) for f in w.foods])
+        edge = int(np.sum((d >= 4.0) & (d <= 6.0)))
+        cap_area = lambda r: 2 * math.pi * 12.0 ** 2 * (1 - math.cos(r / 12.0))  # noqa: E731
+        edge_area = cap_area(6.0) - cap_area(4.0)
+        open_area = 4 * math.pi * 12.0 ** 2 - cap_area(6.0)
+        self.assertGreater(edge / edge_area, 1.6 * (len(w.foods) - edge) / open_area)  # about twice as dense
 
     def test_the_terrain_round_trips(self):
-        terrain = make_terrain(starting_rules(), random.Random(1), 50.0, 30.0)
+        terrain = make_terrain(starting_rules(), random.Random(1), 37.0)
         back = Terrain.from_state(terrain.state())
-        self.assertEqual((back.obstacles, back.trees), (terrain.obstacles, terrain.trees))
+        self.assertEqual((back.obstacles, back.trees, back.radius), (terrain.obstacles, terrain.trees, terrain.radius))
 
 
 class TestObstacles(unittest.TestCase):
     def test_food_never_grows_on_a_rock(self):
         w = walled(make_world(replace(NO_FOOD, max_food=400, food_per_step=6.0)),
-                   [Obstacle("rock", ((25.0, 15.0, 10.0),))])  # (food grows in ponds: tests/test_water.py)
+                   [Obstacle("rock", (cap(0.0, 0.0, 10.0),))])  # (food grows in ponds: tests/test_water.py)
         for _ in range(60):
             w.spawn_food()
         self.assertTrue(w.foods)
-        self.assertTrue(all(math.hypot(f.x - 25.0, f.y - 15.0) >= 10.0 + f.radius for f in w.foods))
+        self.assertTrue(all(map_distance(f.p, 0.0, 0.0, w.radius) >= 10.0 + f.radius for f in w.foods))
 
     def test_moving_into_an_obstacle_is_refused_and_costs_energy(self):
         w = walled(make_world())
         c = add(w, 17.5, 10.0, size=1.0)
-        before = c.energy
+        start, before = c.p.copy(), c.energy
         c.apply_action(("MOVE", (0.3, 0.0)), w)  # its body would touch the rock
-        self.assertEqual((c.x, c.y, c.moved), (17.5, 10.0, False))
+        np.testing.assert_array_equal(c.p, start)
+        self.assertFalse(c.moved)
         self.assertTrue(c.bumped)
         free = add(w, 5.0, 5.0, size=1.0)
         free_before = free.energy
@@ -84,57 +92,76 @@ class TestObstacles(unittest.TestCase):
     def test_an_obstacle_hides_what_is_behind_it(self):
         w = walled(make_world())
         me = add(w, 15.0, 10.0, size=1.0)
-        me.vision_width, me.vision_reach, me.facing = 120.0, 15.0, (1.0, 0.0)
+        me.vision_width, me.vision_reach = 120.0, 15.0
         w.foods.append(Food(at(25.0, 10.0), remaining_duration=-1, energy=10.0))  # behind the rock
         self.assertIsNone(sense(me, w).food)
         w.foods.append(Food(at(17.0, 12.5), remaining_duration=-1, energy=10.0))  # beside it, in the open
         self.assertIsNotNone(sense(me, w).food)
 
+    def test_a_rock_anywhere_hides_what_is_behind_it(self):
+        rng = random.Random(9)
+        for _ in range(20):
+            centre = random_point(rng)
+            e1, e2 = local_frame(centre)
+            t = Terrain([Obstacle("rock", ((tuple(centre), 2.0),))], [], 37.0)
+            a = exp_map(centre, e1, e2, -6.0, 0.3, 37.0)
+            b = exp_map(centre, e1, e2, 6.0, -0.3, 37.0)
+            aside = exp_map(centre, e1, e2, 6.0, 5.0, 37.0)
+            self.assertTrue(t.sight_blocked(a, b)[0, 0])
+            self.assertFalse(t.sight_blocked(a, aside)[0, 0])
+        opposite = -at(0.0, 0.0, 37.0)  # the point opposite the map's centre
+        e1, e2 = local_frame(opposite)
+        t = Terrain([Obstacle("rock", ((tuple(opposite), 2.0),))], [], 37.0)
+        self.assertTrue(t.sight_blocked(exp_map(opposite, e1, e2, 0.0, -5.0, 37.0), exp_map(opposite, e1, e2, 0.0, 5.0, 37.0))[0, 0])
+
     def test_checking_only_the_pairs_asked_gives_the_same_answer(self):
-        rng = np.random.default_rng(5)
-        terrain = make_terrain(starting_rules(), random.Random(5), 120.0, 72.0)
-        ax, ay = rng.uniform(0, 120, 40), rng.uniform(0, 72, 40)
-        bx, by = rng.uniform(0, 120, 70), rng.uniform(0, 72, 70)
-        mask = rng.random((40, 70)) < 0.2
-        full = terrain.sight_blocked(ax, ay, bx, by)
-        self.assertTrue(full.any() and (~full).any())  # some lines blocked, some open
-        np.testing.assert_array_equal(terrain.sight_blocked(ax, ay, bx, by, only=mask), full & mask)
+        rng = random.Random(5)
+        terrain = make_terrain(starting_rules(), rng, 37.0)
+        a = np.stack([random_point(rng) for _ in range(40)])
+        b = np.stack([random_point(rng) for _ in range(70)])
+        mask = np.random.default_rng(5).random((40, 70)) < 0.2
+        full = terrain.sight_blocked(a, b)
+        self.assertTrue(full.any() and (~full).any())  # some ways blocked, some open
+        np.testing.assert_array_equal(terrain.sight_blocked(a, b, only=mask), full & mask)
 
     def test_an_obstacle_in_its_field_of_vision_is_sensed(self):
         w = walled(make_world())
         me = add(w, 15.0, 10.0, size=1.0)
         me.vision_width, me.vision_reach = 120.0, 5.0
-        me.facing = (1.0, 0.0)
         v = sense(me, w).vector
         self.assertEqual(len(v), N_SENSES)
         self.assertEqual(v[20], 1.0)  # seen
-        self.assertAlmostEqual(v[21], 3.0 / 5.0)  # its edge 3 away, ÷ its vision reach
-        self.assertAlmostEqual(v[22], 1.0)  # ahead
-        me.facing = (-1.0, 0.0)  # looking away: not seen
+        self.assertAlmostEqual(v[21], 3.0 / 5.0, places=4)  # its edge 3 away, ÷ its vision reach
+        self.assertAlmostEqual(v[22], 1.0, places=4)  # ahead
+        face(me, -1.0, 0.0)  # looking away: not seen
         self.assertTrue(np.all(sense(me, w).vector[20:24] == 0.0))
 
 
 class TestTrees(unittest.TestCase):
     def test_a_tree_drops_fruit_near_its_trunk_now_and_then(self):
-        w = walled(make_world(replace(NO_FOOD, max_food=400, fruit_rate=1.0)), [], [Tree(25.0, 15.0, 1.5)])
+        w = walled(make_world(replace(NO_FOOD, max_food=400, fruit_rate=1.0)), [], [tree(25.0, 15.0, 1.5)])
         for _ in range(40):  # a fruit a step, where one fits (not on another)
             w.spawn_food()
         fruit = [f for f in w.foods if f.fruit]
         self.assertGreater(len(fruit), 3)
-        self.assertTrue(all(math.hypot(f.x - 25.0, f.y - 15.0) <= w.rules["fruit_spread"] for f in fruit))
-        none = walled(make_world(replace(NO_FOOD, max_food=400, fruit_rate=0.0)), [], [Tree(25.0, 15.0, 1.5)])
+        self.assertTrue(all(map_distance(f.p, 25.0, 15.0, w.radius) <= w.rules["fruit_spread"] + 1e-6 for f in fruit))
+        none = walled(make_world(replace(NO_FOOD, max_food=400, fruit_rate=0.0)), [], [tree(25.0, 15.0, 1.5)])
         for _ in range(10):
             none.spawn_food()
         self.assertEqual(none.foods, [])
 
     def test_a_creature_under_a_tree_is_seen_only_from_close_by(self):
-        w = walled(make_world(), [], [Tree(25.0, 10.0, 1.5)])
+        w = walled(make_world(), [], [tree(25.0, 10.0, 1.5)])
         hidden = add(w, 25.0, 10.0, size=1.0)
         far = add(w, 20.0, 10.0, size=1.0)
-        far.vision_width, far.vision_reach, far.facing = 120.0, 10.0, (1.0, 0.0)
+        far.vision_width, far.vision_reach = 120.0, 10.0
         self.assertIsNone(sense(far, w).other)  # 5 away: it hides under the tree
         near = add(w, 25.0 - w.rules["hide_reach"] * 0.9, 10.0, size=1.0)
-        near.vision_width, near.vision_reach, near.facing = 120.0, 10.0, (1.0, 0.0)
+        near.vision_width, near.vision_reach = 120.0, 10.0
         self.assertIs(sense(near, w).other, hidden)
         self.assertEqual(sense(hidden, w).vector[24], 1.0)  # it knows it is under a tree
         self.assertEqual(sense(far, w).vector[24], 0.0)
+
+
+if __name__ == "__main__":
+    unittest.main()

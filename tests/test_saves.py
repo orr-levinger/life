@@ -59,7 +59,7 @@ def picture(world):
     """Everything about a world that a save must keep."""
     return {
         "creatures": [(c.id, c.slot, c.x, c.y, c.size, c.policy, c.parent_id, c.generation, c.energy, c.age,
-                       c.lifespan, c.food_eaten, c.last_action, tuple(c.intended_vector), c.earned, c.spent,
+                       c.lifespan, c.food_eaten, c.last_action, tuple(c.intended_vector), c.earned, c.spent, c.moved,
                        None if c.brain is None else tuple(a.tobytes() for a in (c.brain.w1, c.brain.b1, c.brain.w2, c.brain.b2)))
                       for c in world.creatures],
         "foods": [(f.x, f.y, f.energy, f.remaining_duration, f.radius) for f in world.foods],
@@ -539,6 +539,28 @@ class TestSaves(unittest.TestCase):
         self.assertEqual({c.kin for c in loaded.creatures}, {0.5})
         self.assertIn("gene.kin.high", loaded.rules)
         self.assertTrue(all(np.all(c.brain.w1[44:] == 0.0) for c in loaded.creatures))  # how alike: silent at first
+
+    def test_a_format_20_save_gets_water(self):
+        world = make_world(seed=17)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 20
+            for c in about["creatures"]:
+                del c["water"]
+            about["rules"] = {k: v for k, v in about["rules"].items()
+                              if not k.startswith("gene.water") and k not in ("land_penalty", "pond_food_share")}
+            arrays["about"] = np.array(json.dumps(about))
+            arrays["brain.w1"] = arrays["brain.w1"][:, :45, :]  # 45 inputs then
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({c.water for c in loaded.creatures}, {0.0})  # it cannot swim, as before
+        self.assertEqual((loaded.rules["land_penalty"], loaded.rules["pond_food_share"]), (0.7, 0.2))
+        self.assertTrue(all(np.all(c.brain.w1[45:] == 0.0) for c in loaded.creatures))
 
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)

@@ -38,9 +38,9 @@ class TestMakingTerrain(unittest.TestCase):
 
 
 class TestObstacles(unittest.TestCase):
-    def test_food_never_grows_on_an_obstacle(self):
+    def test_food_never_grows_on_a_rock(self):
         w = walled(make_world(replace(NO_FOOD, max_food=400, food_per_step=6.0)),
-                   [Obstacle("pond", ((25.0, 15.0, 10.0),))])
+                   [Obstacle("rock", ((25.0, 15.0, 10.0),))])  # (food grows in ponds: tests/test_water.py)
         for _ in range(60):
             w.spawn_food()
         self.assertTrue(w.foods)

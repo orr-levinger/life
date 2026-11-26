@@ -79,6 +79,7 @@ class Creature:
         self.diet = HAND_MADE["diet"]  # 0 lives on plants, 1 on meat: a gene
         self.calls = round(HAND_MADE["calls"])  # how many kinds of call it can make: a gene
         self.kin = HAND_MADE["kin"]  # how much what happens to those like it counts as its own: a gene
+        self.water = HAND_MADE["water"]  # 0 cannot enter a pond; above 0 it swims at this share of its speed: a gene
         self.called: Optional[Tuple[int, float]] = None  # this step's call: its kind and how far it carries (display)
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
         self.had_baby_at: Optional[int] = None  # the step it last had a baby (display only)
@@ -159,6 +160,12 @@ class Creature:
         self.energy = min(self.energy - living, self.max_energy)
         self._spend(living, world)
 
+    def _pace(self, world: World) -> float:
+        """Its share of its speed where it is: its water in a pond, 1 - water × the land penalty on land."""
+        if world.terrain.in_pond(self.x, self.y):
+            return self.water
+        return 1.0 - self.water * self.rules["land_penalty"]
+
     def _call(self, kind: int, volume: float, world: World) -> None:
         """A call of `kind` (one its genes let it make) at `volume` 0-1: everyone within volume × the call reach hears
         it next step. It costs nothing but the step and being heard."""
@@ -191,15 +198,17 @@ class Creature:
     def _move(self, vector: Tuple[float, float], world: World) -> None:
         dx, dy = vector
         distance = math.hypot(dx, dy)
-        if distance > self.top_speed:
-            dx, dy = dx * self.top_speed / distance, dy * self.top_speed / distance
-            distance = self.top_speed
+        pace = self._pace(world)  # in water × its water, on land slower the more it is a swimmer
+        top, cruise = self.top_speed * pace, self.velocity * pace
+        if distance > top:
+            dx, dy = dx * top / distance, dy * top / distance
+            distance = top
         if distance > 0:
             self.facing = (dx / distance, dy / distance)
         x, y = self.x, self.y
         to_x = min(max(self.x + dx, self.radius), world.width - self.radius)
         to_y = min(max(self.y + dy, self.radius), world.height - self.radius)
-        if world.terrain.blocked(to_x, to_y, self.radius):  # it runs into an obstacle: it stays, and it hurts
+        if world.terrain.blocked(to_x, to_y, self.radius, swims=self.water > 0):  # it runs into an obstacle: it stays, and it hurts
             self.bumped = True
             self.energy -= self.rules["bump_cost"]
             self._spend(self.rules["bump_cost"], world)
@@ -207,7 +216,7 @@ class Creature:
             return
         self.x, self.y = to_x, to_y
         self.moved = (self.x, self.y) != (x, y)  # a step that went somewhere makes a sound
-        sprint = max(1.0, distance / self.velocity) ** self.rules["sprint_power"]  # faster than cruising costs more
+        sprint = max(1.0, distance / max(cruise, 1e-9)) ** self.rules["sprint_power"]  # faster than cruising costs more
         cost = distance * world.settings.move_cost * self.size * sprint  # a bigger body pays more to move
         self.energy -= cost
         self._spend(cost, world)

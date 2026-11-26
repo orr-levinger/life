@@ -19,6 +19,8 @@ FOOD_ANGLE = math.pi / 4  # a move within 45° of food counts as going to it
 CALL_FIRST = 3  # a learner's choices 3.. are its calls (0 move, 1 eat, 2 attack)
 N_CALLS = 10  # kinds of call (the most the calls gene allows)
 KIN_INPUT = 44  # how alike the nearest creature it sees is
+IN_WATER = 45  # it is in a pond
+WATER_SEEN = 46  # the nearest obstacle in its field of vision is a pond
 CALL_INPUTS = 27  # where the heard call starts: its kind (10), how loud (1), from where (2), the voice (4)
 
 
@@ -63,7 +65,7 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
     nearest_seen = np.argmin(np.where(seen, other_d, np.inf), axis=1)
     nearest_heard = np.argmin(np.where(heard, other_d, np.inf), axis=1)
     sheltered = world.terrain.under_tree(me.x, me.y)
-    walls = _obstacles_seen(me, world)
+    walls, water_ahead = _obstacles_seen(me, world)
     calls = _calls_heard(me, world)
 
     sensed = []
@@ -76,6 +78,8 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
         sound = everyone[nearest_heard[i]] if heard[i].any() else None
         vector = _vector(creature, food, other, on_food, sound, walls[i], sheltered[i])
         vector[CALL_INPUTS:CALL_INPUTS + N_CALLS + 7] = calls[i]
+        vector[IN_WATER] = 1.0 if world.terrain.in_pond(creature.x, creature.y) else 0.0
+        vector[WATER_SEEN] = water_ahead[i]
         sensed.append(Senses(vector=vector, food=food, other=other, on_food=on_food, heard=sound))
     return sensed
 
@@ -166,10 +170,10 @@ def _in_sight(me: '_Eyes', world: Any, x: np.ndarray, y: np.ndarray, dx: np.ndar
 
 def _obstacles_seen(me: '_Eyes', world: Any) -> np.ndarray:
     """Each looker's nearest obstacle in its field of vision as inputs (seen, distance to its edge ÷ vision reach, cos
-    and sin of the direction to it), zeros when none is in view."""
-    out = np.zeros((len(me.x), 4))
+    and sin of the direction to it), zeros when none is in view; and whether that obstacle is a pond."""
+    out, wet = np.zeros((len(me.x), 4)), np.zeros(len(me.x))
     if not world.terrain.obstacles:
-        return out
+        return out, wet
     edge, dx, dy = world.terrain.nearest_edges(me.x, me.y)
     centre = np.hypot(dx, dy)
     visible = (edge <= me.reach[:, None]) & me.cone(dx, dy, centre)
@@ -178,7 +182,8 @@ def _obstacles_seen(me: '_Eyes', world: Any) -> np.ndarray:
         j = nearest[i]
         length = max(centre[i, j], 1e-12)
         out[i] = (1.0, edge[i, j] / me.reach[i], dx[i, j] / length, dy[i, j] / length)
-    return out
+        wet[i] = 1.0 if world.terrain.pond_circles[j] else 0.0
+    return out, wet
 
 
 def _sighting(creature: Creature, target: Any, reach: float) -> tuple:

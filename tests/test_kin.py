@@ -15,7 +15,7 @@ from tests.helpers import NO_FOOD, NO_FOOD_ATTACKS, add, make_world
 
 def opposite(a, b, rules):
     """`b` as unlike `a` as the genes allow."""
-    for gene, attr in (("size", "size"), ("diet", "diet"), ("vision_width", "vision_width"),
+    for gene, attr in (("size", "size"), ("diet", "diet"), ("water", "water"), ("vision_width", "vision_width"),
                        ("vision_reach", "vision_reach"), ("hearing", "hearing")):
         low, high = rules[f"gene.{gene}.low"], rules[f"gene.{gene}.high"]
         setattr(a, attr, low)
@@ -37,7 +37,7 @@ class TestKin(unittest.TestCase):
         watcher, other = w.add_newcomer(), w.add_newcomer()
         watcher.x, watcher.y, other.x, other.y = 10.0, 10.0, 12.0, 10.0
         watcher.facing, watcher.vision_width, watcher.vision_reach = (1.0, 0.0), 120.0, 5.0
-        for gene in ("size", "diet", "vision_width", "vision_reach", "hearing"):
+        for gene in ("size", "diet", "water", "vision_width", "vision_reach", "hearing"):
             setattr(other, gene, getattr(watcher, gene))
         if not alike:
             opposite(watcher, other, w.rules)
@@ -79,7 +79,7 @@ class TestKin(unittest.TestCase):
         seen = sense(parent, w)
         self.assertIs(seen.other, child)
         self.assertAlmostEqual(seen.vector[KIN_INPUT], similarity(parent, child, w.rules))
-        self.assertEqual(N_SENSES, KIN_INPUT + 1)
+        self.assertLess(KIN_INPUT, N_SENSES)
 
     def test_newcomers_draw_how_much_they_care(self):
         w = make_world(seed=5)

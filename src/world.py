@@ -26,7 +26,7 @@ Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
 FREE_SPOT_TRIES = 1000  # tries to find a newcomer a spot that no obstacle covers
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
-         "layers", "neurons", "weights", "mutations", "mutation_size", "diet", "calls", "kin")  # a baby changes its parent's `mutations` of them
+         "layers", "neurons", "weights", "mutations", "mutation_size", "diet", "calls", "kin", "water")  # a baby changes its parent's `mutations` of them
 
 
 class World:
@@ -153,6 +153,7 @@ class World:
         newcomer.diet = drawn("diet")
         newcomer.calls = whole("calls")
         newcomer.kin = drawn("kin")
+        newcomer.water = drawn("water")
         newcomer.mutations, newcomer.mutation_size = whole("mutations"), drawn("mutation_size")
         self._brain_size(newcomer)
         self.creatures.append(newcomer)
@@ -172,14 +173,18 @@ class World:
         margin = self.FOOD_RADIUS_MARGIN
         whole = int(self.settings.food_per_step)  # e.g. 2.4 per step: 2 every step and a third 40 % of the time
         extra = self.food_rng.random() < self.settings.food_per_step - whole
+        ponds = self.terrain.pond_circles.any()
         for _ in range(whole + extra):
             x = self.food_rng.uniform(margin, self.width - margin)
             y = self.food_rng.uniform(margin, self.height - margin)
             energy = self.food_rng.uniform(*self.settings.food_energy)
+            wet = ponds and self.food_rng.random() < self.rules["pond_food_share"]  # some grows in a pond
+            if wet:
+                x, y = self.terrain.pond_spot(self.food_rng)
             if len(self.foods) >= int(self.settings.max_food):
                 continue
             food = Food(x, y, remaining_duration=-1, energy=energy)
-            if self._fits(food):
+            if self._fits(food, wet):
                 self.foods.append(food)
                 self.foods_created_this_step.add(id(food))
         for tree in self.terrain.trees:  # each tree drops a fruit now and then, near its trunk
@@ -196,9 +201,9 @@ class World:
         for _ in range(self.PREFILL_STEPS):
             self.spawn_food()
 
-    def _fits(self, food: Food) -> bool:
-        """Food fits where nothing else is and no obstacle stands."""
-        if self.terrain.blocked(food.x, food.y, food.radius):
+    def _fits(self, food: Food, wet: bool = False) -> bool:
+        """Food fits where nothing else is and no obstacle stands (a pond's own food, where no rock stands)."""
+        if self.terrain.blocked(food.x, food.y, food.radius, swims=wet):
             return False
         neighbours = list(self.foods) + (list(self.creatures) if self.evolving else [])
         return all(
@@ -350,6 +355,7 @@ class World:
         baby.mutation_size = self._inherited(parent.mutation_size, "mutation_size", picked, change)
         baby.diet = self._inherited(parent.diet, "diet", picked, change)
         baby.kin = self._inherited(parent.kin, "kin", picked, change)
+        baby.water = self._inherited(parent.water, "water", picked, change)
         low, high = gene_limits(self.rules, "mutations")
         step = self.rng.choice((-1, 1)) if "mutations" in picked else 0  # a count: one more or one fewer
         baby.mutations = int(min(max(parent.mutations + step, low), high))

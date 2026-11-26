@@ -27,7 +27,7 @@ class Rule:
 # its newcomers draw every gene from its newcomer range, and babies copy their parents.
 HAND_MADE = {"fear": 10.0, "love": 10.0, "learns": 0.5, "learning_speed": 3e-4, "mutations": 1.0, "mutation_size": 0.05,
              "neurons": 32.0, "layers": 1.0, "diet": 0.0, "calls": 0.0,
-             "kin": 0.0}  # one made by hand eats plants, never calls, cares for nobody
+             "kin": 0.0, "water": 0.0}  # one made by hand eats plants, never calls, cares for nobody, cannot swim
 
 
 def _gene(name: str, words: str, low: float, high: float, limits: tuple, new: tuple) -> tuple:
@@ -78,6 +78,8 @@ RULES = (
     Rule("obstacle_size_low", "world", "An obstacle's size: at least", 1.0, 0.3, 10.0),
     Rule("obstacle_size_high", "world", "An obstacle's size: at most", 4.0, 0.3, 10.0),
     Rule("trees", "world", "Trees a new world gets", 46.0, 0.0, 200.0),
+    Rule("land_penalty", "body", "A swimmer walks slower on land: × (1 - water × this)", 0.7, 0.0, 1.0),
+    Rule("pond_food_share", "world", "Share of new food that grows in ponds", 0.2, 0.0, 1.0),
     Rule("tree_canopy", "world", "A tree's crown: its radius", 1.5, 0.3, 5.0),
     Rule("fruit_spread", "world", "Fruit falls this far from its tree at most", 2.0, 0.5, 10.0),
     Rule("hide_reach", "senses", "Under a tree, a creature is seen only from this close", 1.0, 0.0, 10.0),
@@ -130,7 +132,8 @@ RULES = (
   + _gene("layers", "Layers", 1.0, 3.0, (1.0, 3.0), new=(1.0, 3.0)) \
   + _gene("diet", "Diet (0 plants, 1 meat)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("calls", "Calls it can make", 0.0, 10.0, (0.0, 10.0), new=(0.0, 0.0)) \
-  + _gene("kin", "Care for kin", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
+  + _gene("kin", "Care for kin", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
+  + _gene("water", "Water (0 land, 1 swimmer)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
 
 RULES += (
     Rule("gene_min_change", "genes", "A changed gene moves by at least up to this share of its range", 0.01, 0.0, 0.2),
@@ -171,6 +174,9 @@ MEANS = {
                    "the size is heard from half as far).",
     "seen_power": "How far a body is seen: the looker's reach × the body's size to this power (0.5: half the size is "
                   "seen from about 0.7 as far).",
+    "land_penalty": "How much slower a swimmer walks on land: its land speed × (1 - its water × this). 0.7: a "
+                    "full swimmer walks at 30 % of its speed.",
+    "pond_food_share": "The share of new food that grows inside ponds, where only swimmers reach it.",
     "call_reach": "How far a call carries at full volume; a quieter call carries volume × this. Everyone within it "
                   "hears it, hunters too.",
     "diet_bite": "How much harder a meat eater hits: a hit takes × (1 + its diet × this). 1: a pure meat eater hits "
@@ -261,6 +267,8 @@ GENE_MEANS = {
                      "way (0.05 = 5 %).",
     "neurons": "How many neurons each brain layer has. Each neuron costs energy every step.",
     "layers": "How many layers its brain has.",
+    "water": "How much it is at home in water: 0 cannot enter a pond; above 0 it can, and swims at this share of "
+             "its speed, but walks slower on land (× 1 - water × the land penalty).",
     "kin": "How much what happens to creatures like it counts as its own: when one it sees or hears gains or "
            "loses energy, it feels this share of it, times how alike their genes are (0 = not at all, 1 = twins).",
     "calls": "How many different calls it can make (0 to 10). A new world's creatures make none; a baby may get one "
@@ -314,7 +322,7 @@ def check(rules: Rules, name: str, value: float) -> Optional[str]:
 EDITABLE_GENES = {"size": "size", "vision_width": "vision_width", "vision_reach": "vision_reach", "hearing": "hearing",
                   "fear_of_death": "fear", "love_of_babies": "love", "learns_from_others": "learns",
                   "learning_speed": "learning_speed", "mutations": "mutations", "mutation_size": "mutation_size",
-                  "diet": "diet", "calls": "calls", "kin": "kin"}
+                  "diet": "diet", "calls": "calls", "kin": "kin", "water": "water"}
 
 
 def check_genes(rules: Rules, genes: object) -> Optional[str]:

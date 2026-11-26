@@ -16,7 +16,7 @@ import numpy as np
 
 from .rules import Rules
 
-KINDS = ("rock", "pond")  # how an obstacle looks; both are the same to the creatures
+KINDS = ("rock", "pond")  # a rock stops everyone and hides what is behind it; a pond stops only who cannot swim
 CIRCLES = (3, 6)  # circles making one obstacle's blob
 PLACE_TRIES = 200  # tries to place one obstacle or tree where it fits
 
@@ -41,6 +41,9 @@ class Terrain:
         self._cx = np.array([c[0] for c in circles])
         self._cy = np.array([c[1] for c in circles])
         self._cr = np.array([c[2] for c in circles])
+        self.pond_circles = np.array([o.kind == "pond" for o in self.obstacles for _ in o.circles], dtype=bool)
+        rock = ~self.pond_circles
+        self._rx, self._ry, self._rr = self._cx[rock], self._cy[rock], self._cr[rock]  # what hides what is behind it
         self._tx = np.array([t.x for t in self.trees])
         self._ty = np.array([t.y for t in self.trees])
         self._tr = np.array([t.canopy for t in self.trees])
@@ -49,32 +52,52 @@ class Terrain:
     def empty() -> Terrain:
         return Terrain([], [])
 
-    def blocked(self, x: float, y: float, radius: float) -> bool:
-        """Whether a body of `radius` at (x, y) would overlap an obstacle."""
-        return bool(self._cr.size and np.any(np.hypot(self._cx - x, self._cy - y) < self._cr + radius))
+    def blocked(self, x: float, y: float, radius: float, swims: bool = False) -> bool:
+        """Whether a body of `radius` at (x, y) would overlap an obstacle (only a rock, for one that `swims`)."""
+        if not self._cr.size:
+            return False
+        overlap = np.hypot(self._cx - x, self._cy - y) < self._cr + radius
+        return bool(np.any(overlap & ~self.pond_circles) if swims else np.any(overlap))
+
+    def in_pond(self, x: float, y: float) -> bool:
+        """Whether the point (x, y) is in a pond."""
+        if not self.pond_circles.any():
+            return False
+        inside = np.hypot(self._cx - x, self._cy - y) < self._cr
+        return bool(np.any(inside & self.pond_circles))
+
+    def pond_spot(self, rng) -> Optional[Tuple[float, float]]:
+        """A random point inside a random pond circle (None when there is no pond)."""
+        ponds = np.nonzero(self.pond_circles)[0]
+        if not len(ponds):
+            return None
+        i = ponds[rng.randrange(len(ponds))]
+        angle, away = rng.uniform(0.0, 2.0 * math.pi), self._cr[i] * math.sqrt(rng.random())
+        return float(self._cx[i] + away * math.cos(angle)), float(self._cy[i] + away * math.sin(angle))
 
     def sight_blocked(self, ax: np.ndarray, ay: np.ndarray, bx: np.ndarray, by: np.ndarray,
                       only: Optional[np.ndarray] = None) -> np.ndarray:
-        """[looker, thing]: whether an obstacle stands between each looker (ax, ay) and each thing (bx, by). With
+        """[looker, thing]: whether a rock stands between each looker (ax, ay) and each thing (bx, by) (a pond hides
+        nothing). With
         `only` ([looker, thing]), just those pairs are checked (the rest come back False): one pass over the few pairs
         within reach and cone instead of every pair."""
         out = np.zeros((len(ax), len(bx)), dtype=bool)
-        if not self._cr.size or not len(ax) or not len(bx):
+        if not self._rr.size or not len(ax) or not len(bx):
             return out
         if only is not None:
             looker, thing = np.nonzero(only)
             px, py = ax[looker], ay[looker]
             dx, dy = bx[thing] - px, by[thing] - py
             length2 = np.maximum(dx * dx + dy * dy, 1e-12)
-            t = np.clip(((self._cx[None, :] - px[:, None]) * dx[:, None] + (self._cy[None, :] - py[:, None]) * dy[:, None])
-                        / length2[:, None], 0.0, 1.0)  # [pair, circle]
-            nearest = np.hypot(px[:, None] + t * dx[:, None] - self._cx[None, :],
-                               py[:, None] + t * dy[:, None] - self._cy[None, :])
-            out[looker, thing] = np.any(nearest < self._cr[None, :], axis=1)
+            t = np.clip(((self._rx[None, :] - px[:, None]) * dx[:, None] + (self._ry[None, :] - py[:, None]) * dy[:, None])
+                        / length2[:, None], 0.0, 1.0)  # [pair, rock circle]
+            nearest = np.hypot(px[:, None] + t * dx[:, None] - self._rx[None, :],
+                               py[:, None] + t * dy[:, None] - self._ry[None, :])
+            out[looker, thing] = np.any(nearest < self._rr[None, :], axis=1)
             return out
         dx, dy = bx[None, :] - ax[:, None], by[None, :] - ay[:, None]  # [L, T]
         length2 = np.maximum(dx * dx + dy * dy, 1e-12)
-        for cx, cy, cr in zip(self._cx, self._cy, self._cr):  # a handful of circles: one array pass each
+        for cx, cy, cr in zip(self._rx, self._ry, self._rr):  # a handful of rock circles: one array pass each
             t = np.clip(((cx - ax)[:, None] * dx + (cy - ay)[:, None] * dy) / length2, 0.0, 1.0)
             nearest = np.hypot(ax[:, None] + t * dx - cx, ay[:, None] + t * dy - cy)
             out |= nearest < cr

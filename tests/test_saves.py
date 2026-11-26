@@ -174,6 +174,25 @@ class TestSaves(unittest.TestCase):
         self.assertEqual((loaded.settings.eat_miss, dial.settings.eat_miss), (0.7, 0.7))
         self.assertEqual((loaded.settings.sprint_power, loaded.settings.bump_cost), (2.0, 0.5))  # today's
 
+    def test_an_old_save_gets_the_rules_added_since(self):  # a rule born after the save starts at its start value
+        world = make_world(seed=4)
+        populate(world, 5)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "old.npz"
+            save_world(path, world, Dial(), {})
+            with np.load(path) as data:
+                arrays = {name: data[name] for name in data.files}
+            about = json.loads(str(arrays["about"]))
+            for name in ("auto_least_nudge", "water_share", "islands"):
+                about["rules"].pop(name)
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez_compressed(path, **arrays)
+            loaded, dial, _ = load_world(path, learner_seed=0)
+        self.assertEqual((loaded.rules["auto_least_nudge"], loaded.rules["water_share"], loaded.rules["islands"]),
+                         (0.01, 0.5, 8.0))
+        dial.rules = loaded.rules
+        self.assertTrue(math.isfinite(dial.level))  # what the runner asks first
+
     def test_a_sphere_save_resumes_the_same_world(self):
         world = make_world(replace(START, max_food=200), seed=23)
         world.rules["planet_radius"] = 12.0

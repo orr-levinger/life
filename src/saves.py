@@ -25,7 +25,7 @@ from .brain import Brain
 from .creature import Creature
 from .dial import Dial, settings_from_state, settings_state
 from .food import Food
-from .rules import ROOM_SLOTS
+from .rules import ROOM_SLOTS, starting_rules
 from .terrain import Terrain
 from .world import World
 
@@ -151,7 +151,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
 
         learner = Learner(ROOM_SLOTS, learner_seed)
         learner.load_state({key[len(LEARNER):]: value for key, value in arrays.items() if key.startswith(LEARNER)})
-    rules = about["rules"]
+    rules = {**starting_rules(), **about["rules"]}  # a rule born after the save starts at its start value
     world = World(rules["planet_radius"], settings_from_state(about["settings"], rules), about["species"],
                   random.Random(), np.random.default_rng(), random.Random(), learner=learner, inherit=about["inherit"],
                   rules=dict(rules))

@@ -476,12 +476,13 @@ class TestLifeAndDeath(unittest.TestCase):
 
     def test_a_death_of_old_age_makes_room_for_a_baby(self):
         w = make_world(species="random")
-        for i in range(MAX_CREATURES):
+        room = round(w.rules["room"])  # the test world's room, full
+        for i in range(room):
             add(w, 1 + (i % 10) * 4.5, 1 + (i // 10) * 3.4, energy=90.0)
         elder = w.creatures[0]
         elder.lifespan, elder.age, elder.energy = 100, 99, 20.0
         w.step()
-        self.assertEqual((len(w.creatures), w.deaths["age"], w.births), (MAX_CREATURES, 1, 1))
+        self.assertEqual((len(w.creatures), w.deaths["age"], w.births), (room, 1, 1))
 
     def test_food_per_step_can_be_a_fraction(self):
         w = make_world(replace(START, food_per_step=0.4, max_food=10 ** 6), evolving=False)
@@ -517,13 +518,14 @@ class TestLifeAndDeath(unittest.TestCase):
 
     def test_births_pause_at_limit(self):
         w = make_world(species="random")
-        for i in range(MAX_CREATURES):
+        room = round(w.rules["room"])  # the test world's room, full
+        for i in range(room):
             add(w, 1 + (i % 10) * 4.5, 1 + (i // 10) * 3.4, energy=90.0)
         w.step()
-        self.assertEqual((len(w.creatures), w.births), (MAX_CREATURES, 0))
+        self.assertEqual((len(w.creatures), w.births), (room, 0))
         w.creatures.pop()
         w.step()
-        self.assertEqual((len(w.creatures), w.births), (MAX_CREATURES, 1))
+        self.assertEqual((len(w.creatures), w.births), (room, 1))
 
     def test_soup_refills_a_dying_world(self):
         w = make_world(NO_FOOD)

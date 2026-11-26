@@ -44,6 +44,15 @@ class TestRules(unittest.TestCase):
         genes = {r.name.split(".")[1] for r in RULES if r.name.startswith("gene.") and not r.name.startswith("gene.weights")}
         self.assertEqual(genes - set(GENE_MEANS), set())
 
+    def test_a_new_world_is_bigger_with_room_for_300(self):
+        from src.rules import ROOM_SLOTS, rule
+        wanted = {"room": (300.0, 300.0), "auto_target": (240.0, 300.0), "first_creatures": (100.0, 300.0),
+                  "soup": (40.0, 300.0), "world_width": (120.0, 200.0), "world_height": (72.0, 120.0),
+                  "obstacles": (35.0, 150.0), "trees": (46.0, 200.0)}
+        for name, (start, high) in wanted.items():
+            self.assertEqual((rule(name).start, rule(name).high), (start, high), name)
+        self.assertEqual(ROOM_SLOTS, 300)  # a learner keeps a slot for each creature there may ever be room for
+
     def test_no_rule_decides_who_is_a_threat(self):
         self.assertNotIn("threat_ratio", {r.name for r in RULES})  # the creatures learn whom to flee or chase
 
@@ -74,7 +83,7 @@ class TestRules(unittest.TestCase):
 
     def test_auto_reads_its_rules(self):
         from src.dial import step_for
-        rules = starting_rules()
+        rules = {**starting_rules(), "auto_target": 64.0}
         self.assertEqual(step_for(72, 0.0, 0.0, 0, rules), 1)  # 8 above the target of 64: one nudge harder
         self.assertEqual(step_for(72, 0.0, 0.0, 0, {**rules, "auto_target": 72.0}), 0)
         self.assertEqual(step_for(72, 0.0, 0.0, 0, {**rules, "auto_per_creatures": 4.0}), 2)

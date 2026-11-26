@@ -29,14 +29,15 @@ from .terrain import Terrain, make_terrain
 from .settings import START, TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 15  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 16  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
 # a rule, the three brain genes (2026-11-24); 10: no rule decides who counts as bigger (2026-11-25); 11: one reach for eating and attacking; 12: how
 # many genes a baby changes and by how much are genes; 13: a newcomer draws every gene from a range; 14: terrain
 # (obstacles and trees), fruit, the senses of an obstacle in view and of being under a tree (25 inputs); 15: a gene
-# changes by a share of its range, at least the smallest change
+# changes by a share of its range, at least the smallest change; 16: a learner keeps a slot for each of up to 300
+# creatures (a world's own rules keep its size and room)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -153,6 +154,9 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         _widen_inputs(arrays, INPUTS_TERRAIN)
     if about.get("format") == 14:
         about = {**about, "format": 15, "rules": {**about["rules"], "gene_min_change": rule("gene_min_change").start}}
+    if about.get("format") == 15:
+        about = {**about, "format": 16}  # its rules stay as they are: its size and its room
+        _more_slots(arrays)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -306,6 +310,19 @@ def _room_to_grow(arrays: Dict[str, np.ndarray]) -> None:
             arrays[f"{LEARNER}{kind}.{name}"] = np.zeros((slots,) + shape)
     arrays[f"{LEARNER}size"] = np.tile([1.0, 32.0, 0.0, 0.0], (slots, 1))
     arrays[f"{LEARNER}inborn_size"] = np.tile([1.0, 32.0, 0.0, 0.0], (slots, 1))
+
+
+def _more_slots(arrays: Dict[str, np.ndarray]) -> None:
+    """A format 15 learner had a slot for each of 80 creatures: the slots up to `ROOM_SLOTS` join empty and free, so
+    its brains are kept as they are."""
+    if f"{LEARNER}free" not in arrays:
+        return
+    slots = arrays[f"{LEARNER}free"].shape[0]
+    for name in list(arrays):
+        if name.startswith(LEARNER) and name != f"{LEARNER}generator":
+            widths = [(0, 0)] * arrays[name].ndim
+            widths[0] = (0, ROOM_SLOTS - slots)
+            arrays[name] = np.pad(arrays[name], widths, constant_values=name == f"{LEARNER}free")
 
 
 def _drop_input(arrays: Dict[str, np.ndarray], index: int) -> None:

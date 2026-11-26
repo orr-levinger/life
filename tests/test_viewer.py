@@ -453,6 +453,12 @@ class TestControlRoom(unittest.TestCase):
         self.assertIsNone(self.server.get(f"/now?run={name}"))  # none written yet
         self.assertEqual(self.server.status("/now?run=..%2F..%2Felsewhere"), 404)
 
+    def test_the_alive_tile_reads_the_room_from_the_rules(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        self.assertNotIn("of 80 room", page)  # no fixed room: each world has its own
+        self.assertIn("rules.room", page)
+
     def test_page_has_live_tiles(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

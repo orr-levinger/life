@@ -37,7 +37,7 @@ from .saves import (SaveError, load_world, random_state, save_header, save_path,
                     set_random_state)
 from .terrain import make_terrain
 from .scoreboard import ROW_KEYS, Scoreboard, Value, migrate_scoreboard, read_rows
-from .rules import ROOM_SLOTS
+from .rules import ROOM_SLOTS, starting_rules
 from .world import INHERIT, World
 
 WIDTH, HEIGHT = 50, 30
@@ -346,7 +346,8 @@ def _new_world(args: argparse.Namespace, rules: Dict[str, float]) -> Tuple[World
         learner = Learner(ROOM_SLOTS, args.seed)
     dial = Dial(max_level=args.max_level)
     dial.turn_to(args.level)
-    world = World(WIDTH, HEIGHT, dial.settings, policy, random.Random(args.seed),
+    size = {**starting_rules(), **rules}  # the starting size unless the owner changed it
+    world = World(size["world_width"], size["world_height"], dial.settings, policy, random.Random(args.seed),
                   np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
                   inherit=args.inherit)
     world.change_rules(rules)

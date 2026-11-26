@@ -67,6 +67,16 @@ class TestObstacles(unittest.TestCase):
         w.foods.append(Food(17.0, 12.5, remaining_duration=-1, energy=10.0))  # beside it, in the open
         self.assertIsNotNone(sense(me, w).food)
 
+    def test_checking_only_the_pairs_asked_gives_the_same_answer(self):
+        rng = np.random.default_rng(5)
+        terrain = make_terrain(starting_rules(), random.Random(5), 120.0, 72.0)
+        ax, ay = rng.uniform(0, 120, 40), rng.uniform(0, 72, 40)
+        bx, by = rng.uniform(0, 120, 70), rng.uniform(0, 72, 70)
+        mask = rng.random((40, 70)) < 0.2
+        full = terrain.sight_blocked(ax, ay, bx, by)
+        self.assertTrue(full.any() and (~full).any())  # some lines blocked, some open
+        np.testing.assert_array_equal(terrain.sight_blocked(ax, ay, bx, by, only=mask), full & mask)
+
     def test_an_obstacle_in_its_field_of_vision_is_sensed(self):
         w = walled(make_world())
         me = add(w, 15.0, 10.0, size=1.0)

@@ -17,7 +17,7 @@ from src.learner import Learner
 from src.saves import SAVE_FORMAT, SaveError, load_world, save_world, saves_of
 from src.rules import ROOM_SLOTS as MAX_CREATURES
 from src.settings import START
-from tests.helpers import make_world, populate
+from tests.helpers import make_world, populate, small_world
 from tests.test_learner import live
 from src.brain import N_SENSES
 from src.rules import rule
@@ -39,7 +39,7 @@ def before_rules(about):
 
 
 def quiet_run(argv):
-    with contextlib.redirect_stdout(io.StringIO()):
+    with small_world(), contextlib.redirect_stdout(io.StringIO()):  # the small test world, whatever the starting rules
         return run(parse_args(argv))
 
 
@@ -395,6 +395,38 @@ class TestSaves(unittest.TestCase):
             self.assertEqual(c.neurons, 32)
         self.assertEqual(loaded.rules["neuron_cost"], 0.0005)
 
+    def test_a_format_15_save_with_80_slots_gets_room_for_300(self):
+        learner = Learner(80, 0)  # a format 15 learner had a slot for each of 80 creatures
+        world = make_world(seed=12, learner=learner, species="learner")
+        populate(world, 3)
+        for creature in world.creatures:
+            live(learner, creature.slot, 65)
+        learner.update()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 15
+            about["rules"] = {**about["rules"], "room": 80.0, "auto_target": 64.0, "world_width": 50.0,
+                              "world_height": 30.0}
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        before, after = learner.state(), loaded.learner.state()
+        self.assertEqual(loaded.learner.slots, 300)
+        for key in before:
+            if key == "generator":
+                continue
+            self.assertEqual(after[key].shape[0], 300, key)
+            np.testing.assert_array_equal(after[key][:80], before[key], err_msg=key)  # its 80 brains unchanged
+        self.assertTrue(after["free"][80:].all())  # the 220 new slots are empty and free
+        for c in world.creatures:
+            np.testing.assert_array_equal(loaded.learner.current(c.slot).w1, learner.current(c.slot).w1)
+        self.assertEqual({k: loaded.rules[k] for k in ("room", "auto_target", "world_width", "world_height")},
+                         {"room": 80.0, "auto_target": 64.0, "world_width": 50.0, "world_height": 30.0})
+
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)
@@ -424,7 +456,7 @@ class TestSaves(unittest.TestCase):
             arrays["brain.w1"] = np.insert(arrays["brain.w1"], 16, 0.0, axis=1)  # 21 inputs then: a heard size
             np.savez(path, **arrays)
             loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual(loaded.rules, starting_rules())
+        self.assertEqual(loaded.rules, {**starting_rules(), "world_width": 50.0, "world_height": 30.0})  # at its own size
 
     def test_a_format_4_brain_gets_four_silent_pain_inputs(self):
         world = make_world(seed=7)

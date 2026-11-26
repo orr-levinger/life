@@ -31,5 +31,6 @@ learning during life and evolution across generations, in a world that starts ea
   simple check that could prove it wrong.
 - Plain words, short answers, one question at a time. Explain like to a smart person who is not a programmer.
 - Specs in `docs/superpowers/specs/`, plans in `docs/superpowers/plans/`. No code without an approved spec and plan.
-- Tests: `python -m unittest discover tests`. Runs: `python -m src.evolve`. Python environment:
+- Tests: `python scripts/run_tests.py` (every test file, 4 at a time; it fails past 5 minutes — the owner, 2026-11-26:
+  "hard limits for tests! 5 minutes!"). Never a full life simulation as a test: a small hand-made world, few steps. Runs: `python -m src.evolve`. Python environment:
   `C:\Users\Administrator\.venvs\life` on the Windows box.

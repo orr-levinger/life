@@ -714,8 +714,9 @@ function updateTiles(state) {
   };
   set("step", n.step.toLocaleString(), n.speed === null ? (run.paused ? "paused" : "") : `${Math.round(n.speed)} steps a second`,
       `How many steps this world has lived. It runs ${n.speed === null ? "-" : Math.round(n.speed)} steps a second right now.`);
-  set("alive", n.alive === null ? "-" : n.alive, "of 80 room",
-      `${n.alive} creatures are alive. The world has room for 80; when it is full, no more babies are born until someone dies.`,
+  const room = state.now && state.now.rules ? Math.round(state.now.rules.room) : "-";  // each world has its own room
+  set("alive", n.alive === null ? "-" : n.alive, `of ${room} room`,
+      `${n.alive} creatures are alive. The world has room for ${room}; when it is full, no more babies are born until someone dies.`,
       n.alive !== null && n.alive < 30 ? "bad" : "");
   set("energy", n.fed === null ? "-" : `${n.fed} %`, n.fedBefore === null ? "of a full tank" : `${n.fed >= n.fedBefore ? "up" : "down"} from ${n.fedBefore} %`,
       `On average each creature has ${n.fed} % of a full tank of energy. At 70 % a creature has a baby; past its lifespan, ` +

@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -53,10 +53,24 @@ class Terrain:
         """Whether a body of `radius` at (x, y) would overlap an obstacle."""
         return bool(self._cr.size and np.any(np.hypot(self._cx - x, self._cy - y) < self._cr + radius))
 
-    def sight_blocked(self, ax: np.ndarray, ay: np.ndarray, bx: np.ndarray, by: np.ndarray) -> np.ndarray:
-        """[looker, thing]: whether an obstacle stands between each looker (ax, ay) and each thing (bx, by)."""
+    def sight_blocked(self, ax: np.ndarray, ay: np.ndarray, bx: np.ndarray, by: np.ndarray,
+                      only: Optional[np.ndarray] = None) -> np.ndarray:
+        """[looker, thing]: whether an obstacle stands between each looker (ax, ay) and each thing (bx, by). With
+        `only` ([looker, thing]), just those pairs are checked (the rest come back False): one pass over the few pairs
+        within reach and cone instead of every pair."""
         out = np.zeros((len(ax), len(bx)), dtype=bool)
         if not self._cr.size or not len(ax) or not len(bx):
+            return out
+        if only is not None:
+            looker, thing = np.nonzero(only)
+            px, py = ax[looker], ay[looker]
+            dx, dy = bx[thing] - px, by[thing] - py
+            length2 = np.maximum(dx * dx + dy * dy, 1e-12)
+            t = np.clip(((self._cx[None, :] - px[:, None]) * dx[:, None] + (self._cy[None, :] - py[:, None]) * dy[:, None])
+                        / length2[:, None], 0.0, 1.0)  # [pair, circle]
+            nearest = np.hypot(px[:, None] + t * dx[:, None] - self._cx[None, :],
+                               py[:, None] + t * dy[:, None] - self._cy[None, :])
+            out[looker, thing] = np.any(nearest < self._cr[None, :], axis=1)
             return out
         dx, dy = bx[None, :] - ax[:, None], by[None, :] - ay[:, None]  # [L, T]
         length2 = np.maximum(dx * dx + dy * dy, 1e-12)

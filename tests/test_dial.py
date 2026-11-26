@@ -7,7 +7,22 @@ from src.settings import START, Settings
 
 from src.rules import rule  # noqa: E402
 from src.rules import starting_rules  # noqa: E402
-RULES = starting_rules()
+from unittest import mock  # noqa: E402
+
+from tests.helpers import SMALL_WORLD  # noqa: E402
+
+RULES = {**starting_rules(), **SMALL_WORLD}  # Auto's arithmetic is checked around a target of 64
+_RULES = mock.patch("src.dial.starting_rules", lambda: dict(RULES))  # a new Dial starts on them too
+
+
+def setUpModule():
+    _RULES.start()
+
+
+def tearDownModule():
+    _RULES.stop()
+
+
 TARGET_ALIVE, HUNTERS_AT, MAX_NUDGES = RULES["auto_target"], RULES["auto_hunters_at"], round(RULES["auto_max_nudges"])
 EASY = (TARGET_ALIVE + 8, 0.0, 0.0, 0)  # 8 above the target, steady: one nudge harder
 HARD = (TARGET_ALIVE - 8, 0.0, 0.0, 0)  # 8 below the target, steady: one nudge easier

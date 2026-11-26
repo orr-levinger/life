@@ -44,7 +44,7 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
         food_d = np.hypot(food_dx, food_dy)
         food_edge = food_d - np.array([f.radius for f in foods])[None, :]  # distance to each food's edge
         food_seen = (food_d <= me.reach[:, None]) & me.cone(food_dx, food_dy, food_d)
-        food_seen &= ~world.terrain.sight_blocked(me.x, me.y, food_x, food_y)  # nothing seen through an obstacle
+        food_seen &= ~world.terrain.sight_blocked(me.x, me.y, food_x, food_y, only=food_seen)  # nothing seen through an obstacle
         nearest_food = np.argmin(np.where(food_seen, food_d, np.inf), axis=1)
         touching = np.argmin(food_edge, axis=1)
     ids = np.array([c.id for c in everyone])
@@ -118,7 +118,7 @@ def _in_sight(me: '_Eyes', world: Any, x: np.ndarray, y: np.ndarray, dx: np.ndar
     """[looker, creature]: within its vision reach and cone, no obstacle between, and not hidden under a tree's crown
     (one under a crown is seen only from within the hide reach)."""
     sees = (distance <= me.reach[:, None]) & me.cone(dx, dy, distance)
-    sees &= ~world.terrain.sight_blocked(me.x, me.y, x, y)
+    sees &= ~world.terrain.sight_blocked(me.x, me.y, x, y, only=sees)
     hidden = world.terrain.under_tree(x, y)[None, :] & (distance > world.rules["hide_reach"])
     return sees & ~hidden
 

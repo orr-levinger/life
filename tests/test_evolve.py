@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from src import control as control_module
+from tests.helpers import SMALL_WORLD, small_world
 from src.control import Control, read_control, write_control
 from src.dial import Dial, rates, value, with_value
 from src.evolve import _Knobs, _new_world, parse_args, run
@@ -16,15 +17,15 @@ from src.scoreboard import ROW_KEYS
 from src.settings import START
 from src.rules import rule, starting_rules
 
-TARGET_ALIVE, REVIEW_EVERY = rule("auto_target").start, round(rule("auto_every").start)
+TARGET_ALIVE, REVIEW_EVERY = SMALL_WORLD["auto_target"], round(rule("auto_every").start)  # the small test world
 CONTROL_EVERY, ROW_EVERY = round(rule("control_every").start), round(rule("row_every").start)
-FIRST_CREATURES = round(rule("first_creatures").start)
+FIRST_CREATURES = round(SMALL_WORLD["first_creatures"])
 
 EXAM_COLUMNS = ("intelligence", "wanderers")
 
 
 def quiet_run(argv):
-    with contextlib.redirect_stdout(io.StringIO()):
+    with small_world(), contextlib.redirect_stdout(io.StringIO()):  # the small test world, whatever the starting rules
         return run(parse_args(argv))
 
 
@@ -238,7 +239,7 @@ class TestEvolve(unittest.TestCase):
         argv = ["--seed", "2", "--steps", "3000", "--species", "instinct", "--out"]
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
             examined = read_rows(quiet_run(argv + [a]))
-            with mock.patch("src.world.starting_rules", lambda: {**starting_rules(), "exam_every": 10.0 ** 9}):
+            with mock.patch.dict(SMALL_WORLD, {"exam_every": 10.0 ** 9}):  # the same small world, never examined
                 unexamined = read_rows(quiet_run(argv + [b]))
         self.assertNotEqual(at_reviews(examined)[1]["intelligence"], "")
         self.assertEqual({row["intelligence"] for row in unexamined}, {""})
@@ -389,7 +390,7 @@ class TestEvolve(unittest.TestCase):
     def test_now_never_changes_the_world(self):
         argv = ["--seed", "2", "--steps", "500", "--species", "instinct", "--out"]
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
-            with mock.patch("src.world.starting_rules", lambda: {**starting_rules(), "now_seconds": 0.0}):  # every 25 steps
+            with mock.patch.dict(SMALL_WORLD, {"now_seconds": 0.0}):  # every 25 steps
                 with_now = quiet_run(argv + [a]).read_text()
             with mock.patch("src.evolve.world_now", return_value={}) as asked, mock.patch("src.evolve.write_json"):
                 without = quiet_run(argv + [b]).read_text()  # never looked at, never written
@@ -457,3 +458,9 @@ class TestNextWorldRules(unittest.TestCase):
         world, _ = _new_world(args, {"first_creatures": 5.0, "world_width": 30.0})
         self.assertEqual((len(world.creatures), world.width), (5, 30.0))
         self.assertTrue(all(c.x <= 30.0 for c in world.creatures))
+
+    def test_a_new_world_has_the_starting_size(self):
+        args = parse_args(["--seed", "1", "--species", "instinct", "--steps", "10"])
+        world, _ = _new_world(args, {})  # the owner changed nothing: the starting rules' size, 120 x 72
+        self.assertEqual((world.width, world.height), (120.0, 72.0))
+        self.assertTrue(all(c.x <= 120.0 and c.y <= 72.0 for c in world.creatures))

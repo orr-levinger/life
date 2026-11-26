@@ -27,7 +27,10 @@
   from others → antennae; eyes on the front; armour → plates; stealth → paler, less shiny; water → fins. Cones, hearing
   and call rings are drawn on the ground around them.
 - **Speed:** the test drew the full scene in 19 ms a frame on this box (52 a second); 3D creatures and rocks must keep a
-  frame under 33 ms here (30 a second) with 600 alive, measured by drawing frames back to back.
+  frame under 33 ms here (30 a second) with 600 alive, measured by drawing frames back to back. A look test with 3D
+  creatures (body, head, eyes, legs, collar, quills as separate parts, ~1,150 triangles each) took 52–59 ms to draw and
+  50–80 ms to move: so each creature is one merged, low-detail model (about 150 triangles, its gene parts included),
+  and creatures are re-placed only when the world sends a new picture, not every frame.
 
 ## Intent
 

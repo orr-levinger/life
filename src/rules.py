@@ -73,7 +73,13 @@ RULES = (
     Rule("corpse_energy", "senses", "A corpse's food, × the prey's size", 8.0, 0.0, 50.0),
     Rule("corpse_steps", "senses", "A corpse lasts this many steps", 5.0, 1.0, 100.0),
     Rule("first_creatures", "world", "A new world starts with this many creatures", 200.0, 1.0, 600.0),
-    Rule("obstacles", "world", "Obstacles (rocks and ponds) a new world gets", 70.0, 0.0, 300.0),
+    Rule("obstacles", "world", "Rocks a new world gets", 70.0, 0.0, 300.0),
+    Rule("water_share", "world", "Share of a new planet under water", 0.5, 0.0, 0.8),
+    Rule("islands", "world", "Islands a new planet gets", 8.0, 0.0, 30.0),
+    Rule("island_gap", "world", "An island is at least this far from other land", 6.0, 0.0, 20.0),
+    Rule("rivers", "world", "Rivers a new planet gets", 3.0, 0.0, 10.0),
+    Rule("river_crossings", "world", "Shallow crossings on each river", 2.0, 0.0, 6.0),
+    Rule("river_width", "world", "A river's width", 1.5, 0.5, 4.0),
     Rule("obstacle_size_low", "world", "An obstacle's size: at least", 1.0, 0.3, 10.0),
     Rule("obstacle_size_high", "world", "An obstacle's size: at most", 4.0, 0.3, 10.0),
     Rule("trees", "world", "Trees a new world gets", 92.0, 0.0, 400.0),
@@ -200,6 +206,12 @@ MEANS = {
     "pond_edge_food": "How much thicker food grows on the land near a pond's edge than on open ground (2 = twice "
                       "as thick).",
     "pond_edge_width": "How far out from a pond's edge the rich ground reaches.",
+    "water_share": "How much of a new planet is water: seas, lakes and rivers (0.5: half). Only swimmers go in.",
+    "islands": "How many islands a new planet gets, out in open water, cut off from the other land.",
+    "island_gap": "How far an island lies from any other land at least: walkers can never reach it.",
+    "rivers": "How many rivers a new planet gets, each running from inland down to the sea or a lake.",
+    "river_crossings": "How many shallow spots each river has, where walkers can cross it.",
+    "river_width": "How wide a river is.",
     "exam_radius": "How big the exam's own planet is (10.9: the ground of the old 50 × 30 exam; a new world's "
                    "size never changes the exam).",
     "year_steps": "How many steps a year lasts: food and fruit grow most a quarter into it and least three "
@@ -231,7 +243,7 @@ MEANS = {
     "corpse_energy": "When a creature dies, it leaves food worth this × its size.",
     "corpse_steps": "How many steps a dead creature's food stays before it is gone.",
     "first_creatures": "How many creatures a brand-new world starts with.",
-    "obstacles": "How many rocks and ponds a new world gets. Nothing can enter them, nothing grows on them, nobody sees "
+    "obstacles": "How many rocks a new world gets. Nothing can enter them, nothing grows on them, nobody sees "
                  "through them.",
     "obstacle_size_low": "The smallest an obstacle can be (about its radius). Each gets a random size and shape.",
     "obstacle_size_high": "The biggest an obstacle can be (about its radius).",

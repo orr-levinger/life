@@ -37,6 +37,17 @@ class TestRules(unittest.TestCase):
         self.assertIn("gene.mutations.high", names)
         self.assertIn("gene.mutation_size.high", names)
 
+    def test_the_water_rules(self):  # seas, islands and rivers (the owner, 2026-11-26)
+        from src.rules import means
+        by_name = {r.name: r for r in RULES}
+        want = {"water_share": (0.5, 0.0, 0.8), "islands": (8.0, 0.0, 30.0), "island_gap": (6.0, 0.0, 20.0),
+                "rivers": (3.0, 0.0, 10.0), "river_crossings": (2.0, 0.0, 6.0), "river_width": (1.5, 0.5, 4.0)}
+        for name, (start, low, high) in want.items():
+            r = by_name[name]
+            self.assertEqual((r.start, r.low, r.high, r.group), (start, low, high, "world"), name)
+            self.assertGreater(len(means(name)), 15, name)
+        self.assertNotIn("pond", by_name["obstacles"].words)  # obstacles are rocks now
+
     def test_every_rule_and_gene_says_what_it_means(self):
         from src.rules import GENE_MEANS, means
         for r in RULES:

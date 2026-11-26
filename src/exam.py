@@ -15,6 +15,7 @@ import numpy as np
 
 from .brain import Brain
 from .creature import Creature, full_tank
+from .sphere import random_point
 from .rules import Rules, starting_rules
 from .settings import Settings
 from .world import World
@@ -48,17 +49,17 @@ def _exam_world(policy: str, brains: Sequence[Any], sizes: Sequence[float], seed
         learner = Learner(len(sizes), seed)
         for weights in brains:  # a fresh learner hands out slots 0, 1, 2 … in order
             learner.allocate(weights, lr=0.0)
-    exam_rules = {**starting_rules(), "world_width": rules["exam_width"], "world_height": rules["exam_height"],
-                  **EXAM_BODIES}  # its own size, and bodies as they were: the test stays the same
+    exam_rules = {**starting_rules(), "planet_radius": rules["exam_radius"],
+                  **EXAM_BODIES}  # its own small planet, and bodies as they were: the test stays the same
     world = World(exam_rules["planet_radius"], exam_settings(rules), policy,
                   random.Random(seed + 2), np.random.default_rng(seed), random.Random(seed + 1), evolving=False,
                   learner=learner, rules=exam_rules)
     world.prefill_food()
     spots = random.Random(seed)
     for slot, (brain, size) in enumerate(zip(brains, sizes)):
-        x, y = spots.uniform(1.0, world.width - 1.0), spots.uniform(1.0, world.height - 1.0)
+        spot = random_point(spots)
         full = full_tank(size, world.rules)
-        world.add_creature(Creature(world.next_id(), x, y, size, full * rules["exam_start_share"], policy,
+        world.add_creature(Creature(world.next_id(), spot, size, full * rules["exam_start_share"], policy,
                                     brain if policy == "brain" else None,
                                     slot=slot if policy == "learner" else None, rules=world.rules))
     return world

@@ -23,21 +23,21 @@ def brains(n: int, seed: int = 0):
 
 
 class TestExam(unittest.TestCase):
-    def test_the_exam_world_stays_as_it_was(self):
+    def test_the_exam_planet_stays_as_it_was(self):
         from src.exam import _exam_world
         from src.rules import starting_rules
         world = _exam_world("random", [None, None], [1.0, 2.0], 0, starting_rules())
-        self.assertEqual((world.width, world.height), (50.0, 30.0))  # whatever size a new world has
+        self.assertEqual(world.radius, 10.9)  # its own small planet (the 50 × 30 exam's ground), whatever a new one's
         self.assertEqual([c.max_energy for c in world.creatures], [100.0, 200.0])  # its bodies as they were
         self.assertAlmostEqual(world.creatures[1].velocity, 0.125)
 
     def test_copies_start_identical(self):
         with_brains, with_walkers = exam_worlds(brains(3), [0.5, 1.0, 2.0], seed=4, rules=RULES)
         self.assertGreater(len(with_brains.foods), 0)
-        self.assertEqual([(f.x, f.y, f.energy) for f in with_brains.foods],
-                         [(f.x, f.y, f.energy) for f in with_walkers.foods])
-        self.assertEqual([(c.x, c.y, c.size) for c in with_brains.creatures],
-                         [(c.x, c.y, c.size) for c in with_walkers.creatures])
+        self.assertEqual([(tuple(f.p), f.energy) for f in with_brains.foods],
+                         [(tuple(f.p), f.energy) for f in with_walkers.foods])
+        self.assertEqual([(tuple(c.p), c.size) for c in with_brains.creatures],
+                         [(tuple(c.p), c.size) for c in with_walkers.creatures])
         self.assertEqual({c.policy for c in with_brains.creatures}, {"brain"})
         self.assertEqual({c.policy for c in with_walkers.creatures}, {"random"})
 

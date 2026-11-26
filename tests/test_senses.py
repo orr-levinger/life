@@ -49,15 +49,6 @@ class TestSenses(unittest.TestCase):
         self.assertEqual(s.vector[3], 0.0)
         self.assertIsNone(s.food)
 
-    def test_family_is_invisible(self):
-        parent = creature(10, 10, id_=1)
-        child = creature(11, 10, id_=2, parent_id=1)
-        stranger = creature(12, 10, id_=3)
-        s = sense(parent, world([parent, child, stranger]))
-        self.assertIs(s.other, stranger)
-        self.assertEqual(s.vector[7], 1.0)
-        self.assertAlmostEqual(s.vector[8], 2.0 / 3.0)
-
     def test_relative_size_clipped(self):
         small = creature(10, 10, size=0.5, id_=1)
         big = creature(11, 10, size=2.0, id_=2)

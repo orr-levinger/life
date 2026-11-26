@@ -405,14 +405,6 @@ class TestHunting(unittest.TestCase):
         self.assertEqual(hunter.last_action, "ATTACK_MISS")
         self.assertEqual(prey.energy, 50.0)
 
-    def test_family_cannot_be_hurt(self):
-        w = make_world(NO_FOOD_ATTACKS)
-        parent = add(w, 10, 10, size=2.0, energy=100.0)
-        child = add(w, 11, 10, size=1.0, energy=50.0, parent_id=parent.id)
-        parent.apply_action(("ATTACK", child), w)
-        self.assertEqual(child.energy, 50.0)
-        self.assertEqual(parent.last_action, "ATTACK_MISS")
-
 
 class TestLifeAndDeath(unittest.TestCase):
     def test_energy_out_is_death_from_the_start(self):

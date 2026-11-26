@@ -26,7 +26,8 @@ class Rule:
 # A creature made by hand, outside a world (the tests, the yardstick), gets these genes; the world never uses them:
 # its newcomers draw every gene from its newcomer range, and babies copy their parents.
 HAND_MADE = {"fear": 10.0, "love": 10.0, "learns": 0.5, "learning_speed": 3e-4, "mutations": 1.0, "mutation_size": 0.05,
-             "neurons": 32.0, "layers": 1.0, "diet": 0.0, "calls": 0.0}  # one made by hand eats plants, never calls
+             "neurons": 32.0, "layers": 1.0, "diet": 0.0, "calls": 0.0,
+             "kin": 0.0}  # one made by hand eats plants, never calls, cares for nobody
 
 
 def _gene(name: str, words: str, low: float, high: float, limits: tuple, new: tuple) -> tuple:
@@ -128,7 +129,8 @@ RULES = (
   + _gene("neurons", "Neurons in a layer", 1.0, 64.0, (1.0, 64.0), new=(8.0, 64.0)) \
   + _gene("layers", "Layers", 1.0, 3.0, (1.0, 3.0), new=(1.0, 3.0)) \
   + _gene("diet", "Diet (0 plants, 1 meat)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
-  + _gene("calls", "Calls it can make", 0.0, 10.0, (0.0, 10.0), new=(0.0, 0.0))
+  + _gene("calls", "Calls it can make", 0.0, 10.0, (0.0, 10.0), new=(0.0, 0.0)) \
+  + _gene("kin", "Care for kin", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
 
 RULES += (
     Rule("gene_min_change", "genes", "A changed gene moves by at least up to this share of its range", 0.01, 0.0, 0.2),
@@ -259,6 +261,8 @@ GENE_MEANS = {
                      "way (0.05 = 5 %).",
     "neurons": "How many neurons each brain layer has. Each neuron costs energy every step.",
     "layers": "How many layers its brain has.",
+    "kin": "How much what happens to creatures like it counts as its own: when one it sees or hears gains or "
+           "loses energy, it feels this share of it, times how alike their genes are (0 = not at all, 1 = twins).",
     "calls": "How many different calls it can make (0 to 10). A new world's creatures make none; a baby may get one "
              "more or one fewer. No call means anything until evolution gives it a meaning.",
     "diet": "What it lives on: 0 = plants and fruit only, 1 = meat only (corpses and hits). In between it gets that "
@@ -310,7 +314,7 @@ def check(rules: Rules, name: str, value: float) -> Optional[str]:
 EDITABLE_GENES = {"size": "size", "vision_width": "vision_width", "vision_reach": "vision_reach", "hearing": "hearing",
                   "fear_of_death": "fear", "love_of_babies": "love", "learns_from_others": "learns",
                   "learning_speed": "learning_speed", "mutations": "mutations", "mutation_size": "mutation_size",
-                  "diet": "diet", "calls": "calls"}
+                  "diet": "diet", "calls": "calls", "kin": "kin"}
 
 
 def check_genes(rules: Rules, genes: object) -> Optional[str]:

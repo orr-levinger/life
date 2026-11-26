@@ -29,7 +29,7 @@ from .terrain import Terrain, make_terrain
 from .settings import START, TODAY_SENSES
 from .world import World
 
-SAVE_FORMAT = 19  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
+SAVE_FORMAT = 20  # 2: Auto's state keeps the owner's hunters switch; 3: each creature's energy earned and spent;
 # 4: each creature's senses (a vision cone and hearing) and 17 brain inputs; 5: each creature's values and its pain,
 # and 21 brain inputs; 6: the world's rules; 7: cones at most 120°, hearing without size (20 inputs), vision and
 # hearing priced apart, the sprint's power; 8: the brain's size in the genes, room for 3 layers of 64; 9: every number
@@ -39,7 +39,8 @@ SAVE_FORMAT = 19  # 2: Auto's state keeps the owner's hunters switch; 3: each cr
 # changes by a share of its range, at least the smallest change; 16: a learner keeps a slot for each of up to 300
 # creatures (a world's own rules keep its size and room); 17: size by curves (six powers); 18: the diet
 # gene, meat (a corpse), the senses of meat seen and of its own diet (27 inputs); 19: calls (a gene, 10 kinds
-# closed above it, a volume), the heard call (44 inputs)
+# closed above it, a volume), the heard call (44 inputs); 20: care for kin (a gene), family seen and attacked like
+# anyone, how alike the one it sees is (45 inputs)
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
 LEARNER = "learner."
@@ -47,6 +48,7 @@ INPUTS_HEARD = 5  # format 4: the brain hears (inputs 13-17)
 INPUTS_PAIN = 4  # format 5: the brain feels pain (inputs 18-21)
 INPUTS_TERRAIN = 5  # format 14: an obstacle in view (4 inputs) and being under a tree (1)
 INPUTS_DIET = 2  # format 18: the nearest food it sees is meat, its own diet
+INPUTS_KIN = 1  # format 20: how alike the nearest creature it sees is
 INPUTS_CALL = 17  # format 19: the loudest call heard: its kind (10), how loud, from where (2), the voice (4)
 HEARD_SIZE = 16  # format 7: the heard size (input 17, from 0: 16) leaves the brain
 
@@ -99,7 +101,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                        "vision_reach": c.vision_reach, "hearing": c.hearing, "facing": list(c.facing),
                        "fear_of_death": c.fear_of_death, "love_of_babies": c.love_of_babies,
                        "learns_from_others": c.learns_from_others, "mutations": c.mutations,
-                       "mutation_size": c.mutation_size, "diet": c.diet, "calls": c.calls,
+                       "mutation_size": c.mutation_size, "diet": c.diet, "calls": c.calls, "kin": c.kin,
                        "hurt": None if c.hurt is None else list(c.hurt)}
                       for c, brain in zip(world.creatures, brain_of)],
         "foods": [{"x": f.x, "y": f.y, "energy": f.energy, "remaining_duration": f.remaining_duration, "fruit": f.fruit,
@@ -172,6 +174,10 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         about = {**about, "format": 19, "rules": rules, "creatures": [{**c, "calls": 0} for c in about["creatures"]]}
         _widen_inputs(arrays, INPUTS_CALL)
         _calls_closed(arrays)
+    if about.get("format") == 19:
+        rules = {**about["rules"], **{r.name: r.start for r in RULES if r.name.startswith("gene.kin")}}
+        about = {**about, "format": 20, "rules": rules, "creatures": [{**c, "kin": 0.5} for c in about["creatures"]]}
+        _widen_inputs(arrays, INPUTS_KIN)
     if about.get("format") != SAVE_FORMAT:
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
@@ -432,7 +438,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.fear_of_death, creature.love_of_babies = saved["fear_of_death"], saved["love_of_babies"]
         creature.learns_from_others = saved["learns_from_others"]
         creature.mutations, creature.mutation_size = saved["mutations"], saved["mutation_size"]
-        creature.diet, creature.calls = saved["diet"], saved["calls"]
+        creature.diet, creature.calls, creature.kin = saved["diet"], saved["calls"], saved["kin"]
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])
         world.add_creature(creature)
     world.foods = [_food(f) for f in about["foods"]]

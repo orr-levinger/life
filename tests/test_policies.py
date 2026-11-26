@@ -55,12 +55,6 @@ class TestBrainPolicy(unittest.TestCase):
         self.assertEqual(brain_action(c, sense(c, w), attacks_on=False)[0], "MOVE")
         self.assertEqual(brain_action(c, sense(c, w), attacks_on=True), ("ATTACK", stranger))
 
-    def test_brain_never_targets_family(self):
-        w = make_world()
-        c = add(w, 10, 10, policy="brain", brain=fixed_brain([0, 0, -1, 1]))
-        add(w, 11, 10, parent_id=c.id)
-        self.assertNotEqual(brain_action(c, sense(c, w), attacks_on=True)[0], "ATTACK")
-
 
 class TestLearnerPolicy(unittest.TestCase):
     def test_learner_eat_choice(self):

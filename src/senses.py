@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 import numpy as np
 
 from .brain import N_SENSES
-from .creature import Creature
+from .creature import Creature, similarity
 
 if TYPE_CHECKING:
     from .food import Food
@@ -18,6 +18,7 @@ SIZE_HALF_RANGE = 0.75
 FOOD_ANGLE = math.pi / 4  # a move within 45° of food counts as going to it
 CALL_FIRST = 3  # a learner's choices 3.. are its calls (0 move, 1 eat, 2 attack)
 N_CALLS = 10  # kinds of call (the most the calls gene allows)
+KIN_INPUT = 44  # how alike the nearest creature it sees is
 CALL_INPUTS = 27  # where the heard call starts: its kind (10), how loud (1), from where (2), the voice (4)
 
 
@@ -25,9 +26,9 @@ CALL_INPUTS = 27  # where the heard call starts: its kind (10), how loud (1), fr
 class Senses:
     vector: np.ndarray
     food: Optional['Food']  # nearest food in range
-    other: Optional[Creature]  # nearest non-family creature it sees
+    other: Optional[Creature]  # nearest creature it sees
     on_food: Optional['Food']  # food the creature overlaps
-    heard: Optional[Creature] = None  # nearest non-family creature it hears but does not see
+    heard: Optional[Creature] = None  # nearest creature it hears but does not see
 
 
 def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> List[Senses]:
@@ -51,15 +52,12 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
         nearest_food = np.argmin(np.where(food_seen, food_d, np.inf), axis=1)
         touching = np.argmin(food_edge, axis=1)
     ids = np.array([c.id for c in everyone])
-    parents = np.array([c.parent_id for c in everyone])
     moved = np.array([c.moved for c in everyone], dtype=bool)
     other_x, other_y = np.array([c.x for c in everyone]), np.array([c.y for c in everyone])
     other_size = np.array([c.size for c in everyone])
     other_dx, other_dy = other_x[None, :] - me.x[:, None], other_y[None, :] - me.y[:, None]
     other_d = np.hypot(other_dx, other_dy)
-    family = ((me.ids[:, None] == parents[None, :]) | (ids[None, :] == me.parents[:, None])
-              | ((me.parents[:, None] != 0) & (me.parents[:, None] == parents[None, :])))
-    stranger = (me.ids[:, None] != ids[None, :]) & ~family  # never itself or its family
+    stranger = me.ids[:, None] != ids[None, :]  # anyone but itself: family is seen like anyone
     seen = stranger & _in_sight(me, world, other_x, other_y, other_dx, other_dy, other_d, other_size)
     heard = stranger & ~seen & moved[None, :] & (other_d <= _heard_from(me, world, other_size))  # only movers sound
     nearest_seen = np.argmin(np.where(seen, other_d, np.inf), axis=1)
@@ -121,7 +119,6 @@ class _Eyes:
         self.x = np.array([c.x for c in creatures])
         self.y = np.array([c.y for c in creatures])
         self.ids = np.array([c.id for c in creatures])
-        self.parents = np.array([c.parent_id for c in creatures])
         self.reach = np.array([c.vision_reach for c in creatures])
         self.hearing = np.array([c.hearing for c in creatures])
         width = np.array([c.vision_width for c in creatures])
@@ -213,6 +210,8 @@ def _vector(creature: Creature, food: Optional['Food'], other: Optional[Creature
     vector[24] = 1.0 if sheltered else 0.0  # under a tree's crown
     vector[25] = 1.0 if food is not None and food.meat else 0.0  # the nearest food it sees is meat
     vector[26] = creature.diet  # what it lives on
+    if other is not None:
+        vector[KIN_INPUT] = similarity(creature, other, creature.rules)  # how alike the one it sees is
     return vector
 
 

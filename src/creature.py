@@ -13,8 +13,19 @@ if TYPE_CHECKING:
     from .world import World
 
 
+KIN_GENES = ("size", "diet", "water", "stealth", "armour", "vision_width", "vision_reach", "hearing")
+
+
+def similarity(a: Creature, b: Creature, rules: Rules) -> float:
+    """How alike two creatures' genes are: 1 minus the mean difference, each gene as a share of its range (1 =
+    twins, 0 = as unlike as the genes allow). A gene the world does not have yet is left out."""
+    genes = [g for g in KIN_GENES if f"gene.{g}.low" in rules]
+    return 1.0 - sum(abs(getattr(a, g) - getattr(b, g)) / (rules[f"gene.{g}.high"] - rules[f"gene.{g}.low"])
+                     for g in genes) / len(genes)
+
+
 def is_family(a: Creature, b: Creature) -> bool:
-    """Parent, child, or the same non-zero parent: family can never be attacked."""
+    """Parent, child, or the same non-zero parent (the hand-written yardstick spares family; the world does not)."""
     return a.id == b.parent_id or b.id == a.parent_id or (a.parent_id != 0 and a.parent_id == b.parent_id)
 
 
@@ -67,6 +78,7 @@ class Creature:
         self.mutation_size = HAND_MADE["mutation_size"]  # how much each of those changes: a gene
         self.diet = HAND_MADE["diet"]  # 0 lives on plants, 1 on meat: a gene
         self.calls = round(HAND_MADE["calls"])  # how many kinds of call it can make: a gene
+        self.kin = HAND_MADE["kin"]  # how much what happens to those like it counts as its own: a gene
         self.called: Optional[Tuple[int, float]] = None  # this step's call: its kind and how far it carries (display)
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
         self.had_baby_at: Optional[int] = None  # the step it last had a baby (display only)
@@ -208,7 +220,7 @@ class Creature:
         self.energy -= self.attack_cost
         self._spend(self.attack_cost, world)
         reach = (self.radius + target.radius) * self.rules["reach"]
-        if (target not in world.creatures or target.energy <= 0 or is_family(self, target)
+        if (target not in world.creatures or target.energy <= 0
                 or math.hypot(target.x - self.x, target.y - self.y) > reach):
             self.last_action = "ATTACK_MISS"
             return

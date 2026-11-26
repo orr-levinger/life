@@ -519,6 +519,27 @@ class TestSaves(unittest.TestCase):
             np.testing.assert_allclose(brain.bc[CALL_FIRST:], CALL_BIAS)  # every call starts almost never chosen
             self.assertEqual((brain.wm.shape[-1], brain.log_std.shape[-1]), (3, 3))  # and a volume
 
+    def test_a_format_19_save_gets_care_for_kin(self):
+        world = make_world(seed=16)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 19
+            for c in about["creatures"]:
+                del c["kin"]
+            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith("gene.kin")}
+            arrays["about"] = np.array(json.dumps(about))
+            arrays["brain.w1"] = arrays["brain.w1"][:, :44, :]  # 44 inputs then
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({c.kin for c in loaded.creatures}, {0.5})
+        self.assertIn("gene.kin.high", loaded.rules)
+        self.assertTrue(all(np.all(c.brain.w1[44:] == 0.0) for c in loaded.creatures))  # how alike: silent at first
+
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)

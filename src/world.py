@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tupl
 import numpy as np
 
 from .brain import Brain
-from .creature import Creature, full_tank
+from .creature import KIN_GENES, Creature, full_tank, similarity
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, perceived, sense_all
@@ -26,7 +26,7 @@ Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
 FREE_SPOT_TRIES = 1000  # tries to find a newcomer a spot that no obstacle covers
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
-         "layers", "neurons", "weights", "mutations", "mutation_size", "diet", "calls")  # a baby changes its parent's `mutations` of them
+         "layers", "neurons", "weights", "mutations", "mutation_size", "diet", "calls", "kin")  # a baby changes its parent's `mutations` of them
 
 
 class World:
@@ -152,6 +152,7 @@ class World:
         newcomer.learns_from_others = drawn("learns")
         newcomer.diet = drawn("diet")
         newcomer.calls = whole("calls")
+        newcomer.kin = drawn("kin")
         newcomer.mutations, newcomer.mutation_size = whole("mutations"), drawn("mutation_size")
         self._brain_size(newcomer)
         self.creatures.append(newcomer)
@@ -258,14 +259,33 @@ class World:
         Each learner's step is also a lesson for every other living learner that sees or hears it."""
         alive = set(map(id, self.creatures))
         events = {}
+        shared = self._kin_shares(acting, energy_before)
         for creature, before in zip(acting, energy_before):
             if creature.policy == "learner":
                 died, baby = id(creature) not in alive, id(creature) in self._had_baby
                 events[id(creature)] = (creature.energy - before, died, baby)
-                self.learner.record(creature.slot, self._valued(creature, *events[id(creature)]), died)
+                reward = self._valued(creature, *events[id(creature)]) + shared.get(id(creature), 0.0)
+                self.learner.record(creature.slot, reward, died)
         self._had_baby.clear()
         self._show(acting, events)
         self.learner.update()
+
+    def _kin_shares(self, acting: List[Creature], energy_before: List[float]) -> Dict[int, float]:
+        """Each caring learner's share of what happened to those it perceives this step: its kin gene × Σ how alike
+        each one is × that one's change in energy (never its own)."""
+        carers = [c for c in acting if c.policy == "learner" and c.kin > 0]
+        if not carers:
+            return {}
+        changes = np.array([c.energy - before for c, before in zip(acting, energy_before)])
+        genes = [g for g in KIN_GENES if f"gene.{g}.low" in self.rules]
+        spans = np.array([self.rules[f"gene.{g}.high"] - self.rules[f"gene.{g}.low"] for g in genes])
+        mine = np.array([[getattr(c, g) for g in genes] for c in carers]) / spans
+        theirs = np.array([[getattr(c, g) for g in genes] for c in acting]) / spans
+        alike = 1.0 - np.abs(mine[:, None, :] - theirs[None, :, :]).mean(axis=2)  # [carer, actor]
+        sees = perceived(carers, acting, self).T & (np.array([id(c) for c in carers])[:, None]
+                                                    != np.array([id(c) for c in acting])[None, :])
+        share = (sees * alike * changes[None, :]).sum(axis=1)
+        return {id(c): c.kin * s for c, s in zip(carers, share)}
 
     @staticmethod
     def _valued(valuer: Creature, change: float, died: bool, baby: bool) -> float:
@@ -329,6 +349,7 @@ class World:
         baby.learns_from_others = self._inherited(parent.learns_from_others, "learns", picked, change)
         baby.mutation_size = self._inherited(parent.mutation_size, "mutation_size", picked, change)
         baby.diet = self._inherited(parent.diet, "diet", picked, change)
+        baby.kin = self._inherited(parent.kin, "kin", picked, change)
         low, high = gene_limits(self.rules, "mutations")
         step = self.rng.choice((-1, 1)) if "mutations" in picked else 0  # a count: one more or one fewer
         baby.mutations = int(min(max(parent.mutations + step, low), high))

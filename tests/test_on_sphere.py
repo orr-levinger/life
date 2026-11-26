@@ -1,6 +1,7 @@
 """Bodies and food on the planet: moving, reaching and dying are measured along its surface."""
 import math
 import unittest
+import unittest.mock
 from dataclasses import replace
 
 import numpy as np
@@ -62,6 +63,35 @@ class TestOnSphere(unittest.TestCase):
         self.assertGreater(share, 0.0)
         self.assertAlmostEqual(ahead, -1.0, places=3)
         self.assertAlmostEqual(left, 0.0, places=3)
+
+
+
+class TestWorldOnSphere(unittest.TestCase):
+    def test_a_baby_is_born_near_its_parent(self):
+        w = make_world(replace(NO_FOOD, lifespan=(1000.0, 1000.0)))
+        parent = add(w, 0.0, 0.0, energy=95.0)
+        w._births()
+        babies = [c for c in w.creatures if c.parent_id == parent.id]
+        self.assertEqual(len(babies), 1)
+        self.assertLessEqual(float(arc(parent.p, babies[0].p, w.radius)), 1.0 * math.sqrt(2) + 1e-9)
+
+    def test_food_spreads_evenly_over_the_planet(self):
+        w = make_world(replace(NO_FOOD, food_per_step=20.0, max_food=10 ** 7))
+        w.rules["planet_radius"] = 37.0
+        with unittest.mock.patch.object(type(w), "_fits", return_value=True):
+            for _ in range(100):
+                w.spawn_food()
+        pts = np.stack([f.p for f in w.foods])
+        self.assertEqual(len(pts), 2000)
+        octants = np.bincount((pts > 0).astype(int) @ np.array([4, 2, 1]), minlength=8)
+        self.assertTrue(np.all(np.abs(octants - 250) < 0.25 * 250), octants)
+
+    def test_newcomers_land_anywhere_on_the_ball(self):
+        w = make_world(seed=3)
+        w.rules["planet_radius"] = 37.0
+        pts = np.stack([w.add_newcomer().p for _ in range(400)])
+        self.assertAlmostEqual(float(np.abs(np.linalg.norm(pts, axis=1) - 1).max()), 0.0)
+        self.assertEqual(int((np.bincount((pts > 0).astype(int) @ np.array([4, 2, 1]), minlength=8) > 0).sum()), 8)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ from src.policies import decide_all
 from src.learner import LEARNING_RATE, Learner, NetWeights
 from src.rules import ROOM_SLOTS as MAX_CREATURES, gene_limits, rule, starting_rules
 from src.settings import START
+from src.sphere import arc
 BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, rule("eat_miss").start
 from tests.helpers import face, at, LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
 from tests.test_learner import live, same
@@ -40,9 +41,10 @@ class TestCosts(unittest.TestCase):
     def test_move_cost_and_speed_cap(self):
         w = make_world()
         c = add(w, 10, 10, size=1.0)
+        start = c.p.copy()
         c.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(c.x, 10.48)  # at most its top speed, 0.8 a step for size 1
-        self.assertAlmostEqual(c.y, 10.64)
+        self.assertAlmostEqual(float(arc(start, c.p, w.radius)), 0.8)  # at most its top speed, 0.8 a step for size 1
+        np.testing.assert_allclose(c.p * w.radius, at(10.48, 10.64) * w.radius, atol=1e-6)  # 3 ahead : 4 left
         sprint = 0.8 * NO_FOOD.move_cost * (0.8 / 0.25) ** 2  # faster than cruising costs the square of the speed
         self.assertAlmostEqual(c.energy, 50.0 - sprint - LIVING)
 
@@ -97,22 +99,16 @@ class TestCosts(unittest.TestCase):
     def test_a_big_sprinter_catches_a_small_cruiser(self):
         w = make_world()
         big, small = add(w, 10, 10, size=2.0, energy=150.0), add(w, 12, 10, size=0.5)
-        gap = small.x - big.x
+        gap = float(arc(big.p, small.p, w.radius))
         big.apply_action(("MOVE", (big.top_speed, 0.0)), w)
         small.apply_action(("MOVE", (small.top_speed, 0.0)), w)  # running away as fast as it can
-        self.assertLess(small.x - big.x, gap)
+        self.assertLess(float(arc(big.p, small.p, w.radius)), gap)
 
     def test_speed_is_a_quarter_over_the_root_of_size(self):
         w = make_world()
         speeds = [add(w, 5 + 10 * i, 10, size=size).velocity for i, size in enumerate((0.5, 1.0, 2.0))]
         np.testing.assert_allclose(speeds, [0.25 / math.sqrt(0.5), 0.25, 0.25 / math.sqrt(2.0)])
 
-    def test_move_clamped_in_corner(self):
-        w = make_world()
-        c = add(w, 0.3, 0.3, size=1.0)
-        c.apply_action(("MOVE", (-1.0, -1.0)), w)
-        self.assertAlmostEqual(c.x, c.radius)
-        self.assertAlmostEqual(c.y, c.radius)
 
 
 class TestSenseGenes(unittest.TestCase):
@@ -365,7 +361,8 @@ class TestHunting(unittest.TestCase):
         self.assertEqual(w.deaths["attack"], 1)
         self.assertIn(prey, w.dead_this_step)
         corpse = w.foods[-1]
-        self.assertEqual((corpse.x, corpse.y, corpse.energy, corpse.remaining_duration), (11, 10, 8.0, 5))
+        np.testing.assert_allclose(corpse.p, at(11, 10))
+        self.assertEqual((corpse.energy, corpse.remaining_duration), (8.0, 5))
 
     def test_a_creature_hit_feels_it(self):
         from src.senses import sense
@@ -501,7 +498,7 @@ class TestLifeAndDeath(unittest.TestCase):
         self.assertAlmostEqual(parent.energy, (1 - BABY_SHARE) * before_birth)
         self.assertEqual((baby.parent_id, baby.generation, baby.policy), (parent.id, 1, "brain"))
         self.assertTrue(0.8 <= baby.size <= 1.2)
-        self.assertLessEqual(abs(baby.x - parent.x), 1.0)
+        self.assertLessEqual(float(arc(baby.p, parent.p, w.radius)), math.sqrt(2.0) + 1e-9)  # beside its parent
         changed = np.mean(baby.brain.w1 != parent_brain.w1)
         self.assertTrue(0.0 <= changed < 0.05)  # the parent's brain: a copy, or a few weights changed when they are the gene
         self.assertEqual(w.births, 1)
@@ -555,7 +552,7 @@ class TestLifeAndDeath(unittest.TestCase):
             populate(w)
             for _ in range(200):
                 w.step()
-        positions = [[(c.id, c.x, c.y) for c in w.creatures] for w in worlds]
+        positions = [[(c.id, tuple(c.p)) for c in w.creatures] for w in worlds]
         self.assertEqual(positions[0], positions[1])
 
     def test_brain_creatures_never_call_rules(self):

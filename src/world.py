@@ -12,6 +12,7 @@ import numpy as np
 
 from .brain import Brain
 from .creature import Creature, full_tank, kin_genes, similarity
+from .sphere import arc, exp_map, local_frame, random_point, walk
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, perceived, sense_all
@@ -32,7 +33,6 @@ GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "lea
 
 class World:
     MIN_SPAWN_DISTANCE = 0.5  # gap kept between new food and anything already there
-    FOOD_RADIUS_MARGIN = 0.4  # a new food's largest radius (energy 40 × 0.01): keeps candidates inside the world
     PREFILL_STEPS = 100  # food spawn passes before a fresh world starts, so it doesn't begin empty
 
     def __init__(self, radius: float, settings: Settings, species: str, rng: random.Random,
@@ -129,7 +129,7 @@ class World:
         """A creature of this world's species with a random brain, at a random spot: the first creatures, and the
         primordial soup."""
         r = self.rules
-        x, y = self._free_spot(r["gene.size.new_high"] * r["body_radius"])
+        spot = self._free_spot(r["gene.size.new_high"] * r["body_radius"])
         size = self.rng.uniform(r["gene.size.new_low"], r["gene.size.new_high"])
         brain = Brain.random(self.np_rng) if self.species == "brain" else None
         drawn = lambda gene: self.rng.uniform(r[f"gene.{gene}.new_low"], r[f"gene.{gene}.new_high"])  # noqa: E731
@@ -139,7 +139,8 @@ class World:
             neurons = [whole("neurons") for _ in range(whole("layers"))]  # every layer its own count
             slot = self.learner.newcomer(self.np_rng, drawn("learning_speed"), neurons, r["learn_spread"])
         energy = self.rng.uniform(r["newcomer_energy_low"], r["newcomer_energy_high"])
-        newcomer = Creature(self.next_id(), x, y, size, energy, self.species, brain, slot=slot, rules=r)
+        newcomer = Creature(self.next_id(), spot, size, energy, self.species, brain, slot=slot, rules=r)
+        newcomer.facing = local_frame(spot)[0] if self.rng.random() < 0.5 else -local_frame(spot)[1]  # any way
         newcomer.lifespan = self._lifespan(size)
         newcomer.vision_width = self.rng.uniform(r["gene.vision_width.new_low"], r["gene.vision_width.new_high"])
         newcomer.vision_reach = self.rng.uniform(r["gene.vision_reach.new_low"], r["gene.vision_reach.new_high"])
@@ -158,32 +159,30 @@ class World:
         self.newcomers += 1
         return newcomer
 
-    def _free_spot(self, radius: float) -> tuple:
-        """A random spot where a body of `radius` touches no obstacle."""
+    def _free_spot(self, radius: float) -> np.ndarray:
+        """A random spot anywhere on the planet where a body of `radius` touches no obstacle."""
         for _ in range(FREE_SPOT_TRIES):
-            x, y = self.rng.uniform(1.0, self.width - 1.0), self.rng.uniform(1.0, self.height - 1.0)
-            if not self.terrain.blocked(x, y, radius):
-                return x, y
+            p = random_point(self.rng)
+            if not self.terrain.blocked(p, radius):
+                return p
         raise RuntimeError("the obstacles leave no room for a newcomer")
 
     def spawn_food(self) -> None:
         """The same number of candidates every step, so two worlds with the same food seed draw the same food."""
-        margin = self.FOOD_RADIUS_MARGIN
         season = self.season()
         per_step = self.settings.food_per_step * season
         whole = int(per_step)  # e.g. 2.4 per step: 2 every step and a third 40 % of the time
         extra = self.food_rng.random() < per_step - whole
         ponds = self.terrain.pond_circles.any()
         for _ in range(whole + extra):
-            x, y = self._land_spot(margin) if ponds else (self.food_rng.uniform(margin, self.width - margin),
-                                                          self.food_rng.uniform(margin, self.height - margin))
+            p = self._land_spot() if ponds else random_point(self.food_rng)
             energy = self.food_rng.uniform(*self.settings.food_energy)
             wet = ponds and self.food_rng.random() < self.rules["pond_food_share"]  # some grows in a pond
             if wet:
-                x, y = self.terrain.pond_spot(self.food_rng)
+                p = self.terrain.pond_spot(self.food_rng)
             if len(self.foods) >= int(self.settings.max_food):
                 continue
-            food = Food(x, y, remaining_duration=-1, energy=energy)
+            food = Food(p, remaining_duration=-1, energy=energy)
             if self._fits(food, wet):
                 self.foods.append(food)
                 self.foods_created_this_step.add(id(food))
@@ -191,22 +190,22 @@ class World:
             if self.food_rng.random() >= self.settings.fruit_rate * season:
                 continue
             angle, away = self.food_rng.uniform(0.0, 2.0 * math.pi), self.food_rng.uniform(0.0, self.rules["fruit_spread"])
-            x, y = tree.x + away * math.cos(angle), tree.y + away * math.sin(angle)
-            fruit = Food(x, y, remaining_duration=-1, energy=self.food_rng.uniform(*self.settings.food_energy), fruit=True)
-            inside = fruit.radius <= x <= self.width - fruit.radius and fruit.radius <= y <= self.height - fruit.radius
-            if inside and len(self.foods) < int(self.settings.max_food) and self._fits(fruit):
+            trunk = np.array(tree.p)
+            e1, e2 = local_frame(trunk)
+            p = exp_map(trunk, e1, e2, away * math.cos(angle), away * math.sin(angle), self.radius)
+            fruit = Food(p, remaining_duration=-1, energy=self.food_rng.uniform(*self.settings.food_energy), fruit=True)
+            if len(self.foods) < int(self.settings.max_food) and self._fits(fruit):
                 self.foods.append(fruit)
                 self.foods_created_this_step.add(id(fruit))
-    def _land_spot(self, margin: float) -> tuple:
+    def _land_spot(self) -> np.ndarray:
         """A spot for new food on the land, food growing `pond_edge_food` times as thick near a pond's edge: a spot
         away from the edges is kept 1 time in `pond_edge_food` (the same food a step, more of it by the water)."""
         thicker, width = self.rules["pond_edge_food"], self.rules["pond_edge_width"]
         for _ in range(FOOD_SPOT_TRIES):
-            x = self.food_rng.uniform(margin, self.width - margin)
-            y = self.food_rng.uniform(margin, self.height - margin)
-            if thicker <= 1.0 or self.terrain.near_pond(x, y, width) or self.food_rng.random() < 1.0 / thicker:
-                return x, y
-        return x, y
+            p = random_point(self.food_rng)
+            if thicker <= 1.0 or self.terrain.near_pond(p, width) or self.food_rng.random() < 1.0 / thicker:
+                return p
+        return p
 
     def season(self) -> float:
         """How much food and fruit grow now, against the year's middle: 1 + depth × sin(2π step ÷ year). An exam world
@@ -221,13 +220,14 @@ class World:
 
     def _fits(self, food: Food, wet: bool = False) -> bool:
         """Food fits where nothing else is and no obstacle stands (a pond's own food, where no rock stands)."""
-        if self.terrain.blocked(food.x, food.y, food.radius, swims=wet):
+        if self.terrain.blocked(food.p, food.radius, swims=wet):
             return False
         neighbours = list(self.foods) + (list(self.creatures) if self.evolving else [])
-        return all(
-            math.hypot(food.x - other.x, food.y - other.y) >= food.radius + other.radius + self.MIN_SPAWN_DISTANCE
-            for other in neighbours
-        )
+        if not neighbours:
+            return True
+        where = np.stack([n.p for n in neighbours])
+        room = np.array([n.radius for n in neighbours]) + food.radius + self.MIN_SPAWN_DISTANCE
+        return bool(np.all(arc(food.p[None, :], where, self.radius) >= room))
 
     def step(self, observer: Optional[Observer] = None) -> None:
         self.step_count += 1
@@ -354,18 +354,19 @@ class World:
             slot = self.learner.baby(parent.slot, self.np_rng, lr, self.inherit, brain_genes, self.rng, self.rules)
         gift = self.rules["baby_share"] * parent.energy
         size = self._inherited(parent.size, "size", picked, change)
-        x = min(max(parent.x + self.rng.uniform(-1.0, 1.0), 0.0), self.width)
-        y = min(max(parent.y + self.rng.uniform(-1.0, 1.0), 0.0), self.height)
-        if self.terrain.blocked(x, y, size * self.rules["body_radius"]):  # never born inside an obstacle
-            x, y = parent.x, parent.y
+        ahead, left = self.rng.uniform(-1.0, 1.0), self.rng.uniform(-1.0, 1.0)  # beside its parent
+        spot, facing = walk(parent.p, parent.facing, ahead, left, math.hypot(ahead, left), self.radius)
+        if self.terrain.blocked(spot, size * self.rules["body_radius"]):  # never born inside an obstacle
+            spot, facing = parent.p.copy(), parent.facing
         brain = parent.brain
         if brain is not None and "weights" in picked:  # an instinct brain changes only when its weights are the gene
             brain = brain.mutate(self.np_rng, self.rules["gene.weights.share"], self.rules["gene.weights.size"])
         parent.energy -= gift
         parent.had_baby_at = self.step_count
-        baby = Creature(self.next_id(), x, y, size, gift, parent.policy, brain,
+        baby = Creature(self.next_id(), spot, size, gift, parent.policy, brain,
                         parent_id=parent.id, generation=parent.generation + 1, slot=slot, rules=self.rules)
         baby.lifespan = self._lifespan(size)
+        baby.facing = facing
         baby.vision_width = self._inherited(parent.vision_width, "vision_width", picked, change)
         baby.vision_reach = self._inherited(parent.vision_reach, "vision_reach", picked, change)
         baby.hearing = self._inherited(parent.hearing, "hearing", picked, change)

@@ -44,14 +44,16 @@ class TestRules(unittest.TestCase):
         genes = {r.name.split(".")[1] for r in RULES if r.name.startswith("gene.") and not r.name.startswith("gene.weights")}
         self.assertEqual(genes - set(GENE_MEANS), set())
 
-    def test_a_new_world_is_bigger_with_room_for_300(self):
+    def test_a_new_planet_has_its_numbers(self):
         from src.rules import ROOM_SLOTS, rule
-        wanted = {"room": (300.0, 300.0), "auto_target": (240.0, 300.0), "first_creatures": (100.0, 300.0),
-                  "soup": (40.0, 300.0), "world_width": (120.0, 200.0), "world_height": (72.0, 120.0),
-                  "obstacles": (35.0, 150.0), "trees": (46.0, 200.0)}
+        wanted = {"planet_radius": (37.0, 2000.0), "room": (600.0, 600.0), "auto_target": (480.0, 600.0),
+                  "first_creatures": (200.0, 600.0), "soup": (80.0, 600.0), "obstacles": (70.0, 300.0),
+                  "trees": (92.0, 400.0), "forests": (4.0, 20.0)}
         for name, (start, high) in wanted.items():
             self.assertEqual((rule(name).start, rule(name).high), (start, high), name)
-        self.assertEqual(ROOM_SLOTS, 300)  # a learner keeps a slot for each creature there may ever be room for
+        self.assertEqual(ROOM_SLOTS, 600)
+        names = {r.name for r in RULES}
+        self.assertFalse({"world_width", "world_height"} & names)  # a planet has no width or height
 
     def test_no_rule_decides_who_is_a_threat(self):
         self.assertNotIn("threat_ratio", {r.name for r in RULES})  # the creatures learn whom to flee or chase

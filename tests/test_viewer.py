@@ -251,11 +251,11 @@ class TestControlRoom(unittest.TestCase):
         answer = self.server.get("/rules")
         first = next(r for r in answer["rules"] if r["name"] == "first_creatures")
         self.assertEqual((answer["next"], first["value"]), (True, first["start"]))
-        status, _ = self.server.post("/next-rules", {"rules": {"first_creatures": 12, "world_width": 40}})
+        status, _ = self.server.post("/next-rules", {"rules": {"first_creatures": 12, "planet_radius": 40}})
         self.assertEqual(status, 200)
         values = {r["name"]: r["value"] for r in self.server.get("/rules")["rules"]}
-        self.assertEqual((values["first_creatures"], values["world_width"]), (12.0, 40.0))  # kept on disk
-        status, answer = self.server.post("/next-rules", {"rules": {"first_creatures": 999}})
+        self.assertEqual((values["first_creatures"], values["planet_radius"]), (12.0, 40.0))  # kept on disk
+        status, answer = self.server.post("/next-rules", {"rules": {"first_creatures": 9999}})
         self.assertEqual(status, 400)
         self.assertIn("at most", answer["error"])
 

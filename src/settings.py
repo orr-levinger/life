@@ -21,7 +21,7 @@ class Settings:
 
 
 # Starting values from the design; the plan tunes them by measurement.
-START = Settings(max_food=200, food_energy=(20, 40), food_per_step=3.0, move_cost=0.5, step_cost=0.05,
+START = Settings(max_food=400, food_energy=(20, 40), food_per_step=6.0, move_cost=0.5, step_cost=0.05,
                  lifespan=(4000, 6000), attacks=False, fruit_rate=0.02)
 
 TODAY_SENSES = (360.0, 3.0, 1.5)  # width, reach, hearing of a creature no world gave senses to (the exam's; older saves)

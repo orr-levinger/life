@@ -485,6 +485,40 @@ class TestSaves(unittest.TestCase):
             self.assertTrue(np.array_equal(c.brain.w1[:25], old_w1[i]))
             self.assertTrue(np.all(c.brain.w1[25:] == 0.0))  # the two new senses start silent
 
+    def test_a_format_18_save_gets_calls_closed(self):
+        from src.learner import CALL_BIAS, CALL_FIRST
+        learner = Learner(MAX_CREATURES, 0)
+        world = make_world(seed=15, learner=learner, species="learner")
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 18
+            for c in about["creatures"]:
+                del c["calls"]
+            about["rules"] = {k: v for k, v in about["rules"].items() if not k.startswith("gene.calls") and k != "call_reach"}
+            arrays["about"] = np.array(json.dumps(about))
+            for name in list(arrays):  # a format 18 brain: 27 inputs, 3 choices, a move of 2
+                if name.startswith("learner.") and name.split(".")[-1] in ("w1", "wh"):
+                    arrays[name] = arrays[name][..., :27, :]
+                for part, axis in (("wc", -1), ("bc", -1), ("wm", -1), ("bm", -1), ("log_std", -1)):
+                    if name.startswith("learner.") and name.endswith("." + part):
+                        keep = CALL_FIRST if part in ("wc", "bc") else 2
+                        arrays[name] = arrays[name][..., :keep]
+            old_wc = arrays["learner.params.wc"]
+            np.savez(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual({c.calls for c in loaded.creatures}, {0})
+        self.assertIn("call_reach", loaded.rules)
+        for c in loaded.creatures:
+            brain = loaded.learner.current(c.slot)
+            np.testing.assert_allclose(brain.wc[:, :CALL_FIRST], old_wc[c.slot])  # its choices as they were
+            np.testing.assert_allclose(brain.bc[CALL_FIRST:], CALL_BIAS)  # every call starts almost never chosen
+            self.assertEqual((brain.wm.shape[-1], brain.log_std.shape[-1]), (3, 3))  # and a volume
+
     def test_rules_are_kept_in_a_save(self):
         world = make_world(seed=8)
         populate(world, 3)

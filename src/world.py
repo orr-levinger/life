@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 import random
 from collections import Counter
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
@@ -26,7 +26,7 @@ Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
 FREE_SPOT_TRIES = 1000  # tries to find a newcomer a spot that no obstacle covers
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
-         "layers", "neurons", "weights", "mutations", "mutation_size", "diet")  # a baby changes its parent's `mutations` of them
+         "layers", "neurons", "weights", "mutations", "mutation_size", "diet", "calls")  # a baby changes its parent's `mutations` of them
 
 
 class World:
@@ -67,6 +67,7 @@ class World:
         self.deaths: Counter = Counter()
         self.births = 0
         self.newcomers = 0
+        self.calls: List[Tuple[Creature, int, float]] = []  # the last step's calls: caller, kind, volume
         self.total_bites = 0
         self.energy_earned = 0.0  # by eating and hunting
         self.energy_spent = 0.0  # on moving, living, eating at nothing and attacking
@@ -150,6 +151,7 @@ class World:
         newcomer.fear_of_death, newcomer.love_of_babies = drawn("fear"), drawn("love")
         newcomer.learns_from_others = drawn("learns")
         newcomer.diet = drawn("diet")
+        newcomer.calls = whole("calls")
         newcomer.mutations, newcomer.mutation_size = whole("mutations"), drawn("mutation_size")
         self._brain_size(newcomer)
         self.creatures.append(newcomer)
@@ -222,7 +224,8 @@ class World:
         self.creature_steps += len(acting)
         energy_before = [creature.energy for creature in acting]
 
-        for phase in ("ATTACK", "EAT", "MOVE"):
+        self.calls = []  # this step's calls, heard in the next step's senses
+        for phase in ("CALL", "ATTACK", "EAT", "MOVE"):
             for creature, action in zip(acting, actions):
                 if action[0] == phase and creature in self.creatures:
                     creature.apply_action(action, self)
@@ -329,6 +332,9 @@ class World:
         low, high = gene_limits(self.rules, "mutations")
         step = self.rng.choice((-1, 1)) if "mutations" in picked else 0  # a count: one more or one fewer
         baby.mutations = int(min(max(parent.mutations + step, low), high))
+        low, high = gene_limits(self.rules, "calls")
+        step = self.rng.choice((-1, 1)) if "calls" in picked else 0  # a count: one call more or one fewer
+        baby.calls = int(min(max(parent.calls + step, low), high))
         self._brain_size(baby)
         self.creatures.append(baby)
         self.births += 1

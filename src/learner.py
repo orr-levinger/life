@@ -15,11 +15,14 @@ import tensorflow as tf
 
 from .brain import N_SENSES, jitter
 from .rules import HAND_MADE, rule, starting_rules
+from .senses import CALL_FIRST, N_CALLS
 
 N_IN = N_SENSES
 N_HIDDEN = 32
-N_CHOICES = 3  # 0 move, 1 eat, 2 attack
+N_CHOICES = CALL_FIRST + N_CALLS  # 0 move, 1 eat, 2 attack, 3-12 a call of each kind
 ATTACK = 2
+CALL_BIAS = -6.0  # a call starts almost never chosen: all ten together about 1 % (bias -5 would make it 2 %)
+N_MOVE = 3  # the move's two axes and a call's volume
 LEARNING_RATE = HAND_MADE["learning_speed"]  # a brain made by hand (a newcomer draws its own)
 INITIAL_SPREAD = rule("learn_spread").start  # a newborn's first spread, from the rules
 ADAM_BETAS = (0.9, 0.999)
@@ -37,7 +40,7 @@ SHAPES: Dict[str, Tuple[int, ...]] = {
     "w2": (ROOM, ROOM), "b2": (ROOM,), "s2": (1,),  # layers 2 and 3 add to what they receive, × their strength s
     "w3": (ROOM, ROOM), "b3": (ROOM,), "s3": (1,),
     "wc": (ROOM, N_CHOICES), "bc": (N_CHOICES,),
-    "wm": (ROOM, 2), "bm": (2,), "log_std": (2,),
+    "wm": (ROOM, N_MOVE), "bm": (N_MOVE,), "log_std": (N_MOVE,),
     "wh": (N_IN, N_CRITIC), "bh": (N_CRITIC,),  # the critic's own hidden layer: its large errors never reach the actor's
     "wv": (N_CRITIC, 1), "bv": (1,),
 }
@@ -78,9 +81,9 @@ class NetWeights:
             w1=np_rng.normal(0.0, 1.0 / math.sqrt(N_IN), SHAPES["w1"]), b1=np.zeros(ROOM),
             w2=np_rng.normal(0.0, 1.0 / math.sqrt(ROOM), SHAPES["w2"]), b2=np.zeros(ROOM), s2=np.zeros(1),
             w3=np_rng.normal(0.0, 1.0 / math.sqrt(ROOM), SHAPES["w3"]), b3=np.zeros(ROOM), s3=np.zeros(1),
-            wc=np_rng.normal(0.0, 0.01, SHAPES["wc"]), bc=np.zeros(N_CHOICES),
-            wm=np_rng.normal(0.0, 0.01, SHAPES["wm"]), bm=np.zeros(2),
-            log_std=np.full(2, math.log(spread)),
+            wc=np_rng.normal(0.0, 0.01, SHAPES["wc"]), bc=np.r_[np.zeros(CALL_FIRST), np.full(N_CALLS, CALL_BIAS)],
+            wm=np_rng.normal(0.0, 0.01, SHAPES["wm"]), bm=np.zeros(N_MOVE),
+            log_std=np.full(N_MOVE, math.log(spread)),
             wh=np_rng.normal(0.0, 1.0 / math.sqrt(N_IN), SHAPES["wh"]), bh=np.zeros(N_CRITIC),
             wv=np_rng.normal(0.0, 1.0 / math.sqrt(N_CRITIC), SHAPES["wv"]), bv=np.zeros(1),
             size=size,
@@ -148,9 +151,10 @@ def gae(rewards: np.ndarray, values: np.ndarray, dones: np.ndarray, last_value: 
     return advantages, advantages + values
 
 
-def _heads(p: Dict[str, tf.Tensor], x: tf.Tensor, attacks: tf.Tensor, size: tf.Tensor):
-    """x [K, T, 20], attacks [K, T] (1 allowed, 0 masked), size [K, 4] (layers, neurons of each) -> choice logits, move
-    mean, log spread, critic value. Only a creature's own neurons and layers act."""
+def _heads(p: Dict[str, tf.Tensor], x: tf.Tensor, attacks: tf.Tensor, calls: tf.Tensor, size: tf.Tensor):
+    """x [K, T, inputs], attacks [K, T] (1 allowed, 0 masked), calls [K, T] (how many kinds of call it can make: the
+    rest are closed), size [K, 4] (layers, neurons of each) -> choice logits, move mean (its axes and a call's volume),
+    log spread, critic value. Only a creature's own neurons, layers and calls act."""
     neuron = tf.range(ROOM, dtype=tf.float32)[None, :]
     mask = [tf.cast(neuron < size[:, 1 + layer:2 + layer], tf.float32)[:, None, :] for layer in range(MAX_LAYERS)]
     h = tf.tanh(tf.einsum("kti,kih->kth", x, p["w1"]) + p["b1"][:, None, :]) * mask[0]
@@ -159,6 +163,8 @@ def _heads(p: Dict[str, tf.Tensor], x: tf.Tensor, attacks: tf.Tensor, size: tf.T
         h = h + on[:, None, :] * tf.tanh(tf.einsum("kth,khg->ktg", h, p[w]) + p[b][:, None, :]) * mask[layer]
     logits = tf.einsum("kth,khc->ktc", h, p["wc"]) + p["bc"][:, None, :]
     logits += MASKED * (1.0 - attacks)[..., None] * tf.one_hot(ATTACK, N_CHOICES)
+    closed = tf.cast(tf.range(N_CALLS, dtype=tf.float32)[None, None, :] >= calls[..., None], tf.float32)
+    logits += MASKED * tf.concat([tf.zeros_like(logits[..., :CALL_FIRST]), closed], axis=-1)
     mean = tf.tanh(tf.einsum("kth,khm->ktm", h, p["wm"]) + p["bm"][:, None, :])
     log_std = tf.broadcast_to(p["log_std"][:, None, :], tf.shape(mean))
     critic_h = tf.tanh(tf.einsum("kti,kih->kth", x, p["wh"]) + p["bh"][:, None, :])
@@ -168,8 +174,10 @@ def _heads(p: Dict[str, tf.Tensor], x: tf.Tensor, attacks: tf.Tensor, size: tf.T
 
 def _log_prob(logits, mean, log_std, choice, move):
     choice_logp = tf.reduce_sum(tf.nn.log_softmax(logits) * tf.one_hot(choice, N_CHOICES), axis=-1)
-    move_logp = tf.reduce_sum(-0.5 * tf.square((move - mean) / tf.exp(log_std)) - log_std - 0.5 * LOG_2PI, axis=-1)
-    return choice_logp + tf.cast(tf.equal(choice, 0), tf.float32) * move_logp
+    each = -0.5 * tf.square((move - mean) / tf.exp(log_std)) - log_std - 0.5 * LOG_2PI  # [.., N_MOVE]
+    moving = tf.cast(tf.equal(choice, 0), tf.float32) * tf.reduce_sum(each[..., :2], axis=-1)  # a move: its axes
+    calling = tf.cast(choice >= CALL_FIRST, tf.float32) * each[..., 2]  # a call: its volume
+    return choice_logp + moving + calling
 
 
 def lesson_weight(ratio, learns):
@@ -181,7 +189,7 @@ def lesson_weight(ratio, learns):
 def lesson_loss(p: Dict[str, tf.Tensor], lb: Dict[str, tf.Tensor], value_weight: float, rollout: float) -> tf.Tensor:
     """Each slot's loss from its lessons [K]: per lesson, its weight times (minus the advantage, plus the value error);
     summed over a slot's lessons and divided by a rollout's steps, so a lesson counts against an own step's mean."""
-    logits, mean, log_std, value = _heads(p, lb["obs"], lb["attacks"], lb["size"])
+    logits, mean, log_std, value = _heads(p, lb["obs"], lb["attacks"], lb["calls"], lb["size"])
     logp = _log_prob(logits, mean, log_std, lb["choice"], lb["move"])
     weight = tf.stop_gradient(lesson_weight(tf.exp(logp - lb["logp"]), lb["weight"])) * lb["mask"]
     policy = -tf.exp(logp - tf.stop_gradient(logp)) * lb["adv"]  # its value is -adv; its gradient -adv × d logp
@@ -355,22 +363,25 @@ class Learner:
     def current(self, slot: int) -> NetWeights:
         return NetWeights(**{name: self._params[name][slot].numpy() for name in SHAPES}, size=self._size[slot].copy())
 
-    def act(self, slots: Sequence[int], senses: np.ndarray, attacks_on: bool,
-            learning: bool = True) -> List[Tuple[int, Tuple[float, float]]]:
-        """One call for all `slots`: each rolls its own dice for a choice and a move (each axis in -1..1)."""
+    def act(self, slots: Sequence[int], senses: np.ndarray, attacks_on: bool, learning: bool = True,
+            calls: Optional[Sequence[int]] = None) -> List[Tuple[int, Tuple[float, float, float]]]:
+        """One call for all `slots`: each rolls its own dice for a choice and a move (each axis in -1..1) with a call's
+        volume (0..1); `calls` is how many kinds of call each can make (none when not given)."""
         idx = tf.constant(list(slots), dtype=tf.int32)
         x = tf.constant(senses[:, None, :], dtype=tf.float32)
         attacks = tf.fill([len(slots), 1], 1.0 if attacks_on else 0.0)
-        choice, move, logp, value = self._act_graph(idx, x, attacks, tf.constant(self._size[list(slots)], tf.float32))
+        kinds = np.zeros(len(slots)) if calls is None else np.asarray(calls, dtype=float)
+        choice, move, logp, value = self._act_graph(idx, x, attacks, tf.constant(kinds[:, None], tf.float32),
+                                                    tf.constant(self._size[list(slots)], tf.float32))
         choice_np, move_np = choice.numpy()[:, 0], move.numpy()[:, 0, :]
         if learning:
             logp_np, value_np = logp.numpy()[:, 0], value.numpy()[:, 0]
             for i, slot in enumerate(slots):
                 self._pending[slot] = {"obs": senses[i], "choice": int(choice_np[i]), "move": move_np[i],
                                        "logp": float(logp_np[i]), "value": float(value_np[i]),
-                                       "attacks": 1.0 if attacks_on else 0.0}
-        return [(int(c), (float(np.clip(m[0], -1.0, 1.0)), float(np.clip(m[1], -1.0, 1.0))))
-                for c, m in zip(choice_np, move_np)]
+                                       "attacks": 1.0 if attacks_on else 0.0, "calls": float(kinds[i])}
+        return [(int(c), (float(np.clip(m[0], -1.0, 1.0)), float(np.clip(m[1], -1.0, 1.0)),
+                          float((np.clip(m[2], -1.0, 1.0) + 1.0) / 2.0))) for c, m in zip(choice_np, move_np)]
 
     def record(self, slot: int, reward: float, done: bool) -> None:
         step = self._pending.pop(slot, None)
@@ -406,13 +417,14 @@ class Learner:
             return None
         shape = (len(slots), length)
         obs, next_obs = np.zeros(shape + (N_IN,)), np.zeros(shape + (N_IN,))
-        choice, move = np.zeros(shape, np.int32), np.zeros(shape + (2,))
-        logp, attacks, reward, done, mask, weight = (np.zeros(shape) for _ in range(6))
+        choice, move = np.zeros(shape, np.int32), np.zeros(shape + (N_MOVE,))
+        logp, attacks, calls, reward, done, mask, weight = (np.zeros(shape) for _ in range(7))
         for k, lessons in enumerate(ready):
             for t, lesson in enumerate(lessons):
                 step = lesson["step"]
                 obs[k, t], choice[k, t], move[k, t] = step["obs"], step["choice"], step["move"]
                 logp[k, t], attacks[k, t], done[k, t] = step["logp"], step["attacks"], step["done"]
+                calls[k, t] = step["calls"]
                 reward[k, t], weight[k, t] = lesson["reward"], lesson["weight"]
                 if lesson["next_obs"] is not None:
                     next_obs[k, t] = lesson["next_obs"]
@@ -427,15 +439,16 @@ class Learner:
             if known.any():
                 adv[k, known] = (adv[k, known] - adv[k, known].mean()) / (adv[k, known].std() + 1e-8)
         adv *= mask
-        arrays = {"obs": obs, "choice": choice, "move": move, "logp": logp, "attacks": attacks, "adv": adv,
+        arrays = {"obs": obs, "choice": choice, "move": move, "logp": logp, "attacks": attacks, "calls": calls,
+                  "adv": adv,
                   "target": target, "mask": mask, "weight": weight}
         batch = {key: tf.constant(value, dtype=tf.int32 if key == "choice" else tf.float32) for key, value in arrays.items()}
         return {**batch, "size": size}
 
-    def _act_math(self, idx, x, attacks, size):
+    def _act_math(self, idx, x, attacks, calls, size):
         """Choices and moves of the slots `idx` (each its own dice), with their log odds and values: one graph."""
         p = {name: tf.gather(var, idx) for name, var in self._params.items()}
-        logits, mean, log_std, value = _heads(p, x, attacks, size)
+        logits, mean, log_std, value = _heads(p, x, attacks, calls, size)
         gumbel = -tf.math.log(-tf.math.log(self._gen.uniform(tf.shape(logits), 1e-12, 1.0)))
         choice = tf.argmax(logits + gumbel, axis=-1, output_type=tf.int32)
         move = mean + tf.exp(log_std) * self._gen.normal(tf.shape(mean))
@@ -444,7 +457,7 @@ class Learner:
     def _values_math(self, idx, obs, size):
         """The critic's values of the slots `idx` for `obs`: one graph."""
         p = {name: tf.gather(var, idx) for name, var in self._params.items()}
-        return _heads(p, obs, tf.ones(tf.shape(obs)[:2]), size)[3]
+        return _heads(p, obs, tf.ones(tf.shape(obs)[:2]), tf.zeros(tf.shape(obs)[:2]), size)[3]
 
     def update(self) -> int:
         """One PPO update for every slot with a full rollout (64 steps plus the one that bootstraps them)."""
@@ -452,7 +465,7 @@ class Learner:
         full = [slot for slot in range(self.slots) if len(self._buffers[slot]) > rollout]
         if not full:
             return 0
-        batch = {key: [] for key in ("obs", "choice", "move", "logp", "attacks", "adv", "ret")}
+        batch = {key: [] for key in ("obs", "choice", "move", "logp", "attacks", "calls", "adv", "ret")}
         for slot in full:
             steps = self._buffers[slot][:rollout]
             column = {key: np.array([s[key] for s in steps]) for key in steps[0]}
@@ -460,7 +473,7 @@ class Learner:
                            self.rules["learn_discount"], self.rules["learn_credit"])
             batch["adv"].append((adv - adv.mean()) / (adv.std() + 1e-8))
             batch["ret"].append(ret)
-            for key in ("obs", "choice", "move", "logp", "attacks"):
+            for key in ("obs", "choice", "move", "logp", "attacks", "calls"):
                 batch[key].append(column[key])
             self._buffers[slot] = self._buffers[slot][rollout:]
         tensors = {key: tf.constant(np.stack(values), dtype=tf.int32 if key == "choice" else tf.float32)
@@ -488,7 +501,7 @@ class Learner:
         p = {name: tf.gather(var, idx) for name, var in self._params.items()}
         with tf.GradientTape() as tape:
             tape.watch(list(p.values()))
-            logits, mean, log_std, value = _heads(p, b["obs"], b["attacks"], size)
+            logits, mean, log_std, value = _heads(p, b["obs"], b["attacks"], b["calls"], size)
             ratio = tf.exp(_log_prob(logits, mean, log_std, b["choice"], b["move"]) - b["logp"])
             clipped = tf.clip_by_value(ratio, 1.0 - hyper["clip"], 1.0 + hyper["clip"])
             policy_loss = -tf.reduce_mean(tf.minimum(ratio * b["adv"], clipped * b["adv"]), axis=1)

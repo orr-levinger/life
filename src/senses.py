@@ -16,6 +16,9 @@ if TYPE_CHECKING:
 SIZE_CENTER = 1.25  # middle of the 0.5–2.0 size range
 SIZE_HALF_RANGE = 0.75
 FOOD_ANGLE = math.pi / 4  # a move within 45° of food counts as going to it
+CALL_FIRST = 3  # a learner's choices 3.. are its calls (0 move, 1 eat, 2 attack)
+N_CALLS = 10  # kinds of call (the most the calls gene allows)
+CALL_INPUTS = 27  # where the heard call starts: its kind (10), how loud (1), from where (2), the voice (4)
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,7 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
     nearest_heard = np.argmin(np.where(heard, other_d, np.inf), axis=1)
     sheltered = world.terrain.under_tree(me.x, me.y)
     walls = _obstacles_seen(me, world)
+    calls = _calls_heard(me, world)
 
     sensed = []
     for i, creature in enumerate(creatures):
@@ -72,9 +76,42 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
             on_food = foods[touching[i]] if food_edge[i, touching[i]] <= creature.radius else None
         other = everyone[nearest_seen[i]] if seen[i].any() else None
         sound = everyone[nearest_heard[i]] if heard[i].any() else None
-        sensed.append(Senses(vector=_vector(creature, food, other, on_food, sound, walls[i], sheltered[i]), food=food,
-                             other=other, on_food=on_food, heard=sound))
+        vector = _vector(creature, food, other, on_food, sound, walls[i], sheltered[i])
+        vector[CALL_INPUTS:CALL_INPUTS + N_CALLS + 7] = calls[i]
+        sensed.append(Senses(vector=vector, food=food, other=other, on_food=on_food, heard=sound))
     return sensed
+
+
+def voice(caller: Creature, rules: Any) -> np.ndarray:
+    """How a caller sounds: its diet, size, water and stealth genes, each scaled 0-1 by its range (alike genes sound
+    alike; a gene it does not have yet says 0)."""
+    low, high = rules["gene.size.low"], rules["gene.size.high"]
+    size = (caller.size - low) / (high - low) if high > low else 0.0
+    return np.array([caller.diet, size, getattr(caller, "water", 0.0), getattr(caller, "stealth", 0.0)])
+
+
+def _calls_heard(me: '_Eyes', world: Any) -> np.ndarray:
+    """[listener, 17]: the loudest call each one heard last step (never its own): its kind, how loud it arrived
+    (1 at the caller, 0 where it stops carrying), where from (cos, sin) and the caller's voice; zeros when none."""
+    out = np.zeros((len(me.x), N_CALLS + 7))
+    calls = getattr(world, "calls", [])
+    if not calls:
+        return out
+    cx, cy = np.array([c.x for c, _, _ in calls]), np.array([c.y for c, _, _ in calls])
+    carries = np.array([volume for _, _, volume in calls]) * world.rules["call_reach"]
+    dx, dy = cx[None, :] - me.x[:, None], cy[None, :] - me.y[:, None]
+    distance = np.hypot(dx, dy)
+    loud = np.where((distance <= carries[None, :]) & (me.ids[:, None] != np.array([c.id for c, _, _ in calls])[None, :]),
+                    1.0 - distance / np.maximum(carries[None, :], 1e-9), -1.0)
+    for i in np.nonzero(loud.max(axis=1) >= 0.0)[0]:
+        j = int(np.argmax(loud[i]))
+        caller, kind, _ = calls[j]
+        out[i, kind] = 1.0
+        out[i, N_CALLS] = loud[i, j]
+        if distance[i, j] > 0:
+            out[i, N_CALLS + 1:N_CALLS + 3] = dx[i, j] / distance[i, j], dy[i, j] / distance[i, j]
+        out[i, N_CALLS + 3:] = voice(caller, world.rules)
+    return out
 
 
 class _Eyes:

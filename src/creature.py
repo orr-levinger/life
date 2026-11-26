@@ -66,6 +66,8 @@ class Creature:
         self.mutations = round(HAND_MADE["mutations"])  # how many genes each of its babies changes: a gene
         self.mutation_size = HAND_MADE["mutation_size"]  # how much each of those changes: a gene
         self.diet = HAND_MADE["diet"]  # 0 lives on plants, 1 on meat: a gene
+        self.calls = round(HAND_MADE["calls"])  # how many kinds of call it can make: a gene
+        self.called: Optional[Tuple[int, float]] = None  # this step's call: its kind and how far it carries (display)
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
         self.had_baby_at: Optional[int] = None  # the step it last had a baby (display only)
         self.neurons = 0  # the neurons its brain uses (a learner's, which the world sets); each costs energy
@@ -128,12 +130,15 @@ class Creature:
         kind, param = action
         self.target = param.id if kind == "ATTACK" and param is not None else None  # whom it went for (display only)
         self.moved = self.bumped = False
+        self.called = None
         if kind == "MOVE":
             self._move(param, world)
         elif kind == "EAT":
             self._eat(param, world)
         elif kind == "ATTACK":
             self._attack(param, world)
+        elif kind == "CALL":
+            self._call(*param, world)
         else:
             raise ValueError(f"unknown action {kind!r}")
         living = (world.settings.step_cost * self.size ** self.rules["living_power"]  # a bigger body pays more, less than its size
@@ -141,6 +146,17 @@ class Creature:
                   + self.rules["neuron_cost"] * self.neurons)  # and each neuron of its brain
         self.energy = min(self.energy - living, self.max_energy)
         self._spend(living, world)
+
+    def _call(self, kind: int, volume: float, world: World) -> None:
+        """A call of `kind` (one its genes let it make) at `volume` 0-1: everyone within volume × the call reach hears
+        it next step. It costs nothing but the step and being heard."""
+        if not 0 <= kind < self.calls:
+            self.last_action = "CALL_MISS"
+            return
+        volume = min(max(volume, 0.0), 1.0)
+        world.calls.append((self, kind, volume))
+        self.called = (kind, volume * self.rules["call_reach"])
+        self.last_action = "CALL"
 
     def _eat(self, food: Optional[Food], world: World) -> None:
         """The creature chose to eat: one bite of `food` if it is still there and within reach, otherwise a miss."""

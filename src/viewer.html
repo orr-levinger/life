@@ -645,6 +645,7 @@ const TILES = [
   ["vision", "Sees (degrees)"], ["reach", "Sees how far"], ["hearing", "Hears how far"], ["fear", "Fear of death"],
   ["love", "Love of babies"], ["learns", "Learns from others"], ["mutations", "Genes a baby changes"],
   ["mutation_size", "How much each changes"], ["diet", "Diet (0 plants, 1 meat)"],
+  ["calls", "Calls it can make"],
 ];
 
 function makeTiles(state) {
@@ -761,6 +762,7 @@ function updateTiles(state) {
   geneTile("mutations", "mutations", 1, "", "How many genes each baby changes (the rest are copied exactly)");
   geneTile("mutation_size", "mutation_size", 3, "", "How much each changed gene of a baby changes, either way (0.05 = 5 %)");
   geneTile("diet", "diet", 2, "", "Diet: 0 lives on plants and fruit, 1 on meat (corpses and hits)");
+  geneTile("calls", "calls", 1, "", "Calls it can make (0 to 10 kinds; what each means is up to evolution)");
   const points = state.samples.filter((x) => x.energy !== null);
   const svg = state.tiles.querySelector("svg");
   if (points.length > 1) {
@@ -912,6 +914,19 @@ async function fetchView() {
 
 // Hunger as a colour: red when empty, yellow at half, green from 70 % of a full tank (enough for a baby).
 const HUNGER = [[0, [226, 75, 74]], [0.35, [237, 161, 0]], [0.7, [27, 175, 122]]];
+const CALL_COLOURS = ["#f4d35e", "#ee964b", "#f95738", "#4ecdc4", "#a06cd5", "#5ab1ef", "#ff6fb5", "#9bc53d",
+                      "#e8e8e8", "#c3a995"];  // one per kind of call
+
+function drawCall(g, x, y, call, unit) {  // [kind, how far it carries]: a ring that far out, with the kind's number
+  const [kind, reach] = call, colour = CALL_COLOURS[kind % CALL_COLOURS.length];
+  g.save();
+  g.strokeStyle = colour; g.lineWidth = 2; g.setLineDash([6, 4]); g.globalAlpha = 0.8;
+  g.beginPath(); g.arc(x, y, Math.max(reach * unit, 6), 0, 2 * Math.PI); g.stroke();
+  g.setLineDash([]); g.globalAlpha = 1; g.fillStyle = colour; g.font = "bold 12px system-ui, sans-serif";
+  g.fillText(String(kind + 1), x + 6, y - 6);
+  g.restore();
+}
+
 function meatColour(diet) {  // a creature's outline: green for a plant eater, dark red for a meat eater
   const d = Math.max(0, Math.min(1, diet));
   return `rgb(${Math.round(40 + 120 * d)},${Math.round(140 - 120 * d)},${Math.round(50 - 30 * d)})`;
@@ -1160,7 +1175,7 @@ const GENE_BOXES = [["size", "Size", 2], ["vision_width", "Vision width (degrees
   ["hearing", "Hears how far", 2], ["fear_of_death", "Fear of death", 2], ["love_of_babies", "Love of babies", 2],
   ["learns_from_others", "Learns from others", 2], ["learning_speed", "Learning speed", 6],
   ["mutations", "Genes a baby changes", 0], ["mutation_size", "How much each changes (share)", 3],
-  ["diet", "Diet (0 plants, 1 meat)", 2]];
+  ["diet", "Diet (0 plants, 1 meat)", 2], ["calls", "Calls it can make (0-10)", 0]];
 
 function drawGenes(c) {  // the followed creature's genes as boxes, filled once when the panel opens
   const box = document.querySelector("#genes-panel .gene-boxes");
@@ -1298,6 +1313,7 @@ function paint() {
     const [sx, sy] = toScreen(x, y);
     watching.drawn.push({ c, x: sx / devicePixelRatio, y: sy / devicePixelRatio, r: r * camera.zoom / devicePixelRatio, smart });
   }
+  for (const { c, x, y } of shown) if (c.call) drawCall(g, x, y, c.call, unit);  // a call: a ring as wide as it carries
   const where = new Map(watching.drawn.map((d) => [d.c.id, d]));
   for (const { c, x, y } of shown) {  // attacking: strike lines, over the creatures
     if (c.target === null || c.target === undefined || !where.has(c.target)) continue;
@@ -1639,7 +1655,7 @@ const WORKS_OUT = {
   move_cost: (v, s) => `pays ${(v * s).toFixed(3)} a unit moved`,
 };
 const GENE_NOW = { size: "size", vision_width: "vision_width", vision_reach: "vision_reach", hearing: "hearing",
-                   fear: "fear_of_death", love: "love_of_babies", learns: "learns_from_others", neurons: "neurons", diet: "diet",
+                   fear: "fear_of_death", love: "love_of_babies", learns: "learns_from_others", neurons: "neurons", diet: "diet", calls: "calls",
                    mutations: "mutations", mutation_size: "mutation_size" };
 let ruleNow = { sizes: null, genes: null, values: {} };  // the creatures alive now and the rules' values, for the examples
 

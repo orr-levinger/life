@@ -31,7 +31,7 @@ def food_senses(angles: np.ndarray) -> np.ndarray:
 def toy_rewards(actions, angles: np.ndarray) -> np.ndarray:
     """Reward = cosine between the move and the food direction; eating or attacking earns nothing."""
     rewards = []
-    for (choice, (dx, dy)), angle in zip(actions, angles):
+    for (choice, (dx, dy, _)), angle in zip(actions, angles):  # the third: a call's volume
         length = math.hypot(dx, dy)
         rewards.append((dx * math.cos(angle) + dy * math.sin(angle)) / length if choice == 0 and length > 0 else 0.0)
     return np.array(rewards)
@@ -52,6 +52,7 @@ def outputs(weights: NetWeights, senses: np.ndarray):
     learner.allocate(weights, LEARNING_RATE)
     p = {name: tf.gather(var, [0]) for name, var in learner._params.items()}
     logits, mean, _, _ = L._heads(p, tf.constant(senses[None], tf.float32), tf.ones((1, len(senses))),
+                                  tf.zeros((1, len(senses))),  # no calls
                                   tf.constant([weights.size], tf.float32))
     return logits.numpy(), mean.numpy()
 
@@ -139,9 +140,9 @@ class TestLearner(unittest.TestCase):
         learner = learner_with(4)
         actions = learner.act([0, 1, 2, 3], np.zeros((4, N_SENSES)), attacks_on=True)
         self.assertEqual(len(actions), 4)
-        for choice, (dx, dy) in actions:
-            self.assertIn(choice, (0, 1, 2))  # move, eat or attack
-            self.assertTrue(-1.0 <= dx <= 1.0 and -1.0 <= dy <= 1.0)
+        for choice, (dx, dy, volume) in actions:
+            self.assertIn(choice, (0, 1, 2))  # move, eat or attack: no calls in its genes
+            self.assertTrue(-1.0 <= dx <= 1.0 and -1.0 <= dy <= 1.0 and 0.0 <= volume <= 1.0)
 
     def test_attack_masked(self):
         learner = learner_with(10)
@@ -207,10 +208,11 @@ class TestLearner(unittest.TestCase):
         p = {name: tf.gather(var, [slot]) for name, var in learner._params.items()}
         obs = tf.constant(np.full((1, 1, N_SENSES), 0.4), tf.float32)
         attacks = tf.ones((1, 1))
-        choice, move = tf.zeros((1, 1), tf.int32), tf.constant([[[0.3, -0.2]]], tf.float32)
-        logits, mean, log_std, value = L._heads(p, obs, attacks, tf.constant([[1.0, 32.0, 0.0, 0.0]]))
+        calls = tf.zeros((1, 1))
+        choice, move = tf.zeros((1, 1), tf.int32), tf.constant([[[0.3, -0.2, 0.5]]], tf.float32)
+        logits, mean, log_std, value = L._heads(p, obs, attacks, calls, tf.constant([[1.0, 32.0, 0.0, 0.0]]))
         own = L._log_prob(logits, mean, log_std, choice, move)
-        lb = {"obs": obs, "attacks": attacks, "choice": choice, "move": move, "logp": own - behaviour_shift,
+        lb = {"obs": obs, "attacks": attacks, "calls": calls, "choice": choice, "move": move, "logp": own - behaviour_shift,
               "adv": tf.constant([[1.5]]), "target": tf.constant([[2.0]]), "mask": tf.ones((1, 1)),
               "weight": tf.constant([[0.5]]), "size": tf.constant([[1.0, 32.0, 0.0, 0.0]])}  # it learns half as much from others
         expected = 0.5 * (-1.5 + 0.5 * (float(value[0, 0]) - 2.0) ** 2) / 64  # its own value weight 0.5, a 64-step round

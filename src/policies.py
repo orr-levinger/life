@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 import numpy as np
 
 from .creature import is_family
-from .senses import Senses
+from .senses import CALL_FIRST, Senses
 from .sensors import ProximitySensor
 
 if TYPE_CHECKING:
@@ -50,8 +50,11 @@ def brain_action(creature: Creature, senses: Senses, attacks_on: bool) -> Action
     return ("MOVE", _capped(out[0] * creature.top_speed, out[1] * creature.top_speed, creature.top_speed))
 
 
-def learner_action(creature: Creature, senses: Senses, choice: int, move: Tuple[float, float]) -> Action:
-    """A learner's choice (0 move, 1 eat, 2 attack) and move as an action; an attack with nobody in view does nothing."""
+def learner_action(creature: Creature, senses: Senses, choice: int, move: Tuple[float, ...]) -> Action:
+    """A learner's choice (0 move, 1 eat, 2 attack, 3-12 a call of each kind) and move (its axes, then a call's volume)
+    as an action; an attack with nobody in view does nothing."""
+    if choice >= CALL_FIRST:
+        return ("CALL", (choice - CALL_FIRST, move[2] if len(move) > 2 else 1.0))
     if choice == 1:
         return ("EAT", _reachable_food(creature, senses))
     if choice == 2:
@@ -123,7 +126,8 @@ def decide_all(world: World, creatures: Sequence[Creature], senses: Sequence[Sen
     if learners:
         outputs = world.learner.act([creatures[i].slot for i in learners],
                                     np.stack([senses[i].vector for i in learners]),
-                                    world.settings.attacks, learning=world.evolving)
+                                    world.settings.attacks, learning=world.evolving,
+                                    calls=[creatures[i].calls for i in learners])
         for i, (choice, move) in zip(learners, outputs):
             actions[i] = learner_action(creatures[i], senses[i], choice, move)
     for i, creature in enumerate(creatures):

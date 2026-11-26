@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-N_SENSES = 27  # the numbers the senses hand a brain each step (src/senses.py)
+N_SENSES = 44  # the numbers the senses hand a brain each step (src/senses.py)
 
 
 def jitter(values: np.ndarray, rng: np.random.Generator, rate: float, scale: float) -> np.ndarray:

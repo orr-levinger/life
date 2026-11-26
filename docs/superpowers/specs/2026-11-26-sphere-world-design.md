@@ -12,6 +12,23 @@
   the owner runs the simulator and the page on their Mac (its graphics card draws the planet); no cloud hosting. The
   30-frames-a-second check is done on the Mac.
 
+## How it looks (the owner, 2026-11-26, after a 3D speed test: "Make the obstacles look like rocks … extruded out of
+## the grass. The grass itself should have some texture to it. The trees look really cool. And the creatures
+## themselves, they must also be 3D.")
+
+- **Rocks:** 3D boulders rising out of the grass, each of rough, irregular shape and its own size (from its blob of
+  caps); grey-brown, lit, casting a sense of height. Ponds stay flat water, a little sunk into the ground.
+- **Grass:** the ground has texture — patches of lighter and darker green, fine noise, so the eye reads distance and
+  movement; no flat colour.
+- **Trees:** as in the test — round crowns grouped in forests (the owner liked them), with a trunk under each crown.
+- **Creatures:** 3D bodies standing on the ground, facing where they go. Their genes still show, as today in 2D:
+  size → body size; love of babies → roundness; hunger → body colour (green full, yellow half, red hungry); diet → a
+  collar from green (plants) to dark red (meat); fear of death → quills on the back; brain layers → ridges; learning
+  from others → antennae; eyes on the front; armour → plates; stealth → paler, less shiny; water → fins. Cones, hearing
+  and call rings are drawn on the ground around them.
+- **Speed:** the test drew the full scene in 19 ms a frame on this box (52 a second); 3D creatures and rocks must keep a
+  frame under 33 ms here (30 a second) with 600 alive, measured by drawing frames back to back.
+
 ## Intent
 
 A planet the owner can spin and zoom easily, from the whole ball down to one creature, with no edge anywhere for a

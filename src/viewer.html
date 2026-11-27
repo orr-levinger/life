@@ -84,6 +84,15 @@
   .row .num strong { font-weight: 600; font-size: 15px; }
   .good { color: var(--eat); } .bad { color: var(--warn); }
   #rules-page { display: grid; gap: 14px; }
+  #species-page { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 14px; align-items: start; }
+  #species-page .panel { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
+  #species-page h2 { font-size: 15px; margin: 0 0 6px; } #species-page small { color: var(--muted); }
+  #species-tree svg { width: 100%; display: block; } #species-tree .band { cursor: pointer; }
+  #species-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #species-table td, #species-table th { padding: 3px 6px; border-bottom: 1px solid var(--grid); text-align: left; }
+  #species-table tr { cursor: pointer; } #species-table tr:hover { background: var(--page); }
+  #species-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 6px 0; font-size: 13px; }
+  #species-card dt { color: var(--muted); }
   .chart-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: var(--muted); font-size: 12px; }
   .chart-bar > span { display: inline-flex; align-items: center; gap: 6px; }
   .rules-table { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; overflow-x: auto; }
@@ -145,6 +154,7 @@
     <button id="tab-live" type="button">Live</button>
     <button id="tab-history" type="button">History</button>
     <button id="tab-rules" type="button">Rules</button>
+    <button id="tab-species" type="button">Species</button>
   </div>
   <div id="legend"></div>
   <div id="clock"><i class="dot stale"></i>connecting…</div>
@@ -186,6 +196,12 @@
   <canvas id="watch-legend" hidden height="120" aria-label="What a creature's look means: point at a creature in the world to see its numbers"></canvas>
 </section>
 <section id="rules-page" hidden></section>
+<section id="species-page" hidden>
+  <div class="panel"><h2>The tree of species <small>time runs left to right; a band's thickness: how many alive; click one</small></h2>
+    <div id="species-tree"></div></div>
+  <div><div class="panel" id="species-card"><h2>A species</h2><small>Click a species in the tree or the table.</small></div>
+    <div class="panel" style="margin-top: 14px"><h2>Alive now</h2><table id="species-table"></table></div></div>
+</section>
 <div id="runs"></div>
 <div id="charts"></div>
 <div id="tip" role="tooltip"></div>
@@ -234,7 +250,7 @@ const PANELS = [
 const W = 520, H = 250, M = { l: 44, r: 108, t: 10, b: 30 };
 const PENDING_FOR = 20000;  // ms a value moved by hand is shown before the world's own row must confirm it
 let data = [], lastChange = 0, signature = "", picked = null, KNOBS = [], COSTS = [], startMode = "auto";
-let view = { "#history": "history", "#rules": "rules" }[location.hash] || "live";
+let view = { "#history": "history", "#rules": "rules", "#species": "species" }[location.hash] || "live";
 const cards = new Map();  // a running world's controls, kept between polls so a drag is never interrupted
 
 const colorOf = (kind) => {
@@ -1522,10 +1538,16 @@ async function drawRules() {
 }
 
 function render() {
-  for (const name of ["live", "history", "rules"]) document.getElementById(`tab-${name}`).classList.toggle("on", view === name);
-  const live = view === "live", rulesView = view === "rules";
+  for (const name of ["live", "history", "rules", "species"]) document.getElementById(`tab-${name}`).classList.toggle("on", view === name);
+  const live = view === "live", rulesView = view === "rules", speciesView = view === "species";
   document.getElementById("rules-page").hidden = !rulesView;
-  document.getElementById("charts").hidden = rulesView;
+  document.getElementById("species-page").hidden = !speciesView;
+  document.getElementById("charts").hidden = rulesView || speciesView;
+  if (speciesView) {
+    for (const id of ["start", "worlds", "runs"]) document.getElementById(id).hidden = true;
+    if (watching) jumpOut();
+    return drawSpecies();
+  }
   if (rulesView) {
     for (const id of ["start", "worlds", "runs"]) document.getElementById(id).hidden = true;
     if (watching) jumpOut();
@@ -1561,6 +1583,96 @@ function show(next) {
 document.getElementById("tab-live").addEventListener("click", () => show("live"));
 document.getElementById("tab-history").addEventListener("click", () => show("history"));
 document.getElementById("tab-rules").addEventListener("click", () => show("rules"));
+document.getElementById("tab-species").addEventListener("click", () => show("species"));
+
+// ---- The tree of species (src/species.py): the running world's, else the run picked in History, else the newest ----
+let speciesBook = null, speciesPicked = null;
+const speciesColour = (id) => `hsl(${(id * 137.508) % 360}, 55%, 55%)`;
+const speciesName = (id) => (id === 1 ? "first life" : `species ${id}`);
+
+function speciesWords(g) {  // its typical member in a few words
+  if (!g) return "";
+  const diet = g.diet > 0.6 ? "hunter" : g.diet < 0.4 ? "grazer" : "eats both";
+  const water = g.water > 0.5 ? "aquatic" : g.water > 0.2 ? "swims a little" : "walker";
+  return `${diet}, ${water}, size ${g.size.toFixed(2)}, eye ${Math.round(g.eye_pixels)} px`;
+}
+
+async function drawSpecies() {
+  const run = data.find((r) => r.status === "running") || data.find((r) => r.name === picked) || data[0];
+  const tree = document.getElementById("species-tree");
+  if (!run) { tree.textContent = "No world yet."; return; }
+  const answer = await fetch(`/species?run=${encodeURIComponent(run.name)}`, { cache: "no-store" }).catch(() => null);
+  if (!answer || !answer.ok) { tree.textContent = `${run.name}: no tree yet (it begins at the first chart point; a world started before species has none until it is updated).`; return; }
+  speciesBook = await answer.json();
+  const all = speciesBook.species, byId = new Map(all.map((s) => [s.id, s]));
+  const children = new Map(all.map((s) => [s.id, []]));
+  for (const s of all) if (s.parent !== null && children.has(s.parent)) children.get(s.parent).push(s.id);
+  const order = [], visit = (id) => { order.push(id); for (const c of children.get(id) || []) visit(c); };
+  for (const s of all) if (s.parent === null || !byId.has(s.parent)) visit(s.id);
+  const last = Math.max(1, ...all.flatMap((s) => s.counts.map(([step]) => step)));
+  const most = Math.max(1, ...all.map((s) => s.largest || 0));
+  const W = 520, row = 20, H = order.length * row + 30, x = (step) => 10 + (step / last) * (W - 90);  // room for names
+  const y = new Map(order.map((id, k) => [id, 15 + k * row + row / 2]));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="The tree of species">`;
+  for (const s of all) {  // the line from its parent's band at the step it split off
+    if (s.parent === null || !y.has(s.parent)) continue;
+    svg += `<path d="M${x(s.began)},${y.get(s.parent)} V${y.get(s.id)}" stroke="${speciesColour(s.id)}" stroke-width="1.5" fill="none" opacity="0.8"/>`;
+  }
+  for (const id of order) {
+    const s = byId.get(id), points = s.counts;
+    for (let k = 0; k < points.length; k++) {  // its band, as thick as how many were alive
+      const [from, n] = points[k], to = k + 1 < points.length ? points[k + 1][0] : (s.ended ?? from + 1);
+      const h = Math.max(2, (row - 4) * Math.sqrt(n / most));
+      svg += `<rect class="band" data-species="${id}" x="${x(from)}" y="${y.get(id) - h / 2}" width="${Math.max(1.5, x(to) - x(from))}" height="${h}" fill="${speciesColour(id)}"/>`;
+    }
+    const end = s.ended ?? (points.length ? points[points.length - 1][0] : s.began);
+    svg += `<text x="${x(end) + 6}" y="${y.get(id) + 4}" font-size="11" fill="currentColor">${speciesName(id)}${s.ended !== null ? " †" : ""}</text>`;
+  }
+  svg += `<text x="10" y="${H - 4}" font-size="11" fill="currentColor">step 0</text><text x="${W - 10}" y="${H - 4}" font-size="11" text-anchor="end" fill="currentColor">step ${last.toLocaleString()}</text></svg>`;
+  tree.innerHTML = svg;
+  tree.querySelectorAll(".band").forEach((band) => band.addEventListener("click", () => speciesCard(Number(band.dataset.species))));
+  const alive = all.filter((s) => s.ended === null && s.facts);
+  document.getElementById("species-table").innerHTML = "<tr><th>Species</th><th>Alive</th><th>Typical member</th><th>From</th></tr>" +
+    alive.map((s) => `<tr data-species="${s.id}"><td><span style="color:${speciesColour(s.id)}">■</span> ${speciesName(s.id)}</td>` +
+      `<td>${s.facts.alive}</td><td>${speciesWords(s.now)}</td><td>${s.parent === null ? "-" : speciesName(s.parent)}</td></tr>`).join("");
+  document.querySelectorAll("#species-table tr[data-species]").forEach((tr) => tr.addEventListener("click", () => speciesCard(Number(tr.dataset.species))));
+  if (speciesPicked !== null && byId.has(speciesPicked)) speciesCard(speciesPicked);
+}
+
+// A species' card: its numbers, its typical member in words, how smart it is, its brain, body and lives, and what
+// changed most since it began.
+function speciesCard(id) {
+  speciesPicked = id;
+  const s = speciesBook.species.find((x) => x.id === id), card = document.getElementById("species-card");
+  if (!s) return;
+  const g = s.now || {}, f = s.facts || {}, d = s.deaths || {}, n = (v, k = 2) => (v === null || v === undefined ? "-" : Number(v).toFixed(k));
+  const range = (r, k = 2) => (r ? `${n(r[0], k)} · ${n(r[1], k)} · ${n(r[2], k)}` : "-");
+  const daughters = speciesBook.species.filter((x) => x.parent === id).map((x) => speciesName(x.id));
+  const what = g.diet > 0.6 ? "a hunter" : g.diet < 0.4 ? "a grazer" : "eats both plants and meat";
+  const changed = s.start && s.now ? Object.keys(s.now).map((k) => [k, s.now[k] - s.start[k]])
+    .filter(([, v]) => Math.abs(v) > 1e-9).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 4) : [];
+  const facts = [
+    ["alive", `${f.alive ?? 0} now, ${s.largest || 0} at most`],
+    ["lived", `from step ${s.began.toLocaleString()}${s.ended !== null ? ` to step ${s.ended.toLocaleString()} (ended)` : " on"}`],
+    ["from", s.parent === null ? "the beginning" : speciesName(s.parent)],
+    ["gave rise to", daughters.length ? daughters.join(", ") : "none yet"],
+    ["what it is", `${what} (diet ${n(g.diet)}); ${g.water > 0.5 ? "aquatic" : "a walker"} (water ${n(g.water)})`],
+    ["how smart", `earns ${n(f.smart)} energy for each 1 it spends; steers to food it sees ${f.to_food === null || f.to_food === undefined ? "-" : Math.round(f.to_food * 100) + " %"} of its moves`],
+    ["brain", `${range(f.layers, 1)} layers, ${range(f.neurons, 0)} neurons (smallest · typical · largest)`],
+    ["size", `${range(f.size)} (smallest · typical · largest); tank ${n(f.tank, 0)}; runs ${n(f.speed)} a step`],
+    ["armour, stealth", `armour ${n(g.armour)}, stealth ${n(g.stealth)}`],
+    ["eyesight", `${Math.round(g.eye_pixels || 0)} pixels sharp, ${n(g.vision_width, 0)}° wide, sees ${n(g.vision_reach, 1)} far`],
+    ["hearing", `hears ${n(g.hearing, 1)} far`],
+    ["calls, kin", `${n(g.calls, 1)} calls; cares for kin ${n(g.kin)}`],
+    ["feelings", `fear of death ${n(g.fear, 1)}, love of babies ${n(g.love, 1)}, learns from others ${n(g.learns)}`],
+    ["babies", `babies born ${s.births || 0}; each changes ${n(g.mutations, 1)} genes by up to ${n((g.mutation_size || 0) * 100, 1)} %`],
+    ["lives", `typical age ${n(f.age, 0)}, oldest ${f.oldest ?? "-"}, ${f.generations ?? "-"} generations deep`],
+    ["deaths", `died of hunger ${d.hunger || 0}, hunted ${d.attack || 0}, old age ${d.age || 0}`],
+    ["changed most", changed.length ? changed.map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${n(v)}`).join(", ") : "nothing yet"],
+  ];
+  card.innerHTML = `<h2><span style="color:${speciesColour(id)}">■</span> ${speciesName(id)}</h2><dl>` +
+    facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("") + "</dl>";
+}
 
 for (const button of document.querySelectorAll("#start-mode button"))
   button.addEventListener("click", () => {

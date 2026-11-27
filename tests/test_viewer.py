@@ -762,6 +762,31 @@ class TestControlRoom(unittest.TestCase):
         self.assertIsNone(read_control(self.root / name).follow)
         self.assertEqual(self.server.post("/control", {"run": name, "follow": "x"})[0], 400)
 
+    def test_the_species_book_is_served(self):  # the tree of species (the owner, 2026-11-27)
+        name = self.running_world()
+        book = {"next_id": 3, "species": [{"id": 1, "parent": None, "began": 0, "ended": None, "counts": [[250, 30]]},
+                                          {"id": 2, "parent": 1, "began": 250, "ended": None, "counts": [[250, 6]]}]}
+        (self.root / name / "species.json").write_text(json.dumps(book))
+        self.assertEqual(self.server.get(f"/species?run={name}"), book)
+        self.assertEqual(self.server.status(f"/species?run={self.running_world('20261123-130000-6-learning')}"), 404)
+        self.assertEqual(self.server.status("/species?run=..%2F..%2Felsewhere"), 404)
+
+    def test_the_page_draws_the_tree(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('id="tab-species"', 'id="species-page"', "function drawSpecies(", "/species?run=", "<svg"):
+            self.assertIn(words, page)
+
+    def test_a_species_card_tells_its_story(self):  # "how smart a species is, how big of a brain ... Size"
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        card = page[page.index("function speciesCard("):]
+        card = card[:card.index("\n}\n")]
+        for words in ("hunter", "grazer", "aquatic", "eyesight", "hearing", "how smart", "brain", "size", "armour",
+                      "stealth", "calls", "kin", "fear of death", "love of babies", "learns from others", "babies born",
+                      "died of hunger", "hunted", "old age", "oldest", "generations", "changed most"):
+            self.assertIn(words, card)
+
     def test_world_card_has_every_cost(self):  # the owner's cost sliders, never Auto's (2026-11-27)
         answer = self.server.get("/knobs")
         self.assertNotIn("move_cost", {k["name"] for k in answer["knobs"]})  # not Auto's knobs

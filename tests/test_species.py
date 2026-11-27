@@ -81,6 +81,7 @@ class TestSpecies(unittest.TestCase):
         self.assertEqual(facts["oldest"], 800)
         self.assertEqual(entry["deaths"]["attack"], 1)
         self.assertIn("diet", entry["now"])  # its typical member, gene by gene
+        self.assertEqual(entry["now"]["eye_pixels"], 16.0)  # its eye's sharpness too
         self.assertEqual(entry["start"], entry["now"])  # its first look: it began like this
 
 

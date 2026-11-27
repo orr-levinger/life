@@ -333,6 +333,13 @@ class Controls:
                    "--out", str(folder.resolve())]
         self.started[folder.name] = self.launch(command, folder)
 
+    def species(self, name: Optional[str]) -> bytes:
+        """A world's tree of species (`species.json`, written at each chart point)."""
+        book = self._run_folder(name) / "species.json"
+        if not book.exists():
+            raise Refused(404, "that world has no tree of species yet")
+        return book.read_bytes()
+
     def water(self, name: Optional[str]) -> bytes:
         """The picture of a world's water (`water.png`, written when it starts): its seas, lakes and rivers."""
         picture = self._run_folder(name) / "water.png"
@@ -378,6 +385,12 @@ def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingH
                 self._send(200, runs(folder))
             elif self.path.startswith("/knobs"):
                 self._send(200, knobs())
+            elif self.path.startswith("/species"):
+                try:
+                    self._raw(200, controls.species(parse_qs(urlparse(self.path).query).get("run", [None])[0]),
+                              "application/json")
+                except Refused as refused:
+                    self._send(refused.status, {"error": str(refused)})
             elif self.path.startswith("/water"):
                 try:
                     self._raw(200, controls.water(parse_qs(urlparse(self.path).query).get("run", [None])[0]), "image/png")

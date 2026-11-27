@@ -24,9 +24,9 @@ _ATTRS = {"fear": "fear_of_death", "love": "love_of_babies", "learns": "learns_f
 
 
 def typical(members: Sequence[Creature], world: Any) -> Dict[str, float]:
-    """Its members' genes, gene by gene: the mean (learning speed as the learner holds it)."""
+    """Its members' genes, gene by gene: the mean (learning speed as the learner holds it), and its eye's sharpness."""
     out = {}
-    for gene in SEEN_GENES:
+    for gene in (*SEEN_GENES, "eye_pixels"):
         if gene == "learning_speed":
             learner = getattr(world, "learner", None)
             values = [learner.lr(c.slot) for c in members if learner is not None and c.policy == "learner"

@@ -33,13 +33,13 @@ row; `species.json`), `src/saves.py` (the book and each creature's species), `sr
 **Files:** Modify `src/viewer.py` (route `/species?run=`), `src/viewer.html` (the Species panel: the tree and the
 table; clicking a species opens its card: its numbers, its typical member in words, what changed since it began); Test `tests/test_viewer.py`.
 
-- [ ] Step 1: tests first: `test_the_species_book_is_served`, `test_the_page_draws_the_tree`,
+- [x] Step 1: tests first: `test_the_species_book_is_served`, `test_the_page_draws_the_tree`,
   `test_a_species_card_tells_its_story` (the book holds the start and now typical members and the largest count; the page's
   card names each trait). Run → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK.
-- [ ] Step 3: browser pane, a test server on another port with its own runs folder, a half-size world run long enough
+- [x] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK.
+- [x] Step 3: browser pane, a test server on another port with its own runs folder, a half-size world run long enough
   for a split (or the species of a test world made by hand): a screenshot of the tree sent; closed after.
-- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "The tree of species"; push to
+- [x] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "The tree of species"; push to
   `evolve-from-scratch`.
 
 ## Must be completed to mark this as done

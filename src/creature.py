@@ -305,12 +305,7 @@ class Creature:
         self.last_action = "ATTACK"
         target.last_action = "HIT_BY_ATTACK"
         if target.energy <= 0:
-            from .food import Food
-            corpse = Food(target.p.copy(), remaining_duration=round(self.rules["corpse_steps"]),
-                          energy=target.size * self.rules["corpse_energy"], meat=True)
-            world.foods.append(corpse)
-            world.foods_created_this_step.add(id(corpse))
-            world.kill(target, "attack")
+            world.kill(target, "attack")  # which leaves its corpse
 
     def get_color(self) -> str:
         return "purple" if self.policy in ("brain", "learner") else "green"

@@ -128,6 +128,12 @@ class World:
         self.level = level
 
     def kill(self, creature: Creature, cause: str) -> None:
+        """A death, of any cause (hunger, old age, a hit): it leaves a corpse, meat worth its size × the corpse's
+        energy, where it died."""
+        corpse = Food(creature.p.copy(), remaining_duration=round(self.rules["corpse_steps"]),
+                      energy=creature.size * self.rules["corpse_energy"], meat=True)
+        self.foods.append(corpse)
+        self.foods_created_this_step.add(id(corpse))
         self.creatures.remove(creature)
         self.species_book.died(creature.species, cause)
         self.deaths[cause] += 1

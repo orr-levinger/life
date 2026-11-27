@@ -364,6 +364,29 @@ class TestHunting(unittest.TestCase):
         np.testing.assert_allclose(corpse.p, at(11, 10))
         self.assertEqual((corpse.energy, corpse.remaining_duration), (8.0, 5))
 
+    def test_a_hungry_death_leaves_a_corpse(self):  # the owner, 2026-11-27: "the same if they die of hunger or old age"
+        w = make_world()
+        crowd(w)
+        c = add(w, 10, 10, size=1.0, energy=0.01, policy="brain", brain=fixed_brain(STAY))
+        w.step()
+        self.assertEqual(w.deaths["hunger"], 1)
+        corpses = [f for f in w.foods if f.meat]
+        self.assertEqual(len(corpses), 1)
+        np.testing.assert_allclose(corpses[0].p, c.p)
+        self.assertEqual((corpses[0].energy, corpses[0].remaining_duration), (8.0, 5))
+
+    def test_an_old_death_leaves_a_corpse(self):
+        w = make_world()
+        crowd(w)
+        c = add(w, 10, 10, size=1.0, energy=29.0, policy="brain", brain=fixed_brain(STAY))  # below 30 % of its maximum
+        c.lifespan, c.age = 100, 99
+        w.step()
+        self.assertEqual(w.deaths["age"], 1)
+        corpses = [f for f in w.foods if f.meat]
+        self.assertEqual(len(corpses), 1)
+        np.testing.assert_allclose(corpses[0].p, c.p)
+        self.assertEqual((corpses[0].energy, corpses[0].remaining_duration), (8.0, 5))
+
     def test_a_creature_hit_feels_it(self):
         from src.senses import sense
         w = make_world(NO_FOOD_ATTACKS)

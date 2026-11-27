@@ -100,7 +100,7 @@ RULES = (
     Rule("call_reach", "senses", "A call at full volume carries this far", 12.0, 0.5, 60.0),
     Rule("diet_bite", "senses", "A meat eater's hit takes more: × (1 + diet × this)", 1.0, 0.0, 5.0),
     Rule("hunter_share", "senses", "A hunter keeps this share of what it takes", 0.8, 0.0, 1.0),
-    Rule("corpse_energy", "senses", "A corpse's food, × the prey's size", 8.0, 0.0, 50.0),
+    Rule("corpse_energy", "senses", "A corpse's food, × the dead one's size", 8.0, 0.0, 50.0),
     Rule("corpse_steps", "senses", "A corpse lasts this many steps", 5.0, 1.0, 100.0),
     Rule("first_creatures", "world", "A new world starts with this many creatures", 200.0, 1.0, 600.0),
     Rule("obstacles", "world", "Rocks a new world gets", 70.0, 0.0, 300.0),

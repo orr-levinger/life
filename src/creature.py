@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
 
 import numpy as np
@@ -15,6 +15,39 @@ if TYPE_CHECKING:
     from .brain import Brain
     from .food import Food
     from .world import World
+
+
+# Every gene another creature shows to one that sees it, or that it hits (the owner, 2026-11-27: "they should see all
+# the DNA of the other creature"); each scaled 0-1 by the gene's range, learning speed on a log scale.
+SEEN_GENES = ("size", "diet", "water", "stealth", "armour", "vision_width", "vision_reach", "hearing", "calls", "kin",
+              "fear", "love", "learns", "learning_speed", "mutations", "mutation_size", "neurons", "layers")
+_GENE_ATTRS = {"fear": "fear_of_death", "love": "love_of_babies", "learns": "learns_from_others"}
+
+
+def genes_table(creatures: Sequence["Creature"], world: Any) -> np.ndarray:
+    """[creature, gene]: the genes each of `creatures` shows (SEEN_GENES), each 0-1 by its range."""
+    rules, out = world.rules, np.zeros((len(creatures), len(SEEN_GENES)))
+    if not len(creatures):
+        return out
+    for k, gene in enumerate(SEEN_GENES):
+        low, high = rules[f"gene.{gene}.low"], rules[f"gene.{gene}.high"]
+        if gene == "learning_speed":
+            learner = getattr(world, "learner", None)
+            values = np.array([learner.lr(c.slot) if learner is not None and c.policy == "learner" and c.slot is not None
+                               else 0.0 for c in creatures])
+            if low > 0 and high > low:
+                share = (np.log10(np.maximum(values, 1e-300)) - math.log10(low)) / (math.log10(high) - math.log10(low))
+                out[:, k] = np.where(values > 0, np.clip(share, 0.0, 1.0), 0.0)
+            continue
+        attr = _GENE_ATTRS.get(gene, gene)
+        values = np.fromiter((getattr(c, attr, 0.0) or 0.0 for c in creatures), dtype=float, count=len(creatures))
+        out[:, k] = np.clip((values - low) / (high - low), 0.0, 1.0) if high > low else 0.0
+    return out
+
+
+def genes_seen(other: "Creature", world: Any) -> np.ndarray:
+    """The genes one creature shows (see `genes_table`)."""
+    return genes_table([other], world)[0]
 
 
 KIN_GENES = ("size", "diet", "water", "stealth", "armour", "vision_width", "vision_reach", "hearing")
@@ -100,7 +133,7 @@ class Creature:
         self.layers = 0
         self.moved = False  # it moved in its last step: only then can it be heard
         self.bumped = False  # its last move ran into an obstacle (display only)
-        self.hurt: Optional[Tuple[float, float, float]] = None  # one step after a hit: share taken, direction to the hitter
+        self.hurt: Optional[Tuple[float, ...]] = None  # a hit, a step: share, where, how far, whose genes
 
         self.age = 0
         self.lifespan: Optional[int] = None  # steps it lives; the world sets it when the creature is born
@@ -262,7 +295,8 @@ class Creature:
         taken = min(target.energy, self.attack_damage(world) * (1.0 - target.armour * self.rules["armour_strength"]))
         target.energy -= taken
         ahead, left = bearing(target.p, target.facing, self.p)  # in the one hit's own view: where the hitter stands
-        target.hurt = (taken / target.max_energy, float(ahead), float(left))
+        target.hurt = (taken / target.max_energy, float(ahead), float(left),  # how much, and where the hitter stands
+                       float(arc(self.p, target.p, world.radius)), *map(float, genes_seen(self, world)))  # how far, who
         gained = self.rules["hunter_share"] * taken * self.diet  # a hit feeds a meat eater
         self.energy += gained
         self._earn(gained, world)

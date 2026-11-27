@@ -60,7 +60,7 @@ class TestOnSphere(unittest.TestCase):
         w = make_world(NO_FOOD_ATTACKS)
         hunter, prey = add(w, 0.0, 0.0), add(w, 1.0, 0.0, energy=40.0)  # prey faces east: the hunter is behind it
         hunter.apply_action(("ATTACK", prey), w)
-        share, ahead, left = prey.hurt
+        share, ahead, left = prey.hurt[:3]  # then how far, and the hitter's genes (2026-11-27)
         self.assertGreater(share, 0.0)
         self.assertAlmostEqual(ahead, -1.0, places=3)
         self.assertAlmostEqual(left, 0.0, places=3)

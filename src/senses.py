@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 import numpy as np
 
 from .brain import N_SENSES
-from .creature import Creature, similarity
+from .creature import SEEN_GENES, Creature, genes_seen, genes_table, similarity  # noqa: F401 (genes_seen: the tests')
 from .sphere import arc, bearing, neighbours
 
 if TYPE_CHECKING:
@@ -23,6 +23,8 @@ KIN_INPUT = 44  # how alike the nearest creature it sees is
 IN_WATER = 45  # it is in a pond
 WATER_SEEN = 46  # the nearest obstacle in its field of vision is a pond
 CALL_INPUTS = 27  # where the heard call starts: its kind (10), how loud (1), from where (2), the voice (4)
+GENES_AT = 47  # the nearest one it sees: its 18 genes (SEEN_GENES), 0-1 each
+HITTER_AT = GENES_AT + len(SEEN_GENES)  # the one that hit it, for one step: its distance ÷ vision reach, then its genes
 EVERY_PAIR = False  # True: every pair measured, the slow way (the tests' yardstick for the k-d tree)
 
 
@@ -40,7 +42,8 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
     Inputs 1-3: energy, size, on food. 4-7: nearest food it sees. 8-12: nearest stranger it sees (with its size). 13-16:
     nearest stranger it hears but does not see, of those that moved last step (where and how far only: a sound tells
     no size). 17-20: pain, for one step
-    after a hit: hit, share taken, direction to the hitter. Every direction is in its own view: (ahead, left); every
+    after a hit: hit, share taken, direction to the hitter. 48-65: the nearest one it sees: its genes. 66-84: the one
+    that hit it, for one step: its distance and genes. Every direction is in its own view: (ahead, left); every
     distance is along the ground."""
     creatures = list(world.creatures) if creatures is None else creatures
     if not creatures:
@@ -69,6 +72,9 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
     sheltered = world.terrain.under_tree(me.p)
     walls, water_ahead = _obstacles_seen(me, world)
     calls = _calls_heard(me, world)
+    shown = np.nonzero(seen.any(axis=1))[0]  # the genes of every one that is someone's nearest seen, worked out once
+    seen_ones = sorted(set(nearest_seen[shown].tolist()))
+    genes = dict(zip(seen_ones, genes_table([everyone[j] for j in seen_ones], world)))
 
     sensed = []
     for i, creature in enumerate(creatures):
@@ -82,6 +88,11 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
         vector[CALL_INPUTS:CALL_INPUTS + N_CALLS + 7] = calls[i]
         vector[IN_WATER] = 1.0 if world.terrain.in_pond(creature.p) else 0.0
         vector[WATER_SEEN] = water_ahead[i]
+        if other is not None:
+            vector[GENES_AT:GENES_AT + len(SEEN_GENES)] = genes[nearest_seen[i]]
+        if creature.hurt is not None and len(creature.hurt) > 3:  # who hit it, and how far (a save of before: unknown)
+            vector[HITTER_AT] = creature.hurt[3] / max(creature.vision_reach, 1e-9)
+            vector[HITTER_AT + 1:HITTER_AT + 1 + len(SEEN_GENES)] = creature.hurt[4:]
         sensed.append(Senses(vector=vector, food=food, other=other, on_food=on_food, heard=sound))
     return sensed
 
@@ -247,7 +258,7 @@ def _vector(creature: Creature, food: Optional['Food'], other: Optional[Creature
     if heard is not None:
         vector[12:16] = _sighting(creature, heard, creature.hearing, R)
     if creature.hurt is not None:
-        vector[16:20] = (1.0,) + creature.hurt
+        vector[16:20] = (1.0,) + tuple(creature.hurt[:3])
     vector[20:24] = wall  # the nearest obstacle in its field of vision
     vector[24] = 1.0 if sheltered else 0.0  # under a tree's crown
     vector[25] = 1.0 if food is not None and food.meat else 0.0  # the nearest food it sees is meat

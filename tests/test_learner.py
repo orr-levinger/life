@@ -314,6 +314,26 @@ class TestLearner(unittest.TestCase):
         self.assertGreaterEqual(after, 0.8)
 
 
+class TestLearnersOfBefore(unittest.TestCase):  # 47 senses before 2026-11-27; 84 since (the other one's genes)
+    def test_a_learner_of_before_acts_the_same(self):
+        source = learner_with(3, seed=7)
+        state = source.state()
+        for name in ("w1", "wh"):  # a save of before: no weights for the new senses
+            for part in ("params", "m", "v", "inborn"):
+                state[f"{part}.{name}"] = state[f"{part}.{name}"][:, :47, :]
+        zeroed = dict(source.state())
+        for name in ("w1", "wh"):
+            for part in ("params", "m", "v", "inborn"):
+                zeroed[f"{part}.{name}"] = zeroed[f"{part}.{name}"].copy()
+                zeroed[f"{part}.{name}"][:, 47:, :] = 0.0
+        old, now = learner_with(3, seed=7), learner_with(3, seed=7)
+        old.load_state(state)
+        now.load_state(zeroed)
+        senses = np.random.default_rng(1).normal(size=(3, N_SENSES))
+        self.assertEqual([old.act([0, 1, 2], senses, attacks_on=True) for _ in range(5)],
+                         [now.act([0, 1, 2], senses, attacks_on=True) for _ in range(5)])
+
+
 class TestBrainsInOneGo(unittest.TestCase):
     """Newborn brains wait and go into TensorFlow together, once a step; reading one brain reads that brain only."""
 

@@ -248,6 +248,23 @@ class TestSaves(unittest.TestCase):
         self.assertIsNone(twin.terrain.water)
         self.assertTrue(twin.terrain.in_pond(at(0.0, 0.0)))  # its pond is still its water
 
+    def test_a_save_of_before_resumes(self):  # brains of 47 senses (before 2026-11-27): their new senses weigh nothing
+        world = make_world(seed=8)
+        populate(world, 4)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "old.npz"
+            save_world(path, world, Dial(), {})
+            with np.load(path) as data:
+                arrays = {name: data[name] for name in data.files}
+            old = arrays["brain.w1"][:, :47, :].copy()
+            arrays["brain.w1"] = old
+            np.savez_compressed(path, **arrays)
+            loaded, _, _ = load_world(path, learner_seed=0)
+        w1 = loaded.creatures[0].brain.w1
+        self.assertEqual(w1.shape, (N_SENSES, 16))
+        np.testing.assert_array_equal(w1[:47], old[0])
+        self.assertFalse(w1[47:].any())
+
     def test_a_flat_save_is_refused_in_plain_words(self):
         world = make_world(seed=24)
         populate(world, 3)

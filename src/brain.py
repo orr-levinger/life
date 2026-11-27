@@ -21,6 +21,8 @@ class Brain:
     N_OUT = 4  # move x, move y, eat, attack
 
     def __init__(self, w1: np.ndarray, b1: np.ndarray, w2: np.ndarray, b2: np.ndarray) -> None:
+        if w1.ndim == 2 and w1.shape[0] < self.N_IN and w1.shape[1] == self.N_HIDDEN:  # a brain of before, fewer senses:
+            w1 = np.vstack([w1, np.zeros((self.N_IN - w1.shape[0], self.N_HIDDEN))])  # the new ones weigh nothing
         shapes = {
             "w1": (w1.shape, (self.N_IN, self.N_HIDDEN)),
             "b1": (b1.shape, (self.N_HIDDEN,)),

@@ -49,6 +49,15 @@ SHAPES: Dict[str, Tuple[int, ...]] = {
 _LAYER_WEIGHTS = (("w1", "b1"), ("w2", "b2"), ("w3", "b3"))
 
 
+def _with_new_senses(name: str, values: np.ndarray) -> np.ndarray:
+    """Saved weights of before, with fewer senses (47 before 2026-11-27): the rows of the new senses weigh nothing."""
+    if name in ("w1", "wh") and values.shape[-2] < N_IN:
+        pad = [(0, 0)] * values.ndim
+        pad[-2] = (0, N_IN - values.shape[-2])
+        return np.pad(values, pad)
+    return values
+
+
 @dataclass(frozen=True)
 class NetWeights:
     """One creature's actor-critic network: room for 3 actor layers of 64 neurons, its choice head, move head and
@@ -308,17 +317,18 @@ class Learner:
         return state
 
     def load_state(self, state: Dict[str, np.ndarray]) -> None:
-        """Back to a saved state (see `state`); experience starts empty."""
+        """Back to a saved state (see `state`); experience starts empty. A save of before, with fewer senses, gets the
+        new senses at zero weight: its brains act as they did."""
         self._unwritten = {}
         for name in SHAPES:
-            self._store["params"][name].assign(state[f"params.{name}"])
-            self._store["m"][name].assign(state[f"m.{name}"])
-            self._store["v"][name].assign(state[f"v.{name}"])
+            self._store["params"][name].assign(_with_new_senses(name, state[f"params.{name}"]))
+            self._store["m"][name].assign(_with_new_senses(name, state[f"m.{name}"]))
+            self._store["v"][name].assign(_with_new_senses(name, state[f"v.{name}"]))
         self._t = state["t"].copy()
         self._lr = state["lr"].copy()
         self._free = [slot for slot in range(self.slots) if state["free"][slot]]
         self._size = state["size"].copy()
-        self._inborn = [NetWeights(**{name: state[f"inborn.{name}"][slot] for name in SHAPES},
+        self._inborn = [NetWeights(**{name: _with_new_senses(name, state[f"inborn.{name}"][slot]) for name in SHAPES},
                                    size=state["inborn_size"][slot].copy())
                         if state["has_inborn"][slot] else None for slot in range(self.slots)]
         self._gen.reset(state["generator"])

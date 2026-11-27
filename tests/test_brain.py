@@ -58,5 +58,16 @@ class TestBrain(unittest.TestCase):
             Brain.random(np.random.default_rng(0)).forward(np.ones(11))
 
 
+
+class TestBrainsOfBefore(unittest.TestCase):  # 47 senses before 2026-11-27; 84 since (the other one's genes)
+    def test_a_brain_of_before_acts_the_same(self):
+        rng = np.random.default_rng(3)
+        w1, b1 = rng.normal(size=(47, Brain.N_HIDDEN)), rng.normal(size=Brain.N_HIDDEN)
+        w2, b2 = rng.normal(size=(Brain.N_HIDDEN, Brain.N_OUT)), rng.normal(size=Brain.N_OUT)
+        brain = Brain(w1, b1, w2, b2)  # loads, its new senses weighing nothing
+        x = rng.normal(size=N_SENSES)
+        np.testing.assert_allclose(brain.forward(x), np.tanh(np.tanh(x[:47] @ w1 + b1) @ w2 + b2))
+
+
 if __name__ == "__main__":
     unittest.main()

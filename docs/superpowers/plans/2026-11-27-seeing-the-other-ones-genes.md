@@ -31,12 +31,12 @@ the hitter's distance and genes), `src/creature.py` (`hurt` keeps the hitter's g
 weights: a 47-input state grows zero rows for `w1` and `wh`), `src/saves.py` if a saved brain is read there; Test
 `tests/test_learner.py`, `tests/test_saves.py`.
 
-- [ ] Step 1: tests first: `test_a_brain_of_before_acts_the_same`, `test_a_learner_of_before_acts_the_same`,
+- [x] Step 1: tests first: `test_a_brain_of_before_acts_the_same`, `test_a_learner_of_before_acts_the_same`,
   `test_a_save_of_before_resumes`. Run → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_learner tests.test_saves tests.test_brain` → OK.
-- [ ] Step 3: step time before and after (the same half-size world, 150 steps): within 5 % (the owner: speed is the
+- [x] Step 2: the changes. Run `python -m unittest tests.test_learner tests.test_saves tests.test_brain` → OK.
+- [x] Step 3: step time before and after (the same half-size world, 150 steps): within 5 % (the owner: speed is the
   only reason to drop genes).
-- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "Brains of before keep what they learned"; push to
+- [x] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "Brains of before keep what they learned"; push to
   `evolve-from-scratch`.
 
 ## Must be completed to mark this as done

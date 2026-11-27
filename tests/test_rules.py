@@ -28,7 +28,7 @@ class TestRules(unittest.TestCase):
         self.assertEqual((rule("gene.vision_width.high").start, rule("gene.vision_width.high").high), (120.0, 120.0))
         self.assertEqual(rule("gene.vision_width.new_high").start, 120.0)
         self.assertIn("at most 120", check(starting_rules(), "gene.vision_width.high", 200.0))
-        self.assertEqual(rule("gene.vision_reach.high").start, 10.0)  # it sees farther than it hears (4)
+        self.assertEqual(rule("gene.vision_reach.high").start, 30.0)  # farther than it hears (4); 30: the owner
         w = make_world(seed=2)
         self.assertTrue(all(w.add_newcomer().vision_width <= 120.0 for _ in range(40)))
 
@@ -88,6 +88,12 @@ class TestRules(unittest.TestCase):
         r = {r.name: r for r in RULES}["max_fruit"]
         self.assertEqual((r.start, r.low, r.high, r.group), (300.0, 0.0, 3000.0, "world"))
         self.assertGreater(len(means("max_fruit")), 15)
+
+    def test_vision_reaches_30(self):  # the owner, 2026-11-27: "set max vision to 30"
+        by_name = {r.name: r for r in RULES}
+        high = by_name["gene.vision_reach.high"]
+        self.assertEqual((high.start, high.high), (30.0, 50.0))
+        self.assertIsNone(check(starting_rules(), "gene.vision_reach.high", 30.0))
 
     def test_every_rule_and_gene_says_what_it_means(self):
         from src.rules import GENE_MEANS, means

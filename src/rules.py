@@ -169,7 +169,7 @@ RULES = (
     Rule("auto_every", "auto", "Auto looks every this many steps", 500.0, 100.0, 5000.0),
 ) + _gene("size", "Size", 0.5, 2.0, (0.1, 5.0), new=(0.5, 2.0)) \
   + _gene("vision_width", "Vision width (degrees)", 30.0, 120.0, (1.0, 120.0), new=(30.0, 120.0)) \
-  + _gene("vision_reach", "Vision reach", 1.0, 10.0, (0.1, 20.0), new=(1.0, 10.0)) \
+  + _gene("vision_reach", "Vision reach", 1.0, 30.0, (0.1, 50.0), new=(1.0, 10.0)) \
   + _gene("hearing", "Hearing", 0.0, 4.0, (0.0, 20.0), new=(0.0, 4.0)) \
   + _gene("fear", "Fear of death", 0.1, 100.0, (0.0, 1000.0), new=(0.1, 30.0)) \
   + _gene("love", "Love of babies", 0.1, 100.0, (0.0, 1000.0), new=(0.1, 30.0)) \

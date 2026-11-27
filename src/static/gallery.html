@@ -20,23 +20,23 @@ each creature shows its hunger (green full, yellow half, red hungry).</p>
 import * as THREE from "three";
 import { beastModel } from "/static/beasts.js";
 
-const BASE = { size: 1, diet: 0, water: 0, love: 0.3, fear: 0, layers: 1, neurons: 0.25, learns: 0, learning: 0, width: 0.5,
+const BASE = { size: 1, meat: 0, swim: 0, love: 0.3, fear: 0, layers: 1, neurons: 0.25, learns: 0, learning: 0, width: 0.5,
                reach: 0.5, hearing: 0.4, armour: 0, stealth: 0, calls: 0, kin: 0 };
 const ROWS = [
-  ["Plant eater · in between · meat eater (diet)", [{ diet: 0 }, { diet: 0.5 }, { diet: 1 }]],
-  ["Swimmers (water 1): plant eater · in between · meat eater", [{ water: 1 }, { water: 1, diet: 0.5 }, { water: 1, diet: 1 }]],
-  ["Water: land · half · full (a meat eater)", [{ diet: 1 }, { diet: 1, water: 0.5 }, { diet: 1, water: 1 }]],
+  ["Plant eater · in between · meat eater (meat gut)", [{ meat: 0 }, { meat: 0.5 }, { meat: 1 }]],
+  ["Swimmers (gills 1): plant eater · in between · meat eater", [{ swim: 1 }, { swim: 1, meat: 0.5 }, { swim: 1, meat: 1 }]],
+  ["Gills: land · half · full (a meat eater)", [{ meat: 1 }, { meat: 1, swim: 0.5 }, { meat: 1, swim: 1 }]],
   ["Size", [{ size: 0.6 }, { size: 1.2 }, { size: 1.8 }]],
   ["Love of babies → a rounder body", [{ love: 0 }, { love: 0.5 }, { love: 1 }]],
   ["Fear of death → quills", [{ fear: 0.2 }, { fear: 0.6 }, { fear: 1 }]],
-  ["Brain layers → horn tines (a grazer) / a crest (a hunter)", [{ layers: 1, diet: 1 }, { layers: 2, diet: 1 }, { layers: 3, diet: 1 }]],
+  ["Brain layers → horn tines (a grazer) / a crest (a hunter)", [{ layers: 1, meat: 1 }, { layers: 2, meat: 1 }, { layers: 3, meat: 1 }]],
   ["Neurons → head size", [{ neurons: 0 }, { neurons: 0.5 }, { neurons: 1 }]],
   ["Learns from others → antennae", [{ learns: 0.1 }, { learns: 0.5 }, { learns: 1 }]],
-  ["Learning speed → bands on the coat", [{ learning: 0, diet: 1 }, { learning: 0.5, diet: 1 }, { learning: 1, diet: 1 }]],
+  ["Learning speed → bands on the coat", [{ learning: 0, meat: 1 }, { learning: 0.5, meat: 1 }, { learning: 1, meat: 1 }]],
   ["Vision width → eyes to the sides · vision reach → eye size", [{ width: 0 }, { width: 1 }, { reach: 1 }]],
   ["Hearing → ears", [{ hearing: 0.1 }, { hearing: 0.5 }, { hearing: 1 }]],
-  ["Armour → bone plates (a hunter)", [{ diet: 1, armour: 0.3 }, { diet: 1, armour: 0.65 }, { diet: 1, armour: 1 }]],
-  ["Stealth → a duller coat (a hunter)", [{ diet: 1, stealth: 0 }, { diet: 1, stealth: 0.5 }, { diet: 1, stealth: 1 }]],
+  ["Armour → bone plates (a hunter)", [{ meat: 1, armour: 0.3 }, { meat: 1, armour: 0.65 }, { meat: 1, armour: 1 }]],
+  ["Stealth → a duller coat (a hunter)", [{ meat: 1, stealth: 0 }, { meat: 1, stealth: 0.5 }, { meat: 1, stealth: 1 }]],
   ["Calls → a throat sac", [{ calls: 1 }, { calls: 5 }, { calls: 10 }]],
   ["Care for kin → a pale blaze on the face", [{ kin: 0.2 }, { kin: 0.6 }, { kin: 1 }]],
 ];

@@ -471,11 +471,19 @@ class TestControlRoom(unittest.TestCase):
         for words in ('geneTile("kin"', '["kin", "Care for kin'):
             self.assertIn(words, page)  # a tile and a box to change it
 
-    def test_page_shows_water(self):
+    def test_the_page_shows_the_four_genes(self):  # two guts, gills and lungs (2026-11-27)
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ('geneTile("water"', '["water", "Water'):
-            self.assertIn(words, page)  # a tile and a box to change it
+        for gene, words in (("grass_gut", "Grass gut"), ("meat_gut", "Meat gut"), ("gills", "Gills"), ("lungs", "Lungs")):
+            self.assertIn(f'geneTile("{gene}"', page)  # a tile
+            self.assertIn(f'["{gene}", "{words}', page)  # a box to change it
+        self.assertIn("meatColour", page)  # a meat eater drawn redder
+        for old in ('geneTile("diet"', 'geneTile("water"', '["diet",', '["water",', "g.diet", "g.water", "c.diet", "c.water"):
+            self.assertNotIn(old, page)
+        with urllib.request.urlopen(self.server.base + "/static/gallery.html") as response:
+            gallery = response.read().decode("utf-8")
+        self.assertNotIn("diet:", gallery)
+        self.assertNotIn("water:", gallery)
 
     def test_page_shows_stealth(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
@@ -533,7 +541,7 @@ class TestControlRoom(unittest.TestCase):
             beasts = response.read().decode("utf-8")
         with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
             planet = response.read().decode("utf-8")
-        for gene in ("radius", "love_of_babies", "energy", "diet", "water", "fear_of_death", "layers", "neurons",
+        for gene in ("radius", "love_of_babies", "energy", "meat_gut", "gills", "fear_of_death", "layers", "neurons",
                      "learns_from_others", "learning_speed", "vision_width", "vision_reach", "hearing", "armour",
                      "stealth", "calls", "kin"):
             self.assertIn(f"c.{gene}", beasts, gene)  # each gene shows in the body (size: by its radius, size x body_radius)
@@ -570,12 +578,6 @@ class TestControlRoom(unittest.TestCase):
         for words in ('geneTile("calls"', '["calls", "Calls'):
             self.assertIn(words, page)  # a tile, a box to change it
         self.assertIn("if (x.c.call)", planet)  # a ring as wide as a call carries
-
-    def test_page_shows_the_diet(self):
-        with urllib.request.urlopen(self.server.base + "/") as response:
-            page = response.read().decode("utf-8")
-        for words in ('geneTile("diet"', '["diet", "Diet', "meatColour"):
-            self.assertIn(words, page)  # a tile, a box to change it, a meat eater drawn redder
 
     def test_the_alive_tile_reads_the_room_from_the_rules(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
@@ -782,7 +784,12 @@ class TestControlRoom(unittest.TestCase):
             page = response.read().decode("utf-8")
         card = page[page.index("function speciesCard("):]
         card = card[:card.index("\n}\n")]
-        for words in ("hunter", "grazer", "aquatic", "eyesight", "hearing", "how smart", "brain", "size", "armour",
+        self.assertIn("eats(g)", card)
+        self.assertIn("lives(g)", card)
+        words_of = page[page.index("function eats("):page.index("function speciesWords(")]  # what it eats, where it lives
+        for words in ("hunter", "grazer", "eats both", "aquatic", "walker"):
+            self.assertIn(words, words_of)
+        for words in ("grass gut", "meat gut", "gills", "lungs", "eyesight", "hearing", "how smart", "brain", "size", "armour",
                       "stealth", "calls", "kin", "fear of death", "love of babies", "learns from others", "babies born",
                       "died of hunger", "hunted", "old age", "oldest", "generations", "changed most"):
             self.assertIn(words, card)

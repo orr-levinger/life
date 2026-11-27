@@ -152,7 +152,8 @@ def save_header(path: Path) -> Dict[str, Any]:
 def _two_guts(about: Dict[str, Any]) -> None:
     """A save of before the two guts (2026-11-27), made one of now in place: diet d becomes a meat gut d and a grass gut
     1 - d, water w gills w and lungs 1 - w, so each creature eats, moves and pays as it did; the hit it felt shows the
-    hitter's grass gut and lungs the same way; the old genes' limits are dropped (the new ones start at theirs)."""
+    hitter's grass gut and lungs the same way, and each species' typical member too; the old genes' limits are dropped
+    (the new ones start at theirs)."""
     for saved in about["creatures"]:
         if "diet" in saved:
             diet, water = saved.pop("diet"), saved.pop("water")
@@ -166,6 +167,11 @@ def _two_guts(about: Dict[str, Any]) -> None:
     for gene in ("diet", "water"):
         for part in ("low", "high", "new_low", "new_high"):
             about["rules"].pop(f"gene.{gene}.{part}", None)
+    for entry in (about.get("species_book") or {}).get("species", []):  # each species' typical member, then and now
+        for typical in (entry.get("start"), entry.get("now")):
+            if typical and "diet" in typical:
+                diet, water = typical.pop("diet"), typical.pop("water")
+                typical.update(meat_gut=diet, grass_gut=1.0 - diet, gills=water, lungs=1.0 - water)
 
 
 def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, Any]]:

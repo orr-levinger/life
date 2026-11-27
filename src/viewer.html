@@ -685,9 +685,9 @@ const TILES = [
   ["flee", "Flees bigger"], ["chase", "Chases smaller"], ["size", "Size"], ["brain", "Brain (neurons)"],
   ["vision", "Sees (degrees)"], ["reach", "Sees how far"], ["hearing", "Hears how far"], ["fear", "Fear of death"],
   ["love", "Love of babies"], ["learns", "Learns from others"], ["mutations", "Genes a baby changes"],
-  ["mutation_size", "How much each changes"], ["diet", "Diet (0 plants, 1 meat)"],
+  ["mutation_size", "How much each changes"], ["grass_gut", "Grass gut"], ["meat_gut", "Meat gut"],
   ["calls", "Calls it can make"], ["kin", "Care for kin"],
-  ["water", "Water (0 land, 1 swimmer)"], ["stealth", "Stealth"],
+  ["gills", "Gills"], ["lungs", "Lungs"], ["stealth", "Stealth"],
   ["armour", "Armour"],
 ];
 
@@ -809,10 +809,12 @@ function updateTiles(state) {
   geneTile("learns", "learns_from_others", 2, "", "Learning from others (1 = as much as from its own step)");
   geneTile("mutations", "mutations", 1, "", "How many genes each baby changes (the rest are copied exactly)");
   geneTile("mutation_size", "mutation_size", 3, "", "How much each changed gene of a baby changes, either way (0.05 = 5 %)");
-  geneTile("diet", "diet", 2, "", "Diet: 0 lives on plants and fruit, 1 on meat (corpses and hits)");
+  geneTile("grass_gut", "grass_gut", 2, "", "Grass gut: the share of a plant or fruit bite it gets; it costs upkeep");
+  geneTile("meat_gut", "meat_gut", 2, "", "Meat gut: the share of a meat bite or a hit it gets; it costs upkeep");
   geneTile("armour", "armour", 2, "", "Armour: a hit takes less, but it is slower and dearer to keep");
   geneTile("stealth", "stealth", 2, "", "Stealth: seen and heard only from closer, for a higher living cost");
-  geneTile("water", "water", 2, "", "Water: 0 cannot enter a pond, 1 swims at full speed but walks slowly on land");
+  geneTile("gills", "gills", 2, "", "Gills: 0 cannot enter a pond, 1 swims at full speed; they cost upkeep");
+  geneTile("lungs", "lungs", 2, "", "Lungs: 1 walks at full speed on land, less walks slower; they cost upkeep");
   geneTile("kin", "kin", 2, "", "Care for kin: the share of what happens to one like it that it feels as its own");
   geneTile("calls", "calls", 1, "", "Calls it can make (0 to 10 kinds; what each means is up to evolution)");
   const points = state.samples.filter((x) => x.energy !== null);
@@ -879,14 +881,14 @@ const INDEX = [
              ["its target:, a red line, from the attacker", { mark: "star" }], ["hit", { mark: "hit" }],
              ["chasing:, an orange line, to its prey", { mark: "chase" }], ["fleeing", { mark: "flee" }],
              ["had a baby", { mark: "baby" }]]],
-  ["Body", [["plant eater", { body: { diet: 0 } }], ["meat eater", { body: { diet: 1 } }], ["swimmer", { body: { water: 1 } }],
+  ["Body", [["plant eater", { body: { meat: 0 } }], ["meat eater", { body: { meat: 1 } }], ["swimmer", { body: { swim: 1 } }],
             ["big:, its size", { body: { size: 1.4 } }], ["rounder:, loves babies", { body: { love: 1 } }],
-            ["quills:, fears death", { body: { fear: 1 } }], ["horns or crest:, brain layers", { body: { layers: 3, diet: 1 } }]]],
+            ["quills:, fears death", { body: { fear: 1 } }], ["horns or crest:, brain layers", { body: { layers: 3, meat: 1 } }]]],
   ["", [["big head:, many neurons", { body: { neurons: 1 } }], ["antennae:, learns from others", { body: { learns: 1 } }],
-        ["coat bands:, learns fast", { body: { learning: 1, diet: 1 } }], ["eyes to the sides:, wide vision", { body: { width: 1 } }],
+        ["coat bands:, learns fast", { body: { learning: 1, meat: 1 } }], ["eyes to the sides:, wide vision", { body: { width: 1 } }],
         ["big eyes:, sees far", { body: { reach: 1 } }], ["ears:, hears far", { body: { hearing: 1 } }],
-        ["bone plates:, armour", { body: { diet: 1, armour: 1 } }]]],
-  ["", [["duller coat:, stealth", { body: { diet: 1, stealth: 1 } }], ["throat sac:, calls", { body: { calls: 6 } }],
+        ["bone plates:, armour", { body: { meat: 1, armour: 1 } }]]],
+  ["", [["duller coat:, stealth", { body: { meat: 1, stealth: 1 } }], ["throat sac:, calls", { body: { calls: 6 } }],
         ["pale blaze:, cares for kin", { body: { kin: 1 } }],
         ["cone:, what it sees", { ...PLAIN, vision_width: 110, vision_reach: 1.5, hearing: 0, senses: true }],
         ["blue blur:, what it hears, (Eyes view)", { heard: true }], ["food", { food: true }]]],
@@ -978,8 +980,8 @@ async function fetchView() {
 const HUNGER = [[0, [226, 75, 74]], [0.35, [237, 161, 0]], [0.7, [27, 175, 122]]];
 // one per kind of call
 
-function meatColour(diet) {  // a creature's outline: green for a plant eater, dark red for a meat eater
-  const d = Math.max(0, Math.min(1, diet));
+function meatColour(meatGut) {  // a creature's outline: green for a plant eater, dark red for a meat eater
+  const d = Math.max(0, Math.min(1, meatGut));
   return `rgb(${Math.round(40 + 120 * d)},${Math.round(140 - 120 * d)},${Math.round(50 - 30 * d)})`;
 }
 
@@ -1059,8 +1061,8 @@ const GENE_BOXES = [["size", "Size", 2], ["vision_width", "Vision width (degrees
   ["hearing", "Hears how far", 2], ["fear_of_death", "Fear of death", 2], ["love_of_babies", "Love of babies", 2],
   ["learns_from_others", "Learns from others", 2], ["learning_speed", "Learning speed", 6],
   ["mutations", "Genes a baby changes", 0], ["mutation_size", "How much each changes (share)", 3],
-  ["diet", "Diet (0 plants, 1 meat)", 2], ["calls", "Calls it can make (0-10)", 0],
-  ["kin", "Care for kin (0-1)", 2], ["water", "Water (0 land, 1 swimmer)", 2],
+  ["grass_gut", "Grass gut (0-1)", 2], ["meat_gut", "Meat gut (0-1)", 2], ["calls", "Calls it can make (0-10)", 0],
+  ["kin", "Care for kin (0-1)", 2], ["gills", "Gills (0-1)", 2], ["lungs", "Lungs (0-1)", 2],
   ["stealth", "Stealth (0-1)", 2], ["armour", "Armour (0-1)", 2]];
 
 function drawGenes(c) {  // the followed creature's genes as boxes, filled once when the panel opens
@@ -1469,7 +1471,8 @@ const WORKS_OUT = {
   move_cost: (v, s) => `pays ${(v * s).toFixed(3)} a unit moved`,
 };
 const GENE_NOW = { size: "size", vision_width: "vision_width", vision_reach: "vision_reach", hearing: "hearing",
-                   fear: "fear_of_death", love: "love_of_babies", learns: "learns_from_others", neurons: "neurons", diet: "diet", calls: "calls", kin: "kin", water: "water", stealth: "stealth", armour: "armour",
+                   fear: "fear_of_death", love: "love_of_babies", learns: "learns_from_others", neurons: "neurons", grass_gut: "grass_gut", meat_gut: "meat_gut", calls: "calls", kin: "kin", gills: "gills",
+                   lungs: "lungs", stealth: "stealth", armour: "armour",
                    mutations: "mutations", mutation_size: "mutation_size" };
 let ruleNow = { sizes: null, genes: null, values: {} };  // the creatures alive now and the rules' values, for the examples
 
@@ -1621,11 +1624,18 @@ let speciesBook = null, speciesPicked = null;
 const speciesColour = (id) => `hsl(${(id * 137.508) % 360}, 55%, 55%)`;
 const speciesName = (id) => (id === 1 ? "first life" : `species ${id}`);
 
+function eats(g) {  // what its guts make it: by which gut is bigger, and by how much
+  const meat = g.meat_gut ?? 0, grass = g.grass_gut ?? 0;
+  return meat > grass + 0.2 ? "hunter" : grass > meat + 0.2 ? "grazer" : "eats both";
+}
+function lives(g) {  // where its gills and lungs make it at home
+  const gills = g.gills ?? 0, lungs = g.lungs ?? 0;
+  return gills > 0.5 && lungs < 0.5 ? "aquatic" : gills > 0.2 ? "swims too" : "walker";
+}
+
 function speciesWords(g) {  // its typical member in a few words
   if (!g) return "";
-  const diet = g.diet > 0.6 ? "hunter" : g.diet < 0.4 ? "grazer" : "eats both";
-  const water = g.water > 0.5 ? "aquatic" : g.water > 0.2 ? "swims a little" : "walker";
-  return `${diet}, ${water}, size ${g.size.toFixed(2)}, eye ${Math.round(g.eye_pixels)} px`;
+  return `${eats(g)}, ${lives(g)}, size ${g.size.toFixed(2)}, eye ${Math.round(g.eye_pixels)} px`;
 }
 
 async function drawSpecies() {
@@ -1679,7 +1689,6 @@ function speciesCard(id) {
   const g = s.now || {}, f = s.facts || {}, d = s.deaths || {}, n = (v, k = 2) => (v === null || v === undefined ? "-" : Number(v).toFixed(k));
   const range = (r, k = 2) => (r ? `${n(r[0], k)} · ${n(r[1], k)} · ${n(r[2], k)}` : "-");
   const daughters = speciesBook.species.filter((x) => x.parent === id).map((x) => speciesName(x.id));
-  const what = g.diet > 0.6 ? "a hunter" : g.diet < 0.4 ? "a grazer" : "eats both plants and meat";
   const changed = s.start && s.now ? Object.keys(s.now).map((k) => [k, s.now[k] - s.start[k]])
     .filter(([, v]) => Math.abs(v) > 1e-9).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 4) : [];
   const facts = [
@@ -1687,7 +1696,7 @@ function speciesCard(id) {
     ["lived", `from step ${s.began.toLocaleString()}${s.ended !== null ? ` to step ${s.ended.toLocaleString()} (ended)` : " on"}`],
     ["from", s.parent === null ? "the beginning" : speciesName(s.parent)],
     ["gave rise to", daughters.length ? daughters.join(", ") : "none yet"],
-    ["what it is", `${what} (diet ${n(g.diet)}); ${g.water > 0.5 ? "aquatic" : "a walker"} (water ${n(g.water)})`],
+    ["what it is", `${eats(g)} (grass gut ${n(g.grass_gut)}, meat gut ${n(g.meat_gut)}); ${lives(g)} (gills ${n(g.gills)}, lungs ${n(g.lungs)})`],
     ["how smart", `earns ${n(f.smart)} energy for each 1 it spends; steers to food it sees ${f.to_food === null || f.to_food === undefined ? "-" : Math.round(f.to_food * 100) + " %"} of its moves`],
     ["brain", `${range(f.layers, 1)} layers, ${range(f.neurons, 0)} neurons (smallest · typical · largest)`],
     ["size", `${range(f.size)} (smallest · typical · largest); tank ${n(f.tank, 0)}; runs ${n(f.speed)} a step`],

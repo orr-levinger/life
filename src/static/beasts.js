@@ -1,5 +1,6 @@
 // How a creature looks, from its genes (the look the owner approved in the gallery, 2026-11-26): a body plan that
-// blends a grazer (diet 0), a hunter (diet 1) and a swimmer (water 1), and on it every other gene's own sign.
+// blends a grazer (meat 0), a hunter (meat 1: its meat gut) and a swimmer (swim 1: its gills), and on it every other
+// gene's own sign.
 // Low-poly and flat-shaded; the parts sharing a material are merged; bodies with the same rounded genes share their
 // geometry. Near the camera the full body; far away a simple one of its body plan, drawn in batches (one per plan,
 // each body in its own coat colour): this box draws without a graphics card, so every draw counts.
@@ -45,7 +46,7 @@ function genesOf(c) {
   const lr = c.learning_speed ? clamp01((Math.log10(c.learning_speed) + 5) / 3) : 0;  // 1e-5 .. 1e-2
   return {
     size: 1,  // the body is scaled by its size when it is placed (dress)
-    diet: step(c.diet ?? 0, 4), water: step(c.water ?? 0, 4),
+    meat: step(c.meat_gut ?? 0, 4), swim: step(c.gills ?? 0, 4),
     love: step((c.love_of_babies ?? 30) / 100, 4), fear: step((c.fear_of_death ?? 0) / 100, 4),
     layers: Math.max(1, Math.round(c.layers || 1)), neurons: step((c.neurons || 32) / 128, 4),
     learns: step(c.learns_from_others ?? 0, 4), learning: step(lr, 4),
@@ -57,7 +58,7 @@ function genesOf(c) {
 const keyOf = (g) => Object.values(g).join(",");
 
 function coatOf(g) {  // the coat's colour: tan grazer, rust hunter, teal swimmer; stealth dulls it
-  const p = g.diet, w = g.water;
+  const p = g.meat, w = g.swim;
   const base = new THREE.Color().setRGB(mix(0.55, 0.45, p), mix(0.55, 0.22, p), mix(0.3, 0.14, p)).lerp(new THREE.Color(0.18, 0.55, 0.62), w * 0.8);
   if (g.stealth > 0) base.lerp(new THREE.Color(0.42, 0.42, 0.36), 0.6 * g.stealth);  // stealth: a duller coat
   return base;
@@ -65,7 +66,7 @@ function coatOf(g) {  // the coat's colour: tan grazer, rust hunter, teal swimme
 
 // ---------- one body (genes 0..1 except layers 1-3 and calls 0-10), full or simple
 export function beastModel(g, detail = "near") {
-  const p = g.diet, w = g.water, h = 1 - p;
+  const p = g.meat, w = g.swim, h = 1 - p;
   const parts = { skin: [], dark: [], horn: [], white: [], eye: [], fin: [], accent: [], sac: [] };
   const put = (list, geo, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => {
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)),
@@ -186,7 +187,7 @@ export function beastModel(g, detail = "near") {
 }
 
 // ---------- what the planet uses: near, a full body for each creature (shared by alike genes); far, a simple body of
-// its plan (diet and water in quarters) drawn in one batch per plan, coloured by its coat; every hunger ring in one batch
+// its plan (meat gut and gills in quarters) drawn in one batch per plan, coloured by its coat; every hunger ring in one batch
 const models = new Map(), farModels = new Map();
 const PLAIN = { size: 1, love: 0.3, fear: 0, layers: 1, neurons: 0.25, learns: 0, learning: 0, width: 0.5, reach: 0.5,
                 hearing: 0.4, armour: 0, stealth: 0, calls: 0, kin: 0 };
@@ -194,8 +195,8 @@ const ringColours = [...Array(11).keys()].map((k) => new THREE.Color().setHSL(0.
 function ringColour(energy) { return ringColours[Math.round(clamp01(energy) * 10)]; }  // green full, yellow half, red hungry
 function farGeometry(key) {
   if (!farModels.has(key)) {
-    const [diet, water, detail] = key.split(",");
-    farModels.set(key, beastModel({ ...PLAIN, diet: Number(diet), water: Number(water) }, detail).children[0].geometry);
+    const [meat, swim, detail] = key.split(",");
+    farModels.set(key, beastModel({ ...PLAIN, meat: Number(meat), swim: Number(swim) }, detail).children[0].geometry);
   }
   return farModels.get(key);
 }
@@ -214,7 +215,7 @@ export function bodyPicture(genes, size = 120) {
   const scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight(0xe6f0ff, 0x40301c, 1.1));
   const sun = new THREE.DirectionalLight(0xfff0d0, 2.0); sun.position.set(5, 10, 7); scene.add(sun);
-  const g = { ...PLAIN, diet: 0, water: 0, ...genes }, body = beastModel(g, "near");
+  const g = { ...PLAIN, meat: 0, swim: 0, ...genes }, body = beastModel(g, "near");
   body.scale.setScalar(Math.min(g.size, 1.4)); body.rotation.y = -0.75; scene.add(body);
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
   camera.position.set(0, 2.4, 6.4); camera.lookAt(0, 0.75, 0);
@@ -233,7 +234,7 @@ export const BEASTS = {
     return models.get(key).clone();
   },
   dress(body, c) { body.scale.setScalar(c.radius); },  // a model is about 2 long: drawn at its body's true size
-  farKey(c, detail) { const g = genesOf(c); return `${g.diet},${g.water},${detail}`; },  // detail: far or dot
+  farKey(c, detail) { const g = genesOf(c); return `${g.meat},${g.swim},${detail}`; },  // detail: far or dot
   farGeometry,
   farMaterial,
   coat: (c) => coatOf(genesOf(c)),

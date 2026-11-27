@@ -872,6 +872,7 @@ const INDEX_ROW = 66, INDEX_LABEL = 56;  // a small legend: the planet keeps the
 
 function drawLegend() {
   const canvas = document.getElementById("watch-legend"), ink = getComputedStyle(document.documentElement);
+  if (canvas.hidden || !canvas.clientWidth) return;  // folded away: nothing to draw in (it is drawn when opened)
   const color = (name) => ink.getPropertyValue(name).trim(), dpr = devicePixelRatio;
   const perRow = Math.max(...INDEX.map(([, items]) => items.length));
   canvas.style.height = `${INDEX.length * INDEX_ROW}px`;

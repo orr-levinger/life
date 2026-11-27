@@ -723,6 +723,13 @@ class TestControlRoom(unittest.TestCase):
         self.assertEqual(read_control(self.root / name).rules, {"move_cost": 0.3})
         self.assertEqual(self.server.post("/control", {"run": name, "rules": {"move_cost": 0.5}})[0], 400)  # above nature
 
+    def test_a_folded_legend_is_not_drawn(self):  # the owner, 2026-11-27: Jump in failed ("radius ... is negative")
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        body = page[page.index("function drawLegend() {"):]
+        body = body[:body.index("\n}\n")]
+        self.assertIn("if (canvas.hidden || !canvas.clientWidth) return;", body)  # hidden: no width to draw in
+
     def test_world_card_has_every_cost(self):  # the owner's cost sliders, never Auto's (2026-11-27)
         answer = self.server.get("/knobs")
         self.assertNotIn("move_cost", {k["name"] for k in answer["knobs"]})  # not Auto's knobs

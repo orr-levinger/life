@@ -276,6 +276,7 @@ function drawBeasts(placed, R, sensed, followed, options) {
     done(mesh, list.length);
   }
   drawMarks(shown, R, sensed, followed, options);
+  drawActions(shown, R);
 }
 function batch(key, geometry, material, n) {  // one draw for many: grows when it must, its ids say who is who
   let mesh = state.batches.get(key);
@@ -333,6 +334,113 @@ function drawMarks(shown, R, sensed, followed, options) {
     if (!sensed.hears.has(x.c.id)) continue;  // a sound: a blur where it came from, never its size
     const blur = new THREE.Mesh(new THREE.CircleGeometry(0.8, 24).rotateX(-Math.PI / 2), markMats.heard);
     ground(blur, x.p, null, 0.05);
+  }
+}
+
+// ---------- what each one is doing this step: a small picture above it (always facing the camera, never too small to
+// see), a red strike line to whom it attacks, an orange line to whom it chases. One draw per kind of picture.
+function markPicture(kind) {
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const disc = (fill) => { g.fillStyle = fill; g.beginPath(); g.arc(32, 32, 26, 0, 7); g.fill(); };
+  if (kind === "eat") {  // a green bite
+    disc("#36c46a"); g.globalCompositeOperation = "destination-out"; g.beginPath(); g.arc(54, 14, 14, 0, 7); g.fill();
+  } else if (kind === "miss") {  // a dotted yellow bite: it bit at nothing
+    g.strokeStyle = "#f2c230"; g.lineWidth = 6; g.setLineDash([6, 7]); g.beginPath(); g.arc(32, 32, 24, 0, 7); g.stroke();
+  } else if (kind === "hit") {  // a red flash: it was hit
+    g.fillStyle = "#ff3b30"; g.beginPath();
+    for (let k = 0; k < 16; k++) { const r = k % 2 ? 12 : 30, a = k * Math.PI / 8; g.lineTo(32 + r * Math.cos(a), 32 + r * Math.sin(a)); }
+    g.fill();
+  } else if (kind === "star") {  // a red star on whom it strikes
+    g.fillStyle = "#ff5a4a"; g.beginPath();
+    for (let k = 0; k < 10; k++) { const r = k % 2 ? 11 : 28, a = -Math.PI / 2 + k * Math.PI / 5; g.lineTo(32 + r * Math.cos(a), 32 + r * Math.sin(a)); }
+    g.fill();
+  } else if (kind === "flee") {  // a yellow "!": it runs away
+    disc("rgba(20,20,20,0.75)"); g.fillStyle = "#ffd23f"; g.font = "bold 46px sans-serif"; g.textAlign = "center";
+    g.textBaseline = "middle"; g.fillText("!", 32, 35);
+  } else if (kind === "chase") {  // an orange arrow: it chases
+    g.fillStyle = "#ff9a2e"; g.beginPath(); g.moveTo(10, 14); g.lineTo(54, 32); g.lineTo(10, 50); g.lineTo(20, 32); g.fill();
+  } else if (kind === "baby") {  // a pink heart: it had a baby
+    g.fillStyle = "#ff7eb6"; g.beginPath(); g.moveTo(32, 54);
+    g.bezierCurveTo(4, 34, 10, 8, 32, 22); g.bezierCurveTo(54, 8, 60, 34, 32, 54); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false });
+}
+const MARK_KINDS = ["eat", "miss", "hit", "star", "flee", "chase", "baby"];
+const markPlane = new THREE.PlaneGeometry(1, 1);
+const markLines = {
+  strike: new THREE.LineBasicMaterial({ color: 0xff3b30 }), chase: new THREE.LineBasicMaterial({ color: 0xff9a2e }),
+};
+function chased(x, shown, R) {  // whom a chaser goes for: the nearest smaller one in its field of vision (as the world)
+  const p = x.p.clone().normalize(), half = Math.cos((x.c.vision_width / 2) * Math.PI / 180), { size } = x.c;
+  let best = null, bestAway = Infinity;
+  for (const y of shown) {
+    if (y === x || y.c.size >= size) continue;
+    const q = y.p.clone().normalize(), away = R * p.angleTo(q);
+    if (away > x.c.vision_reach || away >= bestAway) continue;
+    const t = q.clone().sub(p.clone().multiplyScalar(p.dot(q))), l = t.length();
+    if (x.c.vision_width < 360 && l > 0 && t.dot(x.f) / l < half) continue;
+    best = y; bestAway = away;
+  }
+  return best;
+}
+function drawActions(shown, R) {
+  if (!state.markBatches) {
+    state.markBatches = new Map(MARK_KINDS.map((kind) => {
+      const mesh = new THREE.InstancedMesh(markPlane, markPicture(kind), 256);
+      mesh.frustumCulled = false; mesh.renderOrder = 2; state.marks.parent.add(mesh);
+      return [kind, mesh];
+    }));
+    state.markLineSets = Object.fromEntries(Object.entries(markLines).map(([kind, material]) => {
+      const line = new THREE.LineSegments(new THREE.BufferGeometry(), material);
+      line.frustumCulled = false; state.marks.parent.add(line);
+      return [kind, line];
+    }));
+  }
+  const lists = Object.fromEntries(MARK_KINDS.map((kind) => [kind, []])), lines = { strike: [], chase: [] };
+  const byId = new Map(shown.map((x) => [x.c.id, x]));
+  for (const x of shown) {
+    const c = x.c;
+    if (c.did === "EAT") lists.eat.push(x);
+    else if (c.did === "EAT_MISS") lists.miss.push(x);
+    else if (c.did === "HIT_BY_ATTACK") lists.hit.push(x);
+    if (c.did === "ATTACK" && c.target !== null && c.target !== undefined && byId.has(c.target)) {
+      lines.strike.push([x, byId.get(c.target)]); lists.star.push(byId.get(c.target));
+    }
+    if (c.intent === "RUN_AWAY") lists.flee.push(x);
+    if (c.intent === "CHASE") {
+      lists.chase.push(x);
+      const prey = chased(x, shown, R);
+      if (prey) lines.chase.push([x, prey]);
+    }
+    if (c.baby) lists.baby.push(x);
+  }
+  const eye = state.camera.position, o = new THREE.Object3D(), stacked = new Map();
+  for (const kind of MARK_KINDS) {
+    let mesh = state.markBatches.get(kind);
+    const list = lists[kind];
+    if (mesh.instanceMatrix.count < list.length) {  // more of a kind than room: a bigger batch
+      state.marks.parent.remove(mesh);
+      mesh = new THREE.InstancedMesh(markPlane, mesh.material, list.length * 2);
+      mesh.frustumCulled = false; mesh.renderOrder = 2; state.marks.parent.add(mesh); state.markBatches.set(kind, mesh);
+    }
+    list.forEach((x, i) => {
+      const n = x.p.clone().normalize(), up = stacked.get(x) || 0;
+      const size = Math.max(x.c.radius * 1.6, n.clone().multiplyScalar(R).distanceTo(eye) * 0.03);  // a few pixels at least
+      o.position.copy(n).multiplyScalar(R + x.c.radius * 2.4 + size * (0.6 + up));
+      o.quaternion.copy(state.camera.quaternion); o.scale.setScalar(size); o.updateMatrix(); mesh.setMatrixAt(i, o.matrix);
+      stacked.set(x, up + 1.05);  // two marks on one creature: one above the other
+    });
+    mesh.count = list.length; mesh.instanceMatrix.needsUpdate = true;
+  }
+  for (const [kind, pairs] of Object.entries(lines)) {
+    const at = new Float32Array(pairs.length * 6);
+    pairs.forEach(([a, b], i) => {
+      a.p.clone().normalize().multiplyScalar(R + a.c.radius).toArray(at, i * 6);
+      b.p.clone().normalize().multiplyScalar(R + b.c.radius).toArray(at, i * 6 + 3);
+    });
+    state.markLineSets[kind].geometry.setAttribute("position", new THREE.BufferAttribute(at, 3));
   }
 }
 

@@ -695,6 +695,13 @@ class TestControlRoom(unittest.TestCase):
                       "slider.max = high"):
             self.assertIn(words, page)
 
+    def test_the_planet_shows_what_each_one_does(self):  # the owner, 2026-11-27: "still no animations for most actions"
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            planet = response.read().decode("utf-8")
+        self.assertIn("function drawActions(", planet)
+        for words in ('"EAT"', '"EAT_MISS"', '"ATTACK"', '"HIT_BY_ATTACK"', '"CHASE"', '"RUN_AWAY"', "c.baby"):
+            self.assertIn(words, planet)
+
     def test_world_card_has_every_cost(self):  # every cost a knob, in the Costs group (2026-11-26)
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

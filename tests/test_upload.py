@@ -38,16 +38,16 @@ class TestUpload(unittest.TestCase):
             a_run(runs)
             (runs / "server.log").write_text("started\n")
             aws = Recorder()
-            uploader = Uploader(runs, "s3://my-bucket/mac", "life-reports", run=aws)
+            uploader = Uploader(runs, "s3://my-bucket/mac", "orr-personal", run=aws)
             uploader.once()
             uploader.once()  # nothing changed since: nothing sent again
         name = "20261127-094329-1-learning"
         self.assertIn(["aws", "s3", "sync", str(runs / name / "report"), f"s3://my-bucket/mac/{name}/report",
-                       "--profile", "life-reports", "--only-show-errors"], aws.commands)
+                       "--profile", "orr-personal", "--only-show-errors"], aws.commands)
         self.assertIn(["aws", "s3", "cp", str(runs / name / "species.json"), f"s3://my-bucket/mac/{name}/species.json",
-                       "--profile", "life-reports", "--only-show-errors"], aws.commands)
+                       "--profile", "orr-personal", "--only-show-errors"], aws.commands)
         self.assertIn(["aws", "s3", "cp", str(runs / "server.log"), "s3://my-bucket/mac/server.log",
-                       "--profile", "life-reports", "--only-show-errors"], aws.commands)
+                       "--profile", "orr-personal", "--only-show-errors"], aws.commands)
         self.assertEqual(len(aws.commands), 3)
         self.assertEqual(Uploader.EVERY, 120.0)  # every 2 minutes
 
@@ -56,7 +56,7 @@ class TestUpload(unittest.TestCase):
             runs = Path(tmp)
             a_run(runs)
             log = ServerLog(runs / "server.log")
-            Uploader(runs, "s3://my-bucket/mac", "life-reports", run=Recorder(fail=FileNotFoundError("aws")), log=log).once()
+            Uploader(runs, "s3://my-bucket/mac", "orr-personal", run=Recorder(fail=FileNotFoundError("aws")), log=log).once()
             said = (runs / "server.log").read_text()
         self.assertIn("upload failed", said)
 
@@ -68,8 +68,9 @@ class TestUpload(unittest.TestCase):
             kept = (Path(tmp) / "server.log").read_text().splitlines()
         self.assertEqual([line.split(" ", 1)[1] for line in kept], [f"line {k}" for k in range(3, 8)])  # time, then words
         from src.viewer import parse_args
-        args = parse_args(["--report-to", "s3://b/mac", "--report-profile", "life-reports"])
-        self.assertEqual((args.report_to, args.report_profile), ("s3://b/mac", "life-reports"))
+        args = parse_args(["--report-to", "s3://b/mac", "--report-profile", "another"])
+        self.assertEqual((args.report_to, args.report_profile), ("s3://b/mac", "another"))
+        self.assertEqual(parse_args([]).report_profile, "orr-personal")  # the owner's own profile, on the Mac and here
 
 
 if __name__ == "__main__":

@@ -48,6 +48,25 @@ and errors); Create `docs/mac-reports.md` (the owner's setup, step by step, with
 - [ ] Step 4: the owner follows `docs/mac-reports.md`; Claude reads the first reports from the bucket here and tells the
   owner what it sees.
 
+### Task 3: The owner's own profile (amendment, 2026-11-27)
+
+The owner, 2026-11-27: "on my Mac and also on this machine, the AWS profile for my AWS is orr-personal. So the AWS
+connection has to be to this profile." Asked "Make orr-personal the default and update the guide?": "yes".
+Checked here: `aws configure list-profiles` → `orr-personal`; `aws sts get-caller-identity --profile orr-personal` →
+user `sdk_user`.
+
+**Files:** Modify `src/viewer.py` (`--report-profile` default `orr-personal`); `tests/test_upload.py` (the profile in
+its commands, and the default checked); `docs/mac-reports.md` (the two IAM users and `aws configure` removed: the
+bucket, then the run command); the spec `docs/superpowers/specs/2026-11-27-mac-reports-to-s3-design.md` (the same).
+
+- [x] Step 1: test first: `test_the_server_keeps_its_log` also checks `parse_args([]).report_profile == "orr-personal"`.
+  Run `python -m unittest tests.test_upload` → FAIL (`'life-reports' != 'orr-personal'`).
+- [x] Step 2: the default, the guide and the spec. Run `python -m unittest tests.test_upload tests.test_viewer` → OK;
+  `grep -rn "life-reports\|life-mac-writer\|life-box-reader" src tests docs/mac-reports.md docs/superpowers/specs` → nothing (the bucket's example name
+  becomes `YOUR-BUCKET`).
+- [x] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "Reports use the owner's own AWS profile"
+  (`git show --stat` → the four files and this plan); push to `evolve-from-scratch`.
+
 ## Must be completed to mark this as done
 
 | # | Item | Command or check | What it must show |
@@ -58,5 +77,6 @@ and errors); Create `docs/mac-reports.md` (the owner's setup, step by step, with
 | 3 | Everything else works | `python scripts/run_tests.py` | `OK in … s (limit 300 s)` |
 | 4 | Pushed | `git push origin HEAD:evolve-from-scratch` | pushed |
 | 5 | Reports from the Mac read here | `aws s3 sync` of the bucket, here | the Mac's state and events, told to the owner |
+| 6 | Default profile is the owner's | `python -m unittest tests.test_upload`; the grep of Task 3 Step 2 | `OK`; nothing found |
 
 Anything not done or not proven is reported as such, first.

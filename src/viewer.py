@@ -467,7 +467,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--report-to", default=None,
                         help="an S3 place (s3://bucket/prefix) the worlds' reports are copied to every 2 minutes")
-    parser.add_argument("--report-profile", default="life-reports", help="the AWS profile whose keys copy them")
+    parser.add_argument("--report-profile", default="orr-personal",
+                        help="the AWS profile whose keys copy them (the owner's own: orr-personal)")
     return parser.parse_args(argv)
 
 

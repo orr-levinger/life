@@ -21,21 +21,20 @@ last 5,000 lines).
 
 ## How it reaches this box
 
-- **On the Mac**: `python -m src.viewer --report-to s3://<bucket>/mac --report-profile life-reports` makes the page
+- **On the Mac**: `python -m src.viewer --report-to s3://<bucket>/mac ` makes the page
   server copy every run's `report/` folder that changed, and `server.log`, to the bucket every 2 minutes, with the
-  AWS command-line tool (`aws s3 sync`, the profile's own keys). A failure (no network, no tool) is written to
+  AWS command-line tool (`aws s3 sync`, the keys of the owner's own profile `orr-personal`, the
+  default of `--report-profile`). A failure (no network, no tool) is written to
   `server.log` and tried again next time; it never stops the page or a world.
-- **Here**: Claude reads the bucket with `aws s3 sync s3://<bucket>/mac <scratch> --profile life-reports` (the tool is
+- **Here**: Claude reads the bucket with `aws s3 sync s3://<bucket>/mac <scratch> --profile orr-personal` (the tool is
   installed here) and reads the files.
 - **Nothing piles up**: files are overwritten; a bucket rule deletes anything older than 7 days.
 
 ## What the owner sets up once (`docs/mac-reports.md`, step by step)
 
 1. A private bucket in their own account (block all public access), with a lifecycle rule: expire after 7 days.
-2. Two IAM users: `life-mac-writer` (put, list, delete under `mac/` in that bucket only) and `life-box-reader` (get and
-   list only). Their policies are written out in the guide.
-3. `aws configure --profile life-reports` on the Mac with the writer's keys, and on this box with the reader's keys,
-   typed by the owner (Claude never handles a key).
+2. Nothing else: the owner's own profile `orr-personal` is already set up on the Mac and on this box (the owner,
+   2026-11-27: "the AWS connection has to be to this profile"); Claude never handles a key.
 
 ## Not in this
 

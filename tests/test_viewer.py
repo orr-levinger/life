@@ -488,6 +488,28 @@ class TestControlRoom(unittest.TestCase):
         for words in ('geneTile("armour"', '["armour", "Armour'):
             self.assertIn(words, page)  # a tile and a box to change it
 
+    def test_the_page_gets_the_water(self):
+        name = self.running_world()
+        png = b"\x89PNG\r\n\x1a\n" + b"rest"
+        (self.root / name / "water.png").write_bytes(png)
+        with urllib.request.urlopen(self.server.base + f"/water?run={name}") as response:
+            self.assertEqual((response.read(), response.headers["Content-Type"]), (png, "image/png"))
+        dry = self.running_world("20261123-130000-6-learning")
+        self.assertEqual(self.server.status(f"/water?run={dry}"), 404)  # a world without water (or from before it)
+        self.assertEqual(self.server.status("/water?run=..%2F..%2Felsewhere"), 404)
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            self.assertIn("/water?run=", response.read().decode("utf-8"))
+
+    def test_creatures_are_drawn_at_their_true_size(self):  # a body and its ring by its own radius, as rocks and trees
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            planet = response.read().decode("utf-8")
+        with urllib.request.urlopen(self.server.base + "/static/beasts.js") as response:
+            beasts = response.read().decode("utf-8")
+        self.assertIn("at.scale.setScalar(x.c.radius)", planet)
+        self.assertIn("body.scale.setScalar(c.radius)", beasts)
+        self.assertNotIn("x.c.size", planet)
+        self.assertNotIn("setScalar(Math.max(c.size", beasts)
+
     def test_page_draws_a_planet(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
@@ -510,10 +532,10 @@ class TestControlRoom(unittest.TestCase):
             beasts = response.read().decode("utf-8")
         with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
             planet = response.read().decode("utf-8")
-        for gene in ("size", "love_of_babies", "energy", "diet", "water", "fear_of_death", "layers", "neurons",
+        for gene in ("radius", "love_of_babies", "energy", "diet", "water", "fear_of_death", "layers", "neurons",
                      "learns_from_others", "learning_speed", "vision_width", "vision_reach", "hearing", "armour",
                      "stealth", "calls", "kin"):
-            self.assertIn(f"c.{gene}", beasts, gene)  # each gene shows in the body
+            self.assertIn(f"c.{gene}", beasts, gene)  # each gene shows in the body (size: by its radius, size x body_radius)
         for words in ("export function beastModel(", "export const BEASTS", "farGeometry(", "ringColour(", "export const DOT"):
             self.assertIn(words, beasts)  # a full body near, a simple one far, a simplest one farther, a hunger ring
         self.assertIn('from "/static/beasts.js"', planet)

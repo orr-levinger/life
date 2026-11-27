@@ -335,6 +335,13 @@ class Controls:
                    "--out", str(folder.resolve())]
         self.started[folder.name] = self.launch(command, folder)
 
+    def water(self, name: Optional[str]) -> bytes:
+        """The picture of a world's water (`water.png`, written when it starts): its seas, lakes and rivers."""
+        picture = self._run_folder(name) / "water.png"
+        if not picture.exists():
+            raise Refused(404, "that world has no water of its planet")
+        return picture.read_bytes()
+
     def view(self, name: Optional[str]) -> bytes:
         """The picture a watched world last drew (it is drawn 10 to 30 times a second, so no scoreboard is read)."""
         folder = self._run_folder(name)
@@ -372,6 +379,11 @@ def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingH
                 self._send(200, runs(folder))
             elif self.path.startswith("/knobs"):
                 self._send(200, knobs())
+            elif self.path.startswith("/water"):
+                try:
+                    self._raw(200, controls.water(parse_qs(urlparse(self.path).query).get("run", [None])[0]), "image/png")
+                except Refused as refused:
+                    self._send(refused.status, {"error": str(refused)})
             elif self.path.startswith(("/view", "/saves", "/now", "/rules")):
                 try:
                     name = parse_qs(urlparse(self.path).query).get("run", [None])[0]

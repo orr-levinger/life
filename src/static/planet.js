@@ -1,6 +1,7 @@
 // The live view of a watched world: its planet in 3D (three.js, served from this repository).
 // The page hands it each picture of the world (`/view`: points on the planet, facings, terrain caps) and draws it:
-// textured grass, rocks rising out of it, ponds, forests, food, creatures; drag to spin, wheel or pinch to zoom; click
+// textured grass, its seas, lakes and rivers (a picture of the world's water, `/water`), rocks rising out of it, ponds,
+// forests, food, creatures at their true size; drag to spin, wheel or pinch to zoom; click
 // a creature to follow it; its point of view shows only what it senses (the world's own rules, src/senses.py).
 import * as THREE from "three";
 import { OrbitControls } from "/static/OrbitControls.js";
@@ -173,6 +174,7 @@ export function updatePlanet(picture, before, t, options) {
   if (!state) return;
   const R = picture.radius;
   state.picture = picture;
+  showWater(options && options.run, R);
   if (state.R !== R) {  // a new planet: its ground, and the camera out where the whole ball shows
     if (state.ground) state.scene.remove(state.ground);
     state.ground = makeGround(R, state.renderer); state.scene.add(state.ground);
@@ -197,6 +199,23 @@ export function updatePlanet(picture, before, t, options) {
   drawFood(picture, R, sensed);
   drawBeasts(placed, R, sensed, followed, options || {});
   steer(followed, R);
+}
+
+// the world's water: its picture (blue where water, clear on land) wrapped on a ball just above the ground
+function showWater(run, R) {
+  const key = `${run}:${R}`;
+  if (!run || state.waterKey === key) return;
+  state.waterKey = key;
+  if (state.water) { state.scene.remove(state.water); state.water = null; }
+  new THREE.TextureLoader().load(`/water?run=${encodeURIComponent(run)}`, (picture) => {
+    if (state.waterKey !== key) return;  // another world since
+    picture.colorSpace = THREE.SRGBColorSpace;
+    picture.generateMipmaps = false; picture.minFilter = THREE.LinearFilter;  // plain sampling: sharpened or mipmapped,
+    // this ball cost 12 ms a frame on this box (no graphics card); plain, under 4
+    state.water = new THREE.Mesh(new THREE.SphereGeometry(R + 0.03, 128, 64),
+                                 new THREE.MeshLambertMaterial({ map: picture, alphaTest: 0.5 }));
+    state.scene.add(state.water);
+  }, undefined, () => {});  // a world without water (or from before it): no picture, no water
 }
 
 function drawFood(picture, R, sensed) {
@@ -224,7 +243,7 @@ function drawBeasts(placed, R, sensed, followed, options) {
   const shown = sensed ? placed.filter((x) => x === followed || sensed.sees.has(x.c.id)) : placed;
   const rings = batch("rings", look.ringGeometry, look.ringMaterial, shown.length);
   shown.forEach((x, i) => {
-    standOn(at, x.p, R, 0, x.f); at.scale.setScalar(Math.max(x.c.size, 0.3)); at.updateMatrix();
+    standOn(at, x.p, R, 0, x.f); at.scale.setScalar(x.c.radius); at.updateMatrix();  // its true size, as rocks and trees
     rings.setMatrixAt(i, at.matrix); rings.setColorAt(i, look.ring(x.c)); rings.userData.ids[i] = x.c.id;
     const away = at.position.distanceTo(eye);
     if (away >= NEAR) {

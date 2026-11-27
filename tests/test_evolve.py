@@ -107,6 +107,11 @@ class TestEvolve(unittest.TestCase):
         self.assertEqual([int(row["step"]) for row in rows], [50, 100, 150, 200])
         self.assertEqual(ROW_EVERY, 50)
 
+    def test_a_run_writes_its_water_picture(self):  # the page draws the planet's seas from it
+        with tempfile.TemporaryDirectory() as folder:
+            quiet_run(["--seed", "4", "--steps", "50", "--species", "instinct", "--out", folder])
+            self.assertEqual((Path(folder) / "water.png").read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+
     def test_run_writes_its_record(self):
         with tempfile.TemporaryDirectory() as folder:
             quiet_run(["--seed", "4", "--steps", "200", "--species", "instinct", "--out", folder])

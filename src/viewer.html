@@ -1154,7 +1154,7 @@ function paint() {
     planetMade = true;
   }
   if (camera.follow !== null && !picture.creatures.some((c) => c.id === camera.follow)) follow(null);  // it died
-  Planet.updatePlanet(picture, watching.prev, t, { cones: camera.cones, hover: watching.hover });
+  Planet.updatePlanet(picture, watching.prev, t, { cones: camera.cones, hover: watching.hover, run: watching.name });
   Planet.render();
 }
 let planetMade = false;

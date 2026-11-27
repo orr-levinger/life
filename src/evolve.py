@@ -230,6 +230,8 @@ def run(args: argparse.Namespace) -> Path:
         set_random_state(exam_rng, extra["exam_rng"])
         first_creatures = 0  # the first creatures were counted in the old run's windows
     dial.rules = world.rules  # Auto's target and when hunters come are the world's rules
+    if world.terrain.water is not None and world.terrain.water.any_water():
+        (out / "water.png").write_bytes(world.terrain.water.picture())  # the page draws the seas, lakes and rivers from it
     if control.settings is not None:  # the world starts from the settings the page asked for, in either mode
         dial.set(control.settings)
     knobs = _Knobs(control)

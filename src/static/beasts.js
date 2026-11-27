@@ -206,7 +206,7 @@ export const BEASTS = {
     if (!models.has(key)) models.set(key, beastModel(g, "near"));
     return models.get(key).clone();
   },
-  dress(body, c) { body.scale.setScalar(Math.max(c.size, 0.3)); },
+  dress(body, c) { body.scale.setScalar(c.radius); },  // a model is about 2 long: drawn at its body's true size
   farKey(c, detail) { const g = genesOf(c); return `${g.diet},${g.water},${detail}`; },  // detail: far or dot
   farGeometry,
   farMaterial,

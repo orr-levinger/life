@@ -131,19 +131,26 @@ format 27 can still be updated); Test `tests/test_saves.py`, `tests/test_evolve.
 - [x] Step 2: the changes. Run `python -m unittest tests.test_saves tests.test_evolve tests.test_viewer` → OK.
 - [x] Step 3: commit "New planets have seas, islands and rivers; saves keep them".
 
-### Task 5: The page shows the water
+### Task 5: The page shows the water, and creatures at their true size
 
-**Files:** Modify `src/viewer.py` (route `/water?run=<name>`: the watched world's water picture, PNG, 404 when none),
-`src/evolve.py` (writes `water.png` in the run folder when the world starts or resumes), `src/static/planet.js`
-(a sphere just above the ground with the water picture: blue seas, lakes and rivers; land clear); Test
-`tests/test_viewer.py`.
+Added with the owner on 2026-11-27 ("Yes, both"): the page drew a creature's model about 2 units long and its ring 2.2
+across at size 1, five times its body (radius 0.2 × size); now the model and its ring are scaled by the creature's own
+radius, so bodies, rocks, trees and the planet are drawn in one scale.
 
-- [ ] Step 1: test `test_the_page_gets_the_water` (the route gives a PNG for a world with water; planet.js loads
-  `/water?run=`). Run → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK.
-- [ ] Step 3: in the browser pane on a new planet: screenshots (whole planet, an island close up, a river) sent to
-  the owner; `bench(30)` under 33 ms.
-- [ ] Step 4: commit "The page shows seas, islands and rivers".
+**Files:** Modify `src/viewer.py` (route `/water?run=<name>`: the run folder's `water.png`, 404 when none),
+`src/evolve.py` (writes `water.png` in the run folder when the world starts or resumes, when it has water),
+`src/static/planet.js` (a sphere just above the ground with the water picture: blue seas, lakes and rivers; land clear;
+creatures and their rings scaled by `c.radius`), `src/static/beasts.js` (`dress` scales by `c.radius`); Test
+`tests/test_viewer.py`, `tests/test_evolve.py`.
+
+- [x] Step 1: tests: `test_the_page_gets_the_water` (the route gives the PNG of a run with `water.png`, 404 for one
+  without; planet.js loads `/water?run=`); `test_creatures_are_drawn_at_their_true_size` (planet.js and beasts.js
+  scale a body and its ring by `c.radius`, not `c.size`); `test_a_run_writes_its_water_picture` (a short small-world
+  run's folder has `water.png`, a PNG). Run `python -m unittest tests.test_viewer tests.test_evolve` → FAIL.
+- [x] Step 2: the changes. Run `python -m unittest tests.test_viewer tests.test_evolve` → OK.
+- [x] Step 3: in the browser pane on a new planet: screenshots (whole planet, an island close up, a river, creatures
+  close up) sent to the owner; `bench(30)` under 33 ms.
+- [x] Step 4: commit "The page shows seas, islands and rivers; creatures at their true size".
 
 ### Task 6: Final
 

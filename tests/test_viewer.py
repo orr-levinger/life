@@ -787,6 +787,28 @@ class TestControlRoom(unittest.TestCase):
                       "died of hunger", "hunted", "old age", "oldest", "generations", "changed most"):
             self.assertIn(words, card)
 
+    def test_every_rule_can_be_dragged(self):  # the owner, 2026-11-27: "dragble nobs and not just munbers"
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        box = page[page.index("function ruleInput("):page.index("function ruleRow(")]
+        self.assertIn('type="range" data-slider=', box)  # a slider beside every number box (genes' too: geneRows uses it)
+        for words in ("function sliderValue(", "function sliderPosition(", "data-log", "data-whole"):
+            self.assertIn(words, page)  # even or log scale; whole steps for counts
+        rules = page[page.index("async function drawRules("):page.index("function render(")]
+        self.assertIn('input[data-slider]', rules)  # a drag moves its box, and is sent when it ends
+        self.assertIn("change(slider.dataset.slider", rules)
+
+    def test_a_slowly_watched_world_is_still_running(self):  # the owner, 2026-11-27: Pixels "still doesnt work" at
+        # 1 step a second: a row every 250 s, so the page server took the world for stopped and refused whom it follows
+        import os
+        name = self.running_world()
+        folder = self.root / name
+        long_ago = time.time() - 600
+        os.utime(folder / "scoreboard.csv", (long_ago, long_ago))  # its last row: 10 minutes ago
+        (folder / "view.json").write_text("{}")  # but it draws its picture now: it is being watched
+        self.assertEqual(self.server.post("/control", {"run": name, "follow": 5})[0], 200)
+        self.assertEqual(read_control(folder).follow, 5)
+
     def test_world_card_has_every_cost(self):  # the owner's cost sliders, never Auto's (2026-11-27)
         answer = self.server.get("/knobs")
         self.assertNotIn("move_cost", {k["name"] for k in answer["knobs"]})  # not Auto's knobs

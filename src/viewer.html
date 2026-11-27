@@ -100,6 +100,7 @@
   .rules-table table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 820px; }
   .rules-table th { text-align: left; color: var(--muted); font-weight: 400; font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--grid); }
   .rules-table td { padding: 4px 6px; border-bottom: 1px solid var(--grid); }
+  .rules-table input[type="range"] { width: 110px; vertical-align: middle; margin-left: 6px; padding: 0; border: 0; background: none; }
   .rules-table input { width: 84px; background: var(--page); color: var(--ink); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
   .rules-table .auto { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--muted); color: var(--muted); margin-left: 6px; }
   .rules-table .error { display: block; }
@@ -1433,10 +1434,28 @@ const RULE_GROUPS = { costs: "energy a creature pays (a bite of food gives 1)", 
 const NEXT_WORLD = "(the next new world)";  // what the Rules page shows while nothing runs
 const numberText = (v) => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : String(Number(v.toPrecision(4)));
 
-function ruleInput(rule) {  // one number box: a rule of the world, or one of Auto's two cost knobs
+// A slider over a rule's allowed range (the owner, 2026-11-27: "dragble nobs and not just munbers"): even, or on a log
+// scale when it spans a hundredfold or more from above 0 (so its small values can be reached); whole steps for counts.
+const SLIDER_STEPS = 1000;
+const isLog = (rule) => rule.low > 0 && rule.high / rule.low >= 100;
+const isWhole = (rule) => [rule.low, rule.high, rule.start].every(Number.isInteger) && rule.high - rule.low >= 2;
+function sliderValue(slider) {  // where the slider stands, as the rule's value
+  const low = Number(slider.dataset.low), high = Number(slider.dataset.high), t = Number(slider.value) / SLIDER_STEPS;
+  const value = slider.dataset.log ? low * (high / low) ** t : low + t * (high - low);
+  return slider.dataset.whole ? Math.round(value) : Number(value.toPrecision(4));
+}
+function sliderPosition(rule, value) {  // where a value stands on its slider
+  const t = isLog(rule) ? Math.log(Math.max(value, rule.low) / rule.low) / Math.log(rule.high / rule.low)
+                        : (value - rule.low) / ((rule.high - rule.low) || 1);
+  return Math.round(Math.min(1, Math.max(0, t)) * SLIDER_STEPS);
+}
+
+function ruleInput(rule) {  // one number box and its slider: a rule of the world, or one of Auto's knobs
   return `<input type="number" step="any" data-rule="${rule.name}"${rule.knob ? ' data-knob="1"' : ""} value="${numberText(rule.value)}"
     data-tip="${rule.words}: from ${numberText(rule.low)} to ${numberText(rule.high)}; a new world starts at ${numberText(rule.start)}"
-    aria-label="${rule.words}">`;
+    aria-label="${rule.words}"><input type="range" data-slider="${rule.name}"${rule.knob ? ' data-knob="1"' : ""} min="0" max="${SLIDER_STEPS}" step="1"
+    value="${sliderPosition(rule, rule.value)}" data-low="${rule.low}" data-high="${rule.high}"${isLog(rule) ? ' data-log="1"' : ""}${isWhole(rule) ? ' data-whole="1"' : ""}
+    aria-label="${rule.words}: drag">`;
 }
 
 // What a rule works out to for a creature of size s (v: the rule's value, r: every value now), as the world computes it.
@@ -1500,6 +1519,8 @@ async function drawRules() {
     for (const rule of rules) {
       const input = page.querySelector(`input[data-rule="${rule.name}"]`);
       if (input && input !== document.activeElement) input.value = numberText(rule.value);
+      const slider = page.querySelector(`input[data-slider="${rule.name}"]`);
+      if (slider && slider !== document.activeElement) slider.value = sliderPosition(rule, rule.value);
       const line = page.querySelector(`[data-example="${rule.name}"]`);
       if (line) line.textContent = example(rule);
     }
@@ -1528,11 +1549,21 @@ async function drawRules() {
       say(error, problem.message, "refused");
     }
   };
-  page.querySelectorAll("input[data-rule]").forEach((input) => input.addEventListener("change", () =>
-    change(input.dataset.rule, Number(input.value), !!input.dataset.knob, input)));
+  const sliderOf = (name) => page.querySelector(`input[data-slider="${name}"]`);
+  const boxOf = (name) => page.querySelector(`input[data-rule="${name}"]`);
+  page.querySelectorAll("input[data-rule]").forEach((input) => input.addEventListener("change", () => {
+    const rule = rules.find((r) => r.name === input.dataset.rule), slider = sliderOf(input.dataset.rule);
+    if (rule && slider) slider.value = sliderPosition(rule, Number(input.value));
+    change(input.dataset.rule, Number(input.value), !!input.dataset.knob, input);
+  }));
+  page.querySelectorAll("input[data-slider]").forEach((slider) => {  // a drag moves its box; it is sent when it ends
+    slider.addEventListener("input", () => { boxOf(slider.dataset.slider).value = numberText(sliderValue(slider)); });
+    slider.addEventListener("change", () => change(slider.dataset.slider, sliderValue(slider), !!slider.dataset.knob, slider));
+  });
   page.querySelectorAll("button[data-reset]").forEach((button) => button.addEventListener("click", () => {
     const rule = rules.find((r) => r.name === button.dataset.reset), input = page.querySelector(`input[data-rule="${rule.name}"]`);
     input.value = numberText(rule.start);
+    if (sliderOf(rule.name)) sliderOf(rule.name).value = sliderPosition(rule, rule.start);
     change(rule.name, rule.start, !!rule.knob, input);
   }));
 }

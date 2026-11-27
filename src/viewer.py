@@ -64,6 +64,9 @@ def runs(folder: Path) -> List[Dict]:
         if rows and tuple(rows[0]) not in (ROW_KEYS,) + OLDER_LAYOUTS:
             continue  # a scoreboard of another design altogether
         written = (scoreboard if scoreboard.exists() else record).stat().st_mtime
+        picture = run / "view.json"  # a world watched slowly writes a row seldom but its picture every step
+        if picture.exists():
+            written = max(written, picture.stat().st_mtime)
         if timing.exists():
             status = "finished"
         elif time.time() - written <= RUNNING_WITHIN:

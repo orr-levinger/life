@@ -1,0 +1,10 @@
+#!/bin/bash
+# ./setup: once, makes the game's Python (.venv, Python 3.12) and installs what it needs.
+cd "$(dirname "$0")" || exit 1
+if ! command -v python3.12 >/dev/null; then
+  echo "Python 3.12 is missing: brew install python@3.12, then ./setup again"
+  exit 1
+fi
+python3.12 -m venv .venv || exit 1
+.venv/bin/pip install -r requirements.txt || exit 1
+echo "ready: now ./start"

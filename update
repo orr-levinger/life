@@ -1,0 +1,5 @@
+#!/bin/bash
+# ./update: the newest code.
+cd "$(dirname "$0")" || exit 1
+git pull origin evolve-from-scratch || exit 1
+echo "updated: stop the page (Ctrl+C), ./start again, then press Update code on each running world"

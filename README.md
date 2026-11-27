@@ -10,29 +10,23 @@ You need Git and Python 3.12 (TensorFlow, the learning library, does not install
 
 ### On a Mac
 
-In Terminal:
+In Terminal, once:
 
 ```
 git clone https://github.com/orr-levinger/life.git
 cd life
 git checkout evolve-from-scratch
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m src.viewer
+./setup
 ```
 
-Then open http://localhost:8765 in your browser and press **Start**.
+Then, in the `life` folder:
 
-Next time, only:
-
-```
-cd life
-source .venv/bin/activate
-python -m src.viewer
-```
-
-To get the newest code: `git pull origin evolve-from-scratch`, then start the page again.
+| Type | What it does |
+|------|--------------|
+| `./start` | starts the page and opens http://localhost:8765 (press **Start** there for a new world) |
+| `./update` | gets the newest code; then stop the page (Ctrl+C), `./start` again, and press **Update code** on each world |
+| `./connect-s3 BUCKET` | once: the reports go to your S3 bucket from then on (`docs/mac-reports.md`) |
+| `./setup` | once: makes `.venv` with Python 3.12 and installs what the game needs |
 
 ### On Windows
 

@@ -1,0 +1,14 @@
+#!/bin/bash
+# ./start: the game's page on http://localhost:8765 (it opens in the browser), with the reports going to the bucket
+# ./connect-s3 saved. Ctrl+C stops the page, never the worlds.
+cd "$(dirname "$0")" || exit 1
+if [ ! -f .venv/bin/activate ]; then
+  echo "run ./setup first"
+  exit 1
+fi
+source .venv/bin/activate
+(cd / && sleep 3 && open http://localhost:8765) >/dev/null 2>&1 &
+if [ -f .life-bucket ]; then
+  exec python -m src.viewer --report-to "s3://$(cat .life-bucket)/mac"
+fi
+exec python -m src.viewer

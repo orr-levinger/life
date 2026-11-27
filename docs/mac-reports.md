@@ -14,16 +14,16 @@ Below, `YOUR-BUCKET` is the bucket's name: pick your own (bucket names are globa
    **Expire current versions of objects** after **7** days (and, if versioning is on, **Permanently delete noncurrent
    versions** after 1 day); create.
 
-## 2. Run the page server with reports
+## 2. Connect, then start
 
-On your Mac, in the `life` folder:
+On your Mac, in the `life` folder, once:
 
 ```
-python -m src.viewer --report-to s3://YOUR-BUCKET/mac
+./connect-s3 YOUR-BUCKET
 ```
 
-It uses the `orr-personal` profile (another one: `--report-profile <name>`) and says `reports copied to
-s3://YOUR-BUCKET/mac every 120 s (profile orr-personal)`. A failed copy is written to `runs/server.log`
+It says `connected` when your `orr-personal` profile reaches the bucket. From then on, `./start` sends the reports: it
+says `reports copied to s3://YOUR-BUCKET/mac every 120 s (profile orr-personal)`. A failed copy is written to `runs/server.log`
 ("upload failed: ...") and tried again 2 minutes later; the game never stops for it.
 
 ## 3. Tell Claude the bucket's name

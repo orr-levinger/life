@@ -1,0 +1,18 @@
+#!/bin/bash
+# ./connect-s3 BUCKET: the S3 bucket the reports go to (kept in .life-bucket, never in git), checked with your
+# orr-personal AWS profile.
+cd "$(dirname "$0")" || exit 1
+if [ -z "$1" ]; then
+  echo "which bucket? ./connect-s3 BUCKET"
+  exit 1
+fi
+if ! command -v aws >/dev/null; then
+  echo "the AWS tool is missing: brew install awscli, then ./connect-s3 $1 again"
+  exit 1
+fi
+if ! aws s3 ls "s3://$1" --profile orr-personal >/dev/null; then
+  echo "could not reach s3://$1 with the orr-personal profile"
+  exit 1
+fi
+echo "$1" > .life-bucket
+echo "connected: ./start sends the reports to s3://$1/mac"

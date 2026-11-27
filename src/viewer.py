@@ -148,30 +148,39 @@ class Controls:
         settings = (self._settings(body.get("settings"), START, {**starting_rules(), **self._next_rules()})
                     if body.get("settings") is not None else None)
         if body.get("from") is not None:
-            save = self._save(body["from"])
-            try:
-                header = save_header(save)
-            except SaveError as problem:  # a flat world from before the sphere, or a broken save: nothing starts
-                raise Refused(409, str(problem)) from problem
-            seed, kind = header["seed"], header["kind"]
-            how = ["--resume", str(save.resolve())]
-        else:
-            species, seed = body.get("species"), body.get("seed")
-            if species not in SPECIES:
-                raise Refused(400, f"species must be one of {', '.join(SPECIES)}")
-            if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
-                raise Refused(400, "seed must be a whole number, 0 or more")
-            kind, how = species, ["--seed", str(seed), "--species", species]
+            return {"name": self._start_from(self._save(body["from"]), mode, settings).name}
+        species, seed = body.get("species"), body.get("seed")
+        if species not in SPECIES:
+            raise Refused(400, f"species must be one of {', '.join(SPECIES)}")
+        if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
+            raise Refused(400, "seed must be a whole number, 0 or more")
+        self._room_for_one()
+        folder = self._launch_new(seed, species, ["--seed", str(seed), "--species", species], mode, settings,
+                                  self._next_rules() or None)  # a new world: the owner's rules
+        return {"name": folder.name}
+
+    def _start_from(self, save: Path, mode: str, settings: Optional[Settings]) -> Path:
+        """A new world from a save (its own rules, converted by the save loader when the save is from older code)."""
+        try:
+            header = save_header(save)
+        except SaveError as problem:  # a flat world from before the sphere, or a broken save: nothing starts
+            raise Refused(409, str(problem)) from problem
+        self._room_for_one()
+        return self._launch_new(header["seed"], header["kind"], ["--resume", str(save.resolve())], mode, settings, None)
+
+    def _room_for_one(self) -> None:
         alive = set(self._running()) | {name for name, process in self.started.items() if process.poll() is None}
         if len(alive) >= MAX_RUNNING:
             raise Refused(409, f"{MAX_RUNNING} worlds are running already: stop one first")
+
+    def _launch_new(self, seed: int, kind: str, how: List[str], mode: str, settings: Optional[Settings],
+                    rules: Optional[Dict[str, float]]) -> Path:
         folder = new_run_folder(self.folder, seed, kind)
         folder.mkdir(parents=True)
-        rules = None if body.get("from") is not None else (self._next_rules() or None)  # a new world: the owner's rules
         write_control(folder, Control(mode, settings, False, rules=rules))
         command = [sys.executable, "-m", "src.evolve", *how, "--forever", "--mode", mode, "--out", str(folder.resolve())]
         self.started[folder.name] = self.launch(command, folder)
-        return {"name": folder.name}
+        return folder
 
     def _run_folder(self, name: object) -> Path:
         if not isinstance(name, str) or name not in {run.name for run in self.folder.iterdir()}:
@@ -304,6 +313,10 @@ class Controls:
         update = body.get("update", False)
         if not isinstance(update, bool):
             raise Refused(400, "update must be true or false")
+        back_to = None
+        if "back_to" in body:  # back in time: this world saves and ends, then a new world goes on from that save
+            back_to = self._save({"run": name, "step": body["back_to"]})
+            stop, paused = True, False
         if update:  # the world saves and ends; then it goes on from that save with today's code, in the same run
             saved = saves_of(folder)
             if saved and 0 < save_format(save_path(folder, saved[-1])) < FIRST_PLANET:
@@ -313,21 +326,42 @@ class Controls:
                                       follow))
         if update:
             threading.Thread(target=self._hand_over, args=(folder,), daemon=True).start()
+        if back_to is not None:
+            threading.Thread(target=self._go_back, args=(folder, back_to, mode), daemon=True).start()
         return {"mode": mode, "settings": None if settings is None else knob_values(settings), "stop": stop,
-                "paused": paused, "watching": watch_until is not None, "watch_speed": watch_speed, "updating": update}
+                "paused": paused, "watching": watch_until is not None, "watch_speed": watch_speed, "updating": update,
+                "going_back": None if back_to is None else body["back_to"]}
+
+    def _ended(self, folder: Path, what: str) -> bool:
+        """Waits for the world to save and end (its time.txt); False, said in the log, when it does not in time."""
+        deadline = time.monotonic() + HANDOVER_WAIT
+        while not (folder / "time.txt").exists():
+            if time.monotonic() > deadline:
+                print(f"{what}: {folder.name} did not end within {HANDOVER_WAIT:.0f} s; nothing was started", flush=True)
+                return False
+            time.sleep(HANDOVER_LOOK)
+        return True
+
+    def _go_back(self, folder: Path, save: Path, mode: str) -> None:
+        """Back in time: once the world has saved and ended (it stays in History), a new world from the chosen save, in
+        the same mode, with the knobs it had then (the save's own)."""
+        if not self._ended(folder, "Go back"):
+            return
+        process = self.started.get(folder.name)
+        deadline = time.monotonic() + HANDOVER_WAIT
+        while process is not None and process.poll() is None and time.monotonic() < deadline:  # its process gone too
+            time.sleep(HANDOVER_LOOK)
+        try:
+            self._start_from(save, mode, None)
+        except Refused as problem:
+            print(f"Go back: {folder.name} to {save.name}: {problem}", flush=True)
 
     def _hand_over(self, folder: Path) -> None:
         """Update code: waits for the world to save and end, then starts it again from its last save, same run."""
-        ended = folder / "time.txt"
-        deadline = time.monotonic() + HANDOVER_WAIT
-        while not ended.exists():
-            if time.monotonic() > deadline:
-                print(f"Update code: {folder.name} did not end within {HANDOVER_WAIT:.0f} s; nothing was restarted",
-                      flush=True)
-                return
-            time.sleep(HANDOVER_LOOK)
+        if not self._ended(folder, "Update code"):
+            return
         save = save_path(folder, saves_of(folder)[-1])
-        ended.unlink()
+        (folder / "time.txt").unlink()
         current = read_control(folder)
         write_control(folder, Control(current.mode, current.settings, False, current.watch_until, current.watch_speed,
                                       False, current.hunters, current.rules))  # the owner's rule changes wait on

@@ -76,6 +76,20 @@ class TestSaves(unittest.TestCase):
             resumed = rows_of(quiet_run(["--resume", str(save), "--steps", "800", "--out", new]))
         self.assertEqual(resumed, whole)  # the first 2,000 steps copied, the next 2,000 lived again the same way
 
+    def test_a_save_from_older_code_goes_on(self):
+        """Going back to a save written by older code (the owner, 2026-11-27: "it should still work"): today's rules,
+        a cost above nature held at nature by Auto's first look, and the world goes on."""
+        world, dial, _ = load_world(Path(__file__).parent / "data" / "before_guts" / "save.npz", learner_seed=0)
+        world.rules["eat_miss"] = 0.3  # turned above nature by the older code
+        dial.rules = world.rules
+        dial.review(len(world.creatures), 0.0, 0.0, 0)
+        self.assertAlmostEqual(world.rules["eat_miss"], 0.1)  # its natural value (src/rules.py, COSTS)
+        for _ in range(3):
+            world.step()
+        for c in world.creatures:
+            for gene in ("grass_gut", "meat_gut", "gills", "lungs"):
+                self.assertTrue(0.0 <= getattr(c, gene) <= 1.0, gene)
+
     def test_learners_keep_what_they_learned(self):
         learner = Learner(MAX_CREATURES, 0)
         world = make_world(learner=learner, species="learner", seed=1)

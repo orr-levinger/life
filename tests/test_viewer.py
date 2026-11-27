@@ -418,6 +418,43 @@ class TestControlRoom(unittest.TestCase):
         self.assertIn("--forever", command)
         self.assertEqual(read_control(folder).mode, "manual")
 
+    def test_back_to_a_save_stops_the_world_then_starts_from_it(self):
+        """The owner, 2026-11-27: "It's stops and saved and we resume from the past"."""
+        name = self.saved_world()
+        folder = self.root / name
+        self.assertEqual(self.server.post("/control", {"run": name, "mode": "manual"})[0], 200)
+        with mock.patch("src.viewer.save_header", return_value={"seed": 5, "kind": "learning", "step": 2000}):
+            status, answer = self.server.post("/control", {"run": name, "back_to": 2000})
+            self.assertEqual((status, answer["going_back"]), (200, 2000))
+            self.assertTrue(read_control(folder).stop)  # it saves as it ends
+            time.sleep(0.3)
+            self.assertEqual(self.recorder.launched, [])  # never two at once: nothing starts before it has ended
+            (folder / "time.txt").write_text("1.0\n")  # it ended
+            for _ in range(100):
+                if self.recorder.launched:
+                    break
+                time.sleep(0.05)
+        command, launched_in = self.recorder.launched[0]
+        self.assertNotEqual(launched_in, folder)  # a new world; the old one stays in History
+        self.assertEqual(Path(command[command.index("--resume") + 1]), (folder / "saves" / "step-0002000.npz").resolve())
+        self.assertIn("--forever", command)
+        self.assertNotIn("--continue", command)
+        self.assertEqual(read_control(launched_in).mode, "manual")  # the old world's mode
+        self.assertTrue((folder / "time.txt").exists())  # the old world stays ended
+
+    def test_back_to_a_missing_save_is_refused(self):
+        name = self.saved_world()
+        status, answer = self.server.post("/control", {"run": name, "back_to": 3000})
+        self.assertEqual((status, answer["error"]), (404, f"{name} has no save at step 3000"))
+        self.assertFalse(read_control(self.root / name).stop)  # nothing stopped
+        self.assertEqual(self.recorder.launched, [])
+
+    def test_the_page_goes_back_from_a_chart(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("back_to:", "Go back to step", "/saves?run="):
+            self.assertIn(words, page)
+
     def test_resume_from_a_missing_save_is_refused(self):
         name = self.saved_world()
         status, answer = self.server.post("/start", {"from": {"run": name, "step": 3000}, "mode": "auto"})

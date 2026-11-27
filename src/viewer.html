@@ -97,6 +97,7 @@
   #species-table td.species-body { width: 40px; padding: 0 4px; } #species-table canvas.species-body { display: block; }
   .chart-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: var(--muted); font-size: 12px; }
   .chart-bar > span { display: inline-flex; align-items: center; gap: 6px; }
+  .chart-bar .go-back { color: var(--ink); }  /* back in time: the step clicked on a chart, and its button */
   .rules-table { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; overflow-x: auto; }
   .rules-table h2 { font-size: 15px; margin: 0 0 6px; } .rules-table h2 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
   .rules-table table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 820px; }
@@ -360,12 +361,13 @@ function smoothed(rows) {  // a moving average over `chartView.smooth` points, e
   });
 }
 
-function chartBar() {
+function chartBar(live) {
   const bar = document.createElement("div");
   bar.className = "chart-bar";
   const group = (label, key, options) => `<span>${label}<span class="seg">${options.map(([value, words]) =>
     `<button type="button" data-chart="${key}" data-value="${value}" class="${chartView[key] === value ? "on" : ""}">${words}</button>`).join("")}</span></span>`;
   bar.innerHTML = group("Last", "span", CHART_SPANS) + group("One point per", "per", CHART_POINTS) + group("Smoothing", "smooth", CHART_SMOOTH);
+  if (live) bar.append(goBackBox());  // an ended world (History) already has "Start a new world from this save"
   bar.addEventListener("click", (event) => {
     const button = event.target.closest("[data-chart]");
     if (!button) return;
@@ -374,6 +376,41 @@ function chartBar() {
     render();
   });
   return bar;
+}
+
+// ---- Back in time (the owner, 2026-11-27: "picl a point in time in a chart and move bck in time"): a click on a
+// chart marks a step; the button sends the world back to its last save at or before it: the world saves and ends (it
+// stays in History) and a new world goes on from that save (src/viewer.py, back_to).
+let goBack = null;  // {run, step, saves}: the step clicked, and the world's saves (from /saves)
+
+async function pickStep(run, step) {
+  goBack = { run, step, saves: null };
+  render();
+  const saves = await (await fetch(`/saves?run=${encodeURIComponent(run)}`, { cache: "no-store" })).json().catch(() => []);
+  if (goBack && goBack.run === run && goBack.step === step) { goBack.saves = Array.isArray(saves) ? saves : []; render(); }
+}
+
+function goBackBox() {
+  const box = document.createElement("span");
+  box.className = "go-back";
+  if (!goBack) { box.textContent = "Click a chart to go back in time"; return box; }
+  const before = (goBack.saves || []).filter((s) => s <= goBack.step);
+  const save = before.length ? before[before.length - 1] : null;
+  box.innerHTML = goBack.saves === null ? `step ${goBack.step.toLocaleString()}: looking for its save…`
+    : save === null ? `No save at or before step ${goBack.step.toLocaleString()}`
+    : `<button type="button" class="act back">Go back to step ${save.toLocaleString()}</button>`;
+  box.insertAdjacentHTML("beforeend", ' <button type="button" class="act cancel">Cancel</button>');
+  box.querySelector(".cancel").addEventListener("click", () => { goBack = null; render(); });
+  const back = box.querySelector(".back");
+  if (back) back.addEventListener("click", async () => {
+    back.disabled = true;
+    try {
+      await send("/control", { run: goBack.run, back_to: save });
+      back.textContent = `Saving, then going back to step ${save.toLocaleString()}…`;
+      goBack = null;
+    } catch (problem) { back.disabled = false; box.insertAdjacentText("beforeend", ` ${problem.message}`); }
+  });
+  return box;
 }
 
 function drawPanel(panel, kinds, xMin, xMax, marks, rawKinds) {
@@ -442,11 +479,27 @@ function drawPanel(panel, kinds, xMin, xMax, marks, rawKinds) {
 
   const cross = el("line", { y1: M.t, y2: H - M.b, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" });
   svg.append(cross);
+  if (goBack && goBack.step >= xMin && kinds.some(([, runs]) => runs.some((run) => run.name === goBack.run))) {  // the step picked
+    svg.append(el("line", { x1: px(goBack.step), x2: px(goBack.step), y1: M.t, y2: H - M.b, stroke: "var(--ink)", "stroke-width": 1.5 }));
+  }
   const steps = [...new Set(lines.flatMap((l) => l.mean.map((p) => p[0])))].sort((a, b) => a - b);
-  svg.addEventListener("mousemove", (event) => {
+  const stepAt = (event) => {
     const rect = svg.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * W;
-    const step = steps.reduce((best, s) => Math.abs(px(s) - x) < Math.abs(px(best) - x) ? s : best, steps[0]);
+    return steps.reduce((best, s) => Math.abs(px(s) - x) < Math.abs(px(best) - x) ? s : best, steps[0]);
+  };
+  const world = kinds.flatMap(([, runs]) => runs)[0];  // the running world the charts are of (the first, when two)
+  if (world.status === "running") {
+    svg.addEventListener("click", (event) => {  // the step under the mouse itself, not the nearest chart point
+      const rect = svg.getBoundingClientRect(), x = ((event.clientX - rect.left) / rect.width) * W;
+      const share = Math.min(1, Math.max(0, (x - M.l) / (W - M.l - M.r)));
+      pickStep(world.name, Math.round(xMin + share * (xMax - xMin)));
+    });
+    svg.style.cursor = "crosshair";
+  }
+  svg.addEventListener("mousemove", (event) => {
+    const rect = svg.getBoundingClientRect();
+    const step = stepAt(event);
     cross.setAttribute("x1", px(step)); cross.setAttribute("x2", px(step)); cross.setAttribute("visibility", "visible");
     tip.innerHTML = `<div><b>step ${step.toLocaleString()}</b></div>` + lines.map((l) => {
       const point = l.mean.find((p) => p[0] === step);
@@ -472,7 +525,7 @@ function drawCharts(runs) {
   const rawKinds = kinds.map(([kind, of]) => [kind, of.map((run) => ({ ...run, rows: chartRows(run.rows, xMin) }))]);
   const shown = rawKinds.map(([kind, of]) => [kind, of.map((run) => ({ ...run, rows: smoothed(run.rows) }))]);
   const hunting = runs.some((run) => run.rows.some((row) => row.hunters));
-  document.getElementById("charts").replaceChildren(chartBar(), ...PANELS.filter((panel) => !panel.hunters || hunting)
+  document.getElementById("charts").replaceChildren(chartBar(runs.every((run) => run.status === "running")), ...PANELS.filter((panel) => !panel.hunters || hunting)
     .map((panel) => drawPanel(panel, shown, xMin, Math.max(xMax, xMin + 1), marks, rawKinds)));
 }
 
@@ -1213,6 +1266,7 @@ document.getElementById("genes-panel").addEventListener("submit", (event) => {  
     .then(() => say(said, "Sent: it changes within a moment.", ""), (problem) => say(said, problem.message, "refused"));
 });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && camera.follow !== null) follow(null); });
+document.addEventListener("keydown", (event) => { if (event.key === "Escape" && goBack) { goBack = null; render(); } });
 
 document.getElementById("watch-planet").addEventListener("mousemove", (event) => {  // point at a creature: its numbers
   const tip = document.getElementById("tip");

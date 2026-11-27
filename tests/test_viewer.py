@@ -702,6 +702,15 @@ class TestControlRoom(unittest.TestCase):
         for words in ('"EAT"', '"EAT_MISS"', '"ATTACK"', '"HIT_BY_ATTACK"', '"CHASE"', '"RUN_AWAY"', "c.baby"):
             self.assertIn(words, planet)
 
+    def test_the_planet_has_room(self):  # the owner, 2026-11-27: a smaller legend, drag the edges, full screen
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('id="legend-toggle"', ">Legend<", "its hunger", "a call, as far as it carries", 'id="watch-handle"',
+                      "localStorage", "requestFullscreen", ">Full screen<"):
+            self.assertIn(words, page)
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            self.assertIn("export function markCanvas(", response.read().decode("utf-8"))  # the legend shows the same marks
+
     def test_world_card_has_every_cost(self):  # every cost a knob, in the Costs group (2026-11-26)
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
@@ -732,9 +741,9 @@ class TestControlRoom(unittest.TestCase):
     def test_page_explains_the_creature_look(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ('id="watch-legend"', "dotted: past, its lifespan", "hungry: red", "function creatureShape",
+        for words in ('id="watch-legend"', "ring under it:, its hunger: full", "hungry", "function creatureShape",
                       "big ears:, hears far", "big head:, many neurons", "folds:, brain layers", "quills:, fears death",
-                      "attacking: a strike, line to its target", "chasing", "fleeing", "function drawStrike"):
+                      "its target:, a red line, from the attacker", "chasing", "fleeing", "function drawStrike"):
             self.assertIn(words, page)
         self.assertNotIn("tan diamond: food", page)  # the owner: the words-only key "is not helping"
 

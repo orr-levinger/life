@@ -339,7 +339,7 @@ function drawMarks(shown, R, sensed, followed, options) {
 
 // ---------- what each one is doing this step: a small picture above it (always facing the camera, never too small to
 // see), a red strike line to whom it attacks, an orange line to whom it chases. One draw per kind of picture.
-function markPicture(kind) {
+export function markCanvas(kind) {  // the picture of one kind of mark (the legend draws the same)
   const c = document.createElement("canvas"); c.width = c.height = 64;
   const g = c.getContext("2d");
   const disc = (fill) => { g.fillStyle = fill; g.beginPath(); g.arc(32, 32, 26, 0, 7); g.fill(); };
@@ -364,7 +364,10 @@ function markPicture(kind) {
     g.fillStyle = "#ff7eb6"; g.beginPath(); g.moveTo(32, 54);
     g.bezierCurveTo(4, 34, 10, 8, 32, 22); g.bezierCurveTo(54, 8, 60, 34, 32, 54); g.fill();
   }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return c;
+}
+function markPicture(kind) {
+  const t = new THREE.CanvasTexture(markCanvas(kind)); t.colorSpace = THREE.SRGBColorSpace;
   return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false });
 }
 const MARK_KINDS = ["eat", "miss", "hit", "star", "flee", "chase", "baby"];

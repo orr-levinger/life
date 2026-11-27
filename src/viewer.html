@@ -126,6 +126,9 @@
   #watch .zoom output { min-width: 3.2em; text-align: center; font-variant-numeric: tabular-nums; }
   #watch-planet { width: 100%; height: 64vh; min-height: 380px; border-radius: 6px; overflow: hidden; touch-action: none; cursor: grab; background: #0b0d12; }
   #watch-legend { width: 100%; display: block; margin-top: 8px; }
+  #watch-handle { width: 90px; height: 9px; margin: 5px auto 0; border-radius: 5px; background: var(--grid); cursor: ns-resize; touch-action: none; }
+  #watch:fullscreen { background: var(--page); padding: 8px; overflow: auto; }
+  #watch:fullscreen #watch-planet { height: calc(100vh - 80px) !important; }
   .resume { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; margin-top: 8px; }
   .resume select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
   #resume-bar { grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 8px 12px; }
@@ -168,6 +171,8 @@
     <button id="show-cones" class="act" type="button" aria-pressed="true">Vision cones: on</button>
     <span class="zoom"><button id="zoom-out" class="act" type="button" aria-label="Zoom out">−</button><output id="zoom-shown">1×</output><button id="zoom-in" class="act" type="button" aria-label="Zoom in">+</button></span>
     <span id="follow-note" hidden>following <b id="follow-who"></b> <span class="seg" id="follow-view" data-tip="Above: watch it from above. Eyes: see from its own eyes, only what it senses; what it hears shows as a blur"><button type="button" data-view="above" class="on">Above</button><button type="button" data-view="eyes">Eyes</button></span> <button id="follow-genes" class="act" type="button" aria-expanded="false">Genes</button> <button id="follow-stop" class="act" type="button">Stop following</button></span>
+    <button id="legend-toggle" class="act" type="button" aria-expanded="false">Legend</button>
+    <button id="full-screen" class="act" type="button">Full screen</button>
     <button id="watch-out" class="act" type="button">Jump out</button>
   </div>
   <form id="genes-panel" hidden>
@@ -175,7 +180,8 @@
     <button class="act" type="submit">Apply to this creature</button> <span class="error" id="genes-said"></span>
   </form>
   <div id="watch-planet" role="img" aria-label="The world: a planet you can spin (drag) and zoom (wheel or pinch); click a creature to follow it"></div>
-  <canvas id="watch-legend" height="120" aria-label="What a creature's look means: point at a creature in the world to see its numbers"></canvas>
+  <div id="watch-handle" role="separator" title="Drag to make the planet taller or shorter"></div>
+  <canvas id="watch-legend" hidden height="120" aria-label="What a creature's look means: point at a creature in the world to see its numbers"></canvas>
 </section>
 <section id="rules-page" hidden></section>
 <div id="runs"></div>
@@ -807,13 +813,12 @@ const PLAIN = { energy: 0.7, age: 1500, lifespan: 5000, earned: 30, spent: 30, d
                 vision_width: 70, vision_reach: 3, hearing: 1, fear_of_death: 3, love_of_babies: 10, learns_from_others: 0.2,
                 neurons: 32, layers: 1, learning_speed: 3e-4 };
 const INDEX = [
-  ["Colour", [["full: green", { ...PLAIN, energy: 0.9 }], ["half: yellow", { ...PLAIN, energy: 0.45 }],
-              ["hungry: red", { ...PLAIN, energy: 0.08 }], ["arc: its age", { ...PLAIN, age: 3800 }],
-              ["dotted: past, its lifespan", { ...PLAIN, age: 5400, energy: 0.25 }]]],
-  ["Doing", [["eating", { ...PLAIN, did: "EAT" }], ["eating at, nothing", { ...PLAIN, did: "EAT_MISS" }],
-             ["attacking: a strike, line to its target", { ...PLAIN, did: "ATTACK", strike: true }],
-             ["hit", { ...PLAIN, did: "HIT_BY_ATTACK" }], ["chasing", { ...PLAIN, intent: "CHASE" }],
-             ["fleeing", { ...PLAIN, intent: "RUN_AWAY" }], ["had a baby", { ...PLAIN, baby: true }]]],
+  ["Rings", [["ring under it:, its hunger: full", { ring: 0.9 }], ["half", { ring: 0.45 }], ["hungry", { ring: 0.08 }],
+             ["big yellow ring:, a call, as far as it carries", { call: true }]]],
+  ["Doing", [["eating", { mark: "eat" }], ["bit at, nothing", { mark: "miss" }],
+             ["its target:, a red line, from the attacker", { mark: "star" }], ["hit", { mark: "hit" }],
+             ["chasing:, an orange line, to its prey", { mark: "chase" }], ["fleeing", { mark: "flee" }],
+             ["had a baby", { mark: "baby" }]]],
   ["Body", [["wide-set eyes:, wide cone", { ...PLAIN, vision_width: 120 }], ["big eyes:, sees far", { ...PLAIN, vision_reach: 9 }],
             ["big ears:, hears far", { ...PLAIN, hearing: 3.5 }], ["big head:, many neurons", { ...PLAIN, neurons: 64 }],
             ["folds:, brain layers", { ...PLAIN, neurons: 64, layers: 3 }], ["quills:, fears death", { ...PLAIN, fear_of_death: 80 }]]],
@@ -822,7 +827,7 @@ const INDEX = [
         ["cone:, what it sees", { ...PLAIN, vision_width: 110, vision_reach: 1.5, hearing: 0, senses: true }],
         ["dotted circle:, what it hears", { ...PLAIN, vision_reach: 0, hearing: 1.5, senses: true }], ["food", { food: true }]]],
 ];
-const INDEX_ROW = 104, INDEX_LABEL = 64;
+const INDEX_ROW = 66, INDEX_LABEL = 56;  // a small legend: the planet keeps the room
 
 function drawLegend() {
   const canvas = document.getElementById("watch-legend"), ink = getComputedStyle(document.documentElement);
@@ -831,16 +836,21 @@ function drawLegend() {
   canvas.style.height = `${INDEX.length * INDEX_ROW}px`;
   const width = canvas.clientWidth * dpr, height = INDEX.length * INDEX_ROW * dpr;
   canvas.width = width; canvas.height = height;
-  const g = canvas.getContext("2d"), cell = (width - INDEX_LABEL * dpr) / perRow, unit = Math.min(cell / 5, 12 * dpr);
+  const g = canvas.getContext("2d"), cell = (width - INDEX_LABEL * dpr) / perRow, unit = Math.min(cell / 5, 7 * dpr);
   const line = Math.max(1.2, dpr * 1.2);
   INDEX.forEach(([title, items], row) => {
     const top = row * INDEX_ROW * dpr;
     g.fillStyle = color("--ink"); g.font = `600 ${12 * dpr}px system-ui, sans-serif`; g.textAlign = "left";
-    g.fillText(title, 4 * dpr, top + 38 * dpr);
-    g.font = `${11 * dpr}px system-ui, sans-serif`; g.textAlign = "center";
+    g.fillText(title, 4 * dpr, top + 22 * dpr);
+    g.font = `${10 * dpr}px system-ui, sans-serif`; g.textAlign = "center";
     items.forEach(([words, c], i) => {
-      const x = INDEX_LABEL * dpr + cell * (i + 0.5), y = top + 34 * dpr, r = unit * 1.1;
-      if (c.food) {
+      const x = INDEX_LABEL * dpr + cell * (i + 0.5), y = top + 18 * dpr, r = unit * 1.1;
+      if (c.ring !== undefined || c.call) {  // the planet's rings: hunger (green full, red hungry) and a call
+        g.strokeStyle = c.call ? "#f4d35e" : `hsl(${Math.round(c.ring * 10) * 0.033 * 360}, 85%, 50%)`;
+        g.lineWidth = (c.call ? 1.5 : 3) * dpr; g.beginPath(); g.arc(x, y, c.call ? r * 1.5 : r, 0, 7); g.stroke();
+      } else if (c.mark) {  // the planet's own picture of what it is doing
+        if (window.Planet) g.drawImage(Planet.markCanvas(c.mark), x - r * 1.2, y - r * 1.2, r * 2.4, r * 2.4);
+      } else if (c.food) {
         const d = 5 * dpr; g.fillStyle = FOOD_COLOUR;
         g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill();
       } else {
@@ -854,7 +864,7 @@ function drawLegend() {
         }
       }
       g.fillStyle = color("--muted");
-      words.split(", ").forEach((part, k) => g.fillText(part, x, y + (34 + 12 * k) * dpr));
+      words.split(", ").forEach((part, k) => g.fillText(part, x, y + (22 + 11 * k) * dpr));
     });
   });
 }
@@ -1182,6 +1192,31 @@ function showCones(on) {
 }
 showCones(camera.cones);
 document.getElementById("show-cones").addEventListener("click", () => showCones(!camera.cones));
+document.getElementById("legend-toggle").addEventListener("click", (e) => {  // the legend folds away (hidden at first)
+  const legend = document.getElementById("watch-legend"), open = legend.hidden;
+  legend.hidden = !open; e.currentTarget.setAttribute("aria-expanded", String(open));
+  if (open) drawLegend();
+});
+document.getElementById("full-screen").addEventListener("click", () => {  // the planet fills the screen; Esc leaves
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.getElementById("watch").requestFullscreen().catch(() => {});
+});
+document.addEventListener("fullscreenchange", () => {
+  document.getElementById("full-screen").textContent = document.fullscreenElement ? "Leave full screen" : "Full screen";
+});
+{  // the handle under the planet drags its height, kept for next time
+  const planet = document.getElementById("watch-planet"), handle = document.getElementById("watch-handle");
+  const kept = Number(localStorage.getItem("planetHeight"));
+  if (kept) planet.style.height = `${kept}px`;
+  let from = null;
+  handle.addEventListener("pointerdown", (e) => { from = [e.clientY, planet.clientHeight]; handle.setPointerCapture(e.pointerId); });
+  handle.addEventListener("pointermove", (e) => {
+    if (!from) return;
+    const height = Math.min(window.innerHeight, Math.max(240, from[1] + e.clientY - from[0]));
+    planet.style.height = `${height}px`;
+  });
+  handle.addEventListener("pointerup", () => { from = null; localStorage.setItem("planetHeight", String(planet.clientHeight)); });
+}
 document.getElementById("follow-view").addEventListener("click", (e) => {
   const button = e.target.closest("button[data-view]");
   if (button) setView(button.dataset.view);

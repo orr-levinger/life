@@ -31,13 +31,13 @@ and it goes full screen.
 **Files:** Modify `src/viewer.html` (a Legend button, the legend at half size with the two ring words, a height handle
 under the planet kept in `localStorage`, a Full screen button); Test `tests/test_viewer.py`.
 
-- [ ] Step 1: test first: `test_the_planet_has_room` (the Legend button; "its hunger"; "a call, as far as it carries";
+- [x] Step 1: test first: `test_the_planet_has_room` (the Legend button; "its hunger"; "a call, as far as it carries";
   the handle; `requestFullscreen`). Run `python -m unittest tests.test_viewer` → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK.
-- [ ] Step 3: browser pane, a test page server on another port with its own runs folder, a half-size world: a
+- [x] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK.
+- [x] Step 3: browser pane, a test page server on another port with its own runs folder, a half-size world: a
   screenshot with marks, the legend folded and open, the planet dragged taller; `bench(30)` under 33 ms; the server,
   its world and the browser pane closed after.
-- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "A small legend that folds away; the planet drags
+- [x] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "A small legend that folds away; the planet drags
   taller and goes full screen"; push to `evolve-from-scratch`.
 
 ## Must be completed to mark this as done

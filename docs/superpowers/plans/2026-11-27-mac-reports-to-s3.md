@@ -29,10 +29,10 @@ trimmed writes); Modify `src/evolve.py` (a line every `report_every`; events: st
 nudges; any error written before the world ends), `src/species.py` (`look` returns its splits and endings, as events),
 `src/rules.py` (`report_every`); Test `tests/test_report.py` (new).
 
-- [ ] Step 1: tests first: `test_a_run_writes_its_state_every_500_steps`, `test_a_split_and_a_nudge_are_events`,
+- [x] Step 1: tests first: `test_a_run_writes_its_state_every_500_steps`, `test_a_split_and_a_nudge_are_events`,
   `test_an_error_is_written_with_its_traceback`, `test_the_files_are_trimmed`. Run → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_report tests.test_species tests.test_evolve_runs` → OK.
-- [ ] Step 3: commit "A world reports its state, events and errors".
+- [x] Step 2: the changes. Run `python -m unittest tests.test_report tests.test_species tests.test_evolve_runs` → OK.
+- [x] Step 3: commit "A world reports its state, events and errors".
 
 ### Task 2: The upload, and the server's log
 

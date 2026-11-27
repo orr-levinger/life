@@ -17,7 +17,7 @@ TEST_RADIUS = 1.0e6  # a test planet: flat to ~1e-11 over the few units a test u
 SMALL_WORLD = {"planet_radius": 10.9, "room": 80.0, "first_creatures": 30.0, "soup": 10.0,
                "obstacles": 6.0, "trees": 8.0, "auto_target": 64.0,
                "save_every": 400.0, "row_every": 50.0, "auto_every": 100.0, "auto_measure": 200.0, "exam_every": 400.0,
-               "exam_steps": 100.0, "control_every": 5.0}  # its runner 5× quicker: short test runs  # a test world stays small and quick, whatever a
+               "exam_steps": 100.0, "control_every": 5.0, "report_every": 100.0}  # its runner 5× quicker: short test runs  # a test world stays small and quick, whatever a
 # new world's starting rules are (the owner, 2026-11-26: "we should never run full life simulations as tests!")
 BASE = np.array([0.36, 0.48, 0.8])  # where a test's local map is centred: any point, none special on a sphere
 EAST, NORTH = local_frame(BASE)  # the map's x and y at its centre

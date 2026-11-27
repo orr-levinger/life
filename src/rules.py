@@ -161,6 +161,8 @@ RULES = (
     Rule("exam_step_cost", "exam", "The exam world: cost of being alive, each step", 0.10, 0.0, 2.0),
     Rule("exam_start_share", "exam", "The exam: creatures start with this share of a full tank", 0.5, 0.05, 1.0),
     Rule("save_every", "runner", "The world saves itself every this many steps", 2000.0, 250.0, 20000.0),
+    Rule("report_every", "runner", "The world reports its state (report/state.jsonl) every this many steps", 500.0,
+         50.0, 20000.0),
     Rule("row_every", "runner", "A row of numbers (a point on the charts) every this many steps", 250.0, 50.0, 5000.0),
     Rule("control_every", "runner", "It looks at the page's changes every this many steps", 25.0, 1.0, 500.0),
     Rule("now_seconds", "runner", "Its live numbers for the tiles at most every this many seconds", 0.5, 0.1, 10.0),
@@ -339,6 +341,8 @@ MEANS = {
     "exam_step_cost": "The test world: energy being alive costs, each step.",
     "exam_start_share": "In the test, creatures start with this share of a full tank.",
     "save_every": "The world saves itself to disk every this many steps.",
+    "report_every": "The world writes a line of its state to its report (report/state.jsonl, for the owner's Mac to "
+                    "send on) every this many steps.",
     "row_every": "One row of numbers (one point on the charts) every this many steps.",
     "control_every": "The world checks this page for your changes every this many steps.",
     "now_seconds": "How often the live tiles update, in seconds.",

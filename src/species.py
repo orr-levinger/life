@@ -80,9 +80,10 @@ class SpeciesBook:
         deaths = self._entry(number)["deaths"]
         deaths[cause] = deaths.get(cause, 0) + 1
 
-    def look(self, world: Any, step: int) -> None:
+    def look(self, world: Any, step: int) -> List[Dict[str, Any]]:
         """At a chart point: splits each species whose members have fallen into separate groups, then writes down each
-        one's count, typical member and facts; a species with no one left has ended."""
+        one's count, typical member and facts; a species with no one left has ended. Returns what happened (events)."""
+        happened: List[Dict[str, Any]] = []
         creatures = list(world.creatures)
         apart, group = world.rules["species_apart"], max(1, round(world.rules["species_group"]))
         if creatures:
@@ -103,6 +104,8 @@ class SpeciesBook:
                     self.species[new] = self.new_entry(new, parent=number, began=step)
                     for row in rows[label == k]:
                         creatures[row].species = new
+                    happened.append({"kind": "species_split", "species": new, "parent": number,
+                                     "size": int(sizes[k])})
         members: Dict[int, List[Creature]] = {}
         for c in creatures:
             members.setdefault(c.species, []).append(c)
@@ -111,6 +114,7 @@ class SpeciesBook:
             if not mine:
                 if entry["ended"] is None and (entry["counts"] or entry["began"] < step or number == FIRST):
                     entry["ended"] = step
+                    happened.append({"kind": "species_ended", "species": number})
                 continue
             entry["now"] = typical(mine, world)
             if entry["start"] is None:
@@ -118,6 +122,7 @@ class SpeciesBook:
             entry["counts"].append([step, len(mine)])
             entry["largest"] = max(entry["largest"], len(mine))
             entry["facts"] = facts(mine, world)
+        return happened
 
     def state(self) -> Dict[str, Any]:
         return {"next_id": self.next_id, "species": [self.species[k] for k in sorted(self.species)]}

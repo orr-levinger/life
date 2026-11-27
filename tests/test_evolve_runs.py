@@ -171,7 +171,7 @@ class TestEvolveRuns(unittest.TestCase):
         self.assertEqual([int(r["step"]) for r in rows], [50 * i for i in range(1, 13)])
         self.assertEqual([u["step"] for u in record["updates"]], [400])
         self.assertEqual((record["seed"], record["kind"]), (1, "instinct"))
-        self.assertEqual(sorted(folders), ["best", "saves"])  # no new run folder
+        self.assertEqual(sorted(folders), ["best", "report", "saves"])  # no new run folder (its report: 2026-11-27)
 
     def test_update_drops_rows_after_the_save(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -23,12 +23,13 @@ from collections import deque
 import os
 import random
 import time
+import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .control import MODES, Control, new_run_folder, read_control, write_control, write_json
+from .control import MODES, Control, knob_values, new_run_folder, read_control, write_control, write_json
 from .creature import Creature
 from .senses import EARS_AT, EAR_DIRECTIONS, EYE_AT, EYE_CHANNELS, EYE_PIXELS, sense
 from .dial import Dial, rates
@@ -38,7 +39,8 @@ from .saves import (SaveError, load_world, random_state, save_header, save_path,
                     set_random_state)
 from .terrain import make_terrain
 from .scoreboard import ROW_KEYS, Scoreboard, Value, migrate_scoreboard, read_rows
-from .rules import ROOM_SLOTS, starting_rules
+from .report import Reporter, knob_changes
+from .rules import COST_NAMES, ROOM_SLOTS, starting_rules
 from .world import INHERIT, World
 
 DEFAULT_STEPS = 100000
@@ -213,6 +215,16 @@ def _resumed_from(args: argparse.Namespace) -> Optional[Dict[str, Any]]:
 
 
 def run(args: argparse.Namespace) -> Path:
+    """Runs one world; any error is written to its report with its traceback before the run ends."""
+    reporter = Reporter(Path(args.out))
+    try:
+        return _run(args, reporter)
+    except Exception:
+        reporter.error(-1, traceback.format_exc())
+        raise
+
+
+def _run(args: argparse.Namespace, reporter: Reporter) -> Path:
     started = time.perf_counter()
     source = _resumed_from(args)
     out = Path(args.out)
@@ -248,6 +260,8 @@ def run(args: argparse.Namespace) -> Path:
     knobs.take(control, dial, world)
     world.set_settings(dial.settings, round(dial.level, 2))
 
+    reporter.event("update" if args.continue_run else "resume" if source is not None else "start",
+                   step=world.step_count, seed=args.seed, animals=args.kind, alive=len(world.creatures))
     board = Scoreboard()
     if source is not None:
         board.start_at(world)  # a new world's first row counts its first creatures as newcomers; a resumed one's does not
@@ -306,7 +320,8 @@ def run(args: argparse.Namespace) -> Path:
                 exam = run_exam(_exam_brains(world, sample), [c.size for c in sample], exam_seed, r)
 
             if step % round(r["row_every"]) == 0:
-                world.species_book.look(world, step)  # the tree of species, at every chart point
+                for happened in world.species_book.look(world, step):  # the tree of species, at every chart point
+                    reporter.event(step=step, **happened)
                 write_json(out / "species.json", world.species_book.state())
                 row = board.row(world, exam, knobs.control.mode == "manual")
                 exam = None  # each exam appears in exactly one row
@@ -322,12 +337,19 @@ def run(args: argparse.Namespace) -> Path:
                     soup = sum(r["newcomers"] for r in since_review) - (first_creatures if step == every else 0)
                     measured = [row for row in recent if row["step"] > step - r["auto_measure"]]
                     alive_rate, energy_rate = rates(measured)
-                    dial.review(len(world.creatures), alive_rate, energy_rate, soup)
+                    before = _knobs_now(dial, world)
+                    made = dial.review(len(world.creatures), alive_rate, energy_rate, soup)
                     world.set_settings(dial.settings, round(dial.level, 2))
+                    if made:
+                        reporter.event("auto", step=step, nudges=made, level=round(dial.level, 2),
+                                       changes=knob_changes(before, _knobs_now(dial, world)))
                 since_review = []
 
             if step % round(r["save_every"]) == 0:
                 save()
+
+            if step % round(r["report_every"]) == 0:
+                reporter.state(world, dial.level, _knobs_now(dial, world), step)
 
 
     write_json(out / "now.json", world_now(world))  # its last numbers
@@ -339,7 +361,13 @@ def run(args: argparse.Namespace) -> Path:
             best.offer(brain, creature.food_eaten)
     best.save(out / "best")  # the brains of the living creatures that have eaten the most
     (out / "time.txt").write_text(f"{time.perf_counter() - started:.1f}\n")  # seconds the run took
+    reporter.event("stop", step=world.step_count, alive=len(world.creatures))
     return csv_path
+
+
+def _knobs_now(dial: Dial, world: World) -> Dict[str, float]:
+    """Every knob's value now: the settings' and the costs (the world's rules)."""
+    return {**knob_values(dial.settings), **{name: world.rules[name] for name in COST_NAMES}}
 
 
 def _new_world(args: argparse.Namespace, rules: Dict[str, float]) -> Tuple[World, Dial]:

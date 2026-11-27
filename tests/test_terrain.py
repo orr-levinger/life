@@ -27,7 +27,7 @@ def map_distance(p, x, y, R):
 
 class TestMakingTerrain(unittest.TestCase):
     def test_a_world_gets_its_obstacles_and_trees_none_on_another(self):
-        rules = {**starting_rules(), "obstacles": 5.0, "trees": 6.0, "forests": 0.0}
+        rules = {**starting_rules(), "obstacles": 5.0, "trees": 6.0, "forests": 0.0, "lone_trees": 0.0}
         clear = at(10.0, 10.0, 37.0)
         terrain = make_terrain(rules, random.Random(3), 37.0, keep_clear=[(clear, 1.0)])
         self.assertEqual((len(terrain.obstacles), len(terrain.trees)), (5, 6))
@@ -37,13 +37,23 @@ class TestMakingTerrain(unittest.TestCase):
         self.assertGreater(len(sizes), 1)  # of random sizes
 
     def test_a_new_planet_has_its_forests(self):
-        rules = {**starting_rules(), "forests": 4.0}
+        rules = {**starting_rules(), "forests": 4.0, "lone_trees": 0.0}  # its forest trees only
         terrain = make_terrain(rules, random.Random(4), 37.0)
         self.assertEqual(len(terrain.forest_centres), 4)
         self.assertGreater(len(terrain.trees), 0.8 * rules["trees"])  # nearly all of them fit
         for t in terrain.trees:
             self.assertLessEqual(min(float(arc(np.array(t.p), np.array(c), 37.0)) for c in terrain.forest_centres),
                                  rules["forest_spread"] + 1e-6)
+
+    def test_lone_trees_grow_all_over_the_land(self):  # the owner, 2026-11-27: "some trees all around just not in water"
+        rules = {**starting_rules(), "forests": 2.0, "trees": 20.0, "lone_trees": 40.0}
+        terrain = make_terrain(rules, random.Random(6), 37.0)
+        away = [t for t in terrain.trees
+                if min(float(arc(np.array(t.p), np.array(c), 37.0)) for c in terrain.forest_centres) > rules["forest_spread"]]
+        self.assertGreaterEqual(len(away), 30)  # lone trees, away from every forest
+        for t in terrain.trees:
+            self.assertFalse(terrain.in_pond(np.array(t.p)))  # never in water
+            self.assertFalse(terrain.blocked(np.array(t.p), 0.0, swims=True))  # never on a rock
 
     def test_pond_edges_grow_more_food_than_open_ground(self):
         w = make_world(replace(NO_FOOD, max_food=10 ** 7, food_per_step=6.0, fruit_rate=0.0))

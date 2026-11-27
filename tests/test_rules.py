@@ -57,6 +57,12 @@ class TestRules(unittest.TestCase):
             self.assertEqual((r.start, r.low, r.high, r.group), (*want, "body"), name)
             self.assertGreater(len(means(name)), 15, name)
 
+    def test_the_lone_trees_rule(self):  # trees all over the land (the owner, 2026-11-27)
+        from src.rules import means
+        r = {r.name: r for r in RULES}["lone_trees"]
+        self.assertEqual((r.start, r.low, r.high, r.group), (40.0, 0.0, 200.0, "world"))
+        self.assertGreater(len(means("lone_trees")), 15)
+
     def test_every_rule_and_gene_says_what_it_means(self):
         from src.rules import GENE_MEANS, means
         for r in RULES:

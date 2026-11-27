@@ -75,6 +75,7 @@ RULES = (
     Rule("obstacle_size_low", "world", "An obstacle's size: at least", 1.0, 0.3, 10.0),
     Rule("obstacle_size_high", "world", "An obstacle's size: at most", 4.0, 0.3, 10.0),
     Rule("trees", "world", "Trees a new world gets", 92.0, 0.0, 400.0),
+    Rule("lone_trees", "world", "Lone trees a new world gets anywhere on its land, besides its forests", 40.0, 0.0, 200.0),
     Rule("armour_strength", "body", "A hit takes × (1 - armour × this) from an armoured body", 0.7, 0.0, 1.0),
     Rule("armour_slow", "body", "Armour slows: speed × (1 - armour × this)", 0.3, 0.0, 1.0),
     Rule("stealth_strength", "body", "A stealthy body is seen and heard from × (1 - stealth × this)", 0.7, 0.0, 1.0),
@@ -231,6 +232,8 @@ MEANS = {
                  "through them.",
     "obstacle_size_low": "The smallest an obstacle can be (about its radius). Each gets a random size and shape.",
     "obstacle_size_high": "The biggest an obstacle can be (about its radius).",
+    "lone_trees": "How many single trees a new world gets at random places anywhere on its land (never in water), "
+                  "besides the trees of its forests.",
     "trees": "How many trees a new world gets. Each drops fruit now and then; under its crown a creature hides.",
     "tree_canopy": "How wide a tree's crown is (its radius): the area where a creature hides.",
     "fruit_spread": "How far from its trunk a tree's fruit can fall.",

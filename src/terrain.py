@@ -263,8 +263,9 @@ def _way_near(a: np.ndarray, b: np.ndarray, c: np.ndarray, angle: np.ndarray) ->
 def make_terrain(rules: Rules, rng: random.Random, radius: float,
                  keep_clear: Sequence[Tuple[np.ndarray, float]] = ()) -> Terrain:
     """A new planet's ground, by its rules: the rocks (each of random size and shape), then its water (seas, islands,
-    rivers), then the trees in their forests (anywhere on land when there are none), none on another, on a rock, in the
-    water or on the spots in `keep_clear` (point, radius: creatures already there)."""
+    rivers), then the trees in their forests (anywhere on land when there are none), then `lone_trees` single trees
+    anywhere on land; none on another, on a rock, in the water or on the spots in `keep_clear` (point, radius: creatures
+    already there)."""
     obstacles: List[Obstacle] = []
     taken: List[Tuple[np.ndarray, float]] = [(np.asarray(p), r) for p, r in keep_clear]
     for _ in range(round(rules["obstacles"])):
@@ -295,11 +296,22 @@ def make_terrain(rules: Rules, rng: random.Random, radius: float,
                 p = exp_map(c, e1, e2, away * math.cos(angle), away * math.sin(angle), radius)
             else:
                 p = random_point(rng)
-            if (not rocks.blocked(p, canopy * 0.5)
-                    and all(float(arc(p, np.array(t.p), radius)) > canopy * 2 for t in trees)):
+            if _room_for_a_tree(p, rocks, trees, canopy, radius):
+                trees.append(Tree(tuple(map(float, p)), canopy))
+                break
+    for _ in range(round(rules["lone_trees"])):  # and single trees anywhere on the land
+        for _ in range(PLACE_TRIES):
+            p = random_point(rng)
+            if _room_for_a_tree(p, rocks, trees, canopy, radius):
                 trees.append(Tree(tuple(map(float, p)), canopy))
                 break
     return Terrain(obstacles, trees, radius, [tuple(map(float, c)) for c in centres], water)
+
+
+def _room_for_a_tree(p: np.ndarray, ground: Terrain, trees: Sequence[Tree], canopy: float, radius: float) -> bool:
+    """Whether a tree fits at p: on land, off every rock, and two crowns from every other tree."""
+    return (not ground.blocked(p, canopy * 0.5)
+            and all(float(arc(p, np.array(t.p), radius)) > canopy * 2 for t in trees))
 
 
 def _land_point(ground: Terrain, rng: random.Random) -> np.ndarray:

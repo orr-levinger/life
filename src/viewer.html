@@ -860,33 +860,40 @@ const INDEX = [
              ["its target:, a red line, from the attacker", { mark: "star" }], ["hit", { mark: "hit" }],
              ["chasing:, an orange line, to its prey", { mark: "chase" }], ["fleeing", { mark: "flee" }],
              ["had a baby", { mark: "baby" }]]],
-  ["Body", [["wide-set eyes:, wide cone", { ...PLAIN, vision_width: 120 }], ["big eyes:, sees far", { ...PLAIN, vision_reach: 9 }],
-            ["big ears:, hears far", { ...PLAIN, hearing: 3.5 }], ["big head:, many neurons", { ...PLAIN, neurons: 64 }],
-            ["folds:, brain layers", { ...PLAIN, neurons: 64, layers: 3 }], ["quills:, fears death", { ...PLAIN, fear_of_death: 80 }]]],
-  ["", [["round:, loves babies", { ...PLAIN, love_of_babies: 100 }], ["antennae:, learns from others", { ...PLAIN, learns_from_others: 1 }],
-        ["stripes:, learns fast", { ...PLAIN, learning_speed: 5e-3 }],
+  ["Body", [["plant eater", { body: { diet: 0 } }], ["meat eater", { body: { diet: 1 } }], ["swimmer", { body: { water: 1 } }],
+            ["big:, its size", { body: { size: 1.4 } }], ["rounder:, loves babies", { body: { love: 1 } }],
+            ["quills:, fears death", { body: { fear: 1 } }], ["horns or crest:, brain layers", { body: { layers: 3, diet: 1 } }]]],
+  ["", [["big head:, many neurons", { body: { neurons: 1 } }], ["antennae:, learns from others", { body: { learns: 1 } }],
+        ["coat bands:, learns fast", { body: { learning: 1, diet: 1 } }], ["eyes to the sides:, wide vision", { body: { width: 1 } }],
+        ["big eyes:, sees far", { body: { reach: 1 } }], ["ears:, hears far", { body: { hearing: 1 } }],
+        ["bone plates:, armour", { body: { diet: 1, armour: 1 } }]]],
+  ["", [["duller coat:, stealth", { body: { diet: 1, stealth: 1 } }], ["throat sac:, calls", { body: { calls: 6 } }],
+        ["pale blaze:, cares for kin", { body: { kin: 1 } }],
         ["cone:, what it sees", { ...PLAIN, vision_width: 110, vision_reach: 1.5, hearing: 0, senses: true }],
-        ["dotted circle:, what it hears", { ...PLAIN, vision_reach: 0, hearing: 1.5, senses: true }], ["food", { food: true }]]],
+        ["blue blur:, what it hears, (Eyes view)", { heard: true }], ["food", { food: true }]]],
 ];
-const INDEX_ROW = 66, INDEX_LABEL = 56;  // a small legend: the planet keeps the room
+const INDEX_ROW = 66, BODY_ROW = 96, INDEX_LABEL = 56;  // a small legend: the planet keeps the room
+const rowHeight = (items) => (items.some(([, c]) => c.body) ? BODY_ROW : INDEX_ROW);  // the bodies' pictures need more
 
 function drawLegend() {
   const canvas = document.getElementById("watch-legend"), ink = getComputedStyle(document.documentElement);
   if (canvas.hidden || !canvas.clientWidth) return;  // folded away: nothing to draw in (it is drawn when opened)
   const color = (name) => ink.getPropertyValue(name).trim(), dpr = devicePixelRatio;
   const perRow = Math.max(...INDEX.map(([, items]) => items.length));
-  canvas.style.height = `${INDEX.length * INDEX_ROW}px`;
-  const width = canvas.clientWidth * dpr, height = INDEX.length * INDEX_ROW * dpr;
+  const tall = INDEX.reduce((sum, [, items]) => sum + rowHeight(items), 0);
+  canvas.style.height = `${tall}px`;
+  const width = canvas.clientWidth * dpr, height = tall * dpr;
   canvas.width = width; canvas.height = height;
   const g = canvas.getContext("2d"), cell = (width - INDEX_LABEL * dpr) / perRow, unit = Math.min(cell / 5, 7 * dpr);
-  const line = Math.max(1.2, dpr * 1.2);
-  INDEX.forEach(([title, items], row) => {
-    const top = row * INDEX_ROW * dpr;
+  let top = 0;
+  INDEX.forEach(([title, items]) => {
+    const rowTop = top, shift = (rowHeight(items) - INDEX_ROW) * dpr;
+    top += rowHeight(items) * dpr;
     g.fillStyle = color("--ink"); g.font = `600 ${12 * dpr}px system-ui, sans-serif`; g.textAlign = "left";
-    g.fillText(title, 4 * dpr, top + 22 * dpr);
+    g.fillText(title, 4 * dpr, rowTop + 22 * dpr);
     g.font = `${10 * dpr}px system-ui, sans-serif`; g.textAlign = "center";
     items.forEach(([words, c], i) => {
-      const x = INDEX_LABEL * dpr + cell * (i + 0.5), y = top + 18 * dpr, r = unit * 1.1;
+      const x = INDEX_LABEL * dpr + cell * (i + 0.5), y = rowTop + 18 * dpr + shift / 2, r = unit * 1.1;
       if (c.ring !== undefined || c.call) {  // the planet's rings: hunger (green full, red hungry) and a call
         g.strokeStyle = c.call ? "#f4d35e" : `hsl(${Math.round(c.ring * 10) * 0.033 * 360}, 85%, 50%)`;
         g.lineWidth = (c.call ? 1.5 : 3) * dpr; g.beginPath(); g.arc(x, y, c.call ? r * 1.5 : r, 0, 7); g.stroke();
@@ -895,18 +902,16 @@ function drawLegend() {
       } else if (c.food) {
         const d = 5 * dpr; g.fillStyle = FOOD_COLOUR;
         g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill();
-      } else {
-        if (c.senses) drawSenses(g, x, y, c, Math.min(cell * 0.18, 18 * dpr), true, color);
-        const cx = c.strike ? x - cell * 0.18 : x;
-        drawCreature(g, cx, y, r, c, 1.0, line, color);
-        if (c.strike) {
-          const target = { ...PLAIN, did: "HIT_BY_ATTACK" }, tx = x + cell * 0.25;
-          drawCreature(g, tx, y, r * 0.7, target, 1.0, line, color);
-          drawStrike(g, { x: cx, y, r }, { x: tx, y, r: r * 0.7 }, line, true);
-        }
+      } else if (c.body) {  // the planet's own 3D body, with the sign
+        const s = (BODY_ROW - 30) * dpr;
+        if (window.Planet) g.drawImage(Planet.bodyPicture(c.body), x - s / 2, y - s / 2, s, s);
+      } else if (c.heard) {  // in the Eyes view a sound shows as a soft blue blur where it came from
+        g.fillStyle = "rgba(160, 180, 255, 0.45)"; g.beginPath(); g.arc(x, y, r * 1.3, 0, 7); g.fill();
+      } else if (c.senses) {
+        drawSenses(g, x, y, c, Math.min(cell * 0.18, 18 * dpr), true, color);
       }
       g.fillStyle = color("--muted");
-      words.split(", ").forEach((part, k) => g.fillText(part, x, y + (22 + 11 * k) * dpr));
+      words.split(", ").forEach((part, k) => g.fillText(part, x, y + shift / 2 + (22 + 11 * k) * dpr));
     });
   });
 }
@@ -972,156 +977,12 @@ function hungerColour(energy) {
 }
 
 const FOOD_COLOUR = "#b4977a", MIN_SPENT = 5;  // a creature's intelligence is shown once it has spent this much
-const SIGN = { eat: "#2fbf71", miss: "#e0a23a", attack: "#e5484d", baby: "#e889b8", chase: "#e8873a", flee: "#f5d547" };
 
 function creatureSmarts(c, wanderers) {  // its own energy earned ÷ spent, against the random wanderers' in the last exam
   return c.spent >= MIN_SPENT && wanderers ? (c.earned / c.spent) / wanderers : null;
 }
 
 // A creature's shape from its genes (the Creature Shapes page): every measure in body radii. Body colour stays hunger.
-function creatureShape(c) {
-  const width = c.vision_width ?? 90, reach = c.vision_reach ?? 3, love = Math.log10(Math.max(c.love_of_babies ?? 10, 1));
-  const fear = Math.log10(Math.max(c.fear_of_death ?? 10, 1)), speed = Math.log10(c.learning_speed ?? 3e-4);
-  return {
-    eyeAngle: 0.18 + Math.max(0, Math.min(90, width - 30)) / 90 * 0.95,  // wide cone: eyes round the sides
-    eyeSize: 0.1 + reach * 0.022,  // big eyes see far
-    earSize: 0.12 + (c.hearing ?? 0) * 0.09,  // big ears hear far
-    headSize: 0.22 + Math.min(c.neurons || 0, 192) / 64 * 0.38 / Math.max(1, (c.layers || 1) * 0.6),  // neurons
-    folds: c.layers || 0,  // one fold a layer
-    quills: Math.round(Math.min(fear, 2) * 3.5), quillLength: 0.18 * (0.5 + Math.min(fear, 2) / 2),  // fear of death
-    roundness: 2 + (2 - Math.min(love, 2)) * 1.6,  // love of babies: round and soft, or angular
-    antennae: (c.learns_from_others ?? 0) * 1.3,  // learns from others
-    stripes: Math.max(0, Math.round((speed + 5) / 3 * 5)),  // learning speed
-  };
-}
-
-// What it is doing, in the creature's own frame (it faces +x): rings for eating and a baby, red spikes when hit, speed
-// lines with an arrow (chasing) or a ! (fleeing). Attacking is the strike line, drawn between the two by the picture.
-function drawDoing(g, r, c, line, color) {
-  const ring = (colour, dashed) => {
-    g.strokeStyle = colour; g.lineWidth = line * 1.8;
-    if (dashed) g.setLineDash([line * 2, line * 2]);
-    g.beginPath(); g.arc(0, 0, r * 1.3, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
-  };
-  if (c.did === "EAT") {
-    ring(SIGN.eat);
-    g.fillStyle = FOOD_COLOUR;
-    for (const [dx, dy] of [[1.5, -0.5], [1.8, 0.3], [1.4, 0.6]]) { g.beginPath(); g.arc(r * dx, r * dy, Math.max(1, r * 0.12), 0, Math.PI * 2); g.fill(); }
-  }
-  if (c.did === "EAT_MISS") ring(SIGN.miss, true);
-  if (c.baby) ring(SIGN.baby);
-  if (c.did === "HIT_BY_ATTACK") {
-    g.strokeStyle = SIGN.attack; g.lineWidth = line * 1.4;
-    for (let i = 0; i < 8; i++) {
-      const a = i / 8 * Math.PI * 2;
-      g.beginPath(); g.moveTo(Math.cos(a) * r * 1.3, Math.sin(a) * r * 1.3); g.lineTo(Math.cos(a) * r * 1.75, Math.sin(a) * r * 1.75); g.stroke();
-    }
-  }
-  if (c.intent === "CHASE" || c.intent === "RUN_AWAY") {
-    g.strokeStyle = color("--muted"); g.lineWidth = line; g.globalAlpha = 0.7;
-    for (const dy of [-0.4, 0, 0.4]) { g.beginPath(); g.moveTo(-r * 1.35, dy * r); g.lineTo(-r * 2.3, dy * r); g.stroke(); }
-    g.globalAlpha = 1;
-    if (c.intent === "CHASE") {
-      g.fillStyle = SIGN.chase;
-      g.beginPath(); g.moveTo(r * 1.5, -r * 0.35); g.lineTo(r * 2.2, 0); g.lineTo(r * 1.5, r * 0.35); g.closePath(); g.fill();
-    } else {
-      g.save(); g.rotate(-Math.atan2(...(c.facing || [1, 0]).slice().reverse()));  // the ! stays upright
-      g.fillStyle = SIGN.flee; g.font = `bold ${Math.max(9, r * 1.1)}px system-ui, sans-serif`; g.textAlign = "center";
-      g.fillText("!", 0, -r * 1.35); g.restore();
-    }
-  }
-}
-
-// Attacking: a red strike line from the attacker to the one it went for; a star where it lands (none when it missed).
-function drawStrike(g, from, to, line, landed) {
-  const dx = to.x - from.x, dy = to.y - from.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
-  const sx = from.x + ux * from.r * 1.1, sy = from.y + uy * from.r * 1.1, ex = to.x - ux * to.r * 1.2, ey = to.y - uy * to.r * 1.2;
-  g.strokeStyle = SIGN.attack; g.lineWidth = line * 2;
-  if (!landed) g.setLineDash([line * 2, line * 2]);
-  g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); g.stroke(); g.setLineDash([]);
-  const head = Math.max(4, from.r * 0.5);
-  g.fillStyle = SIGN.attack;
-  g.beginPath(); g.moveTo(ex, ey); g.lineTo(ex - ux * head - uy * head * 0.6, ey - uy * head + ux * head * 0.6);
-  g.lineTo(ex - ux * head + uy * head * 0.6, ey - uy * head - ux * head * 0.6); g.closePath(); g.fill();
-  if (landed) {
-    g.fillStyle = SIGN.flee; g.beginPath();
-    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2, rr = (i % 2 ? 0.25 : 0.6) * to.r; g.lineTo(to.x + Math.cos(a) * rr, to.y - to.r * 1.1 + Math.sin(a) * rr); }
-    g.closePath(); g.fill();
-  }
-}
-
-// One creature, its shape from its genes, turned where it faces; hunger the body's colour, age the arc (a dotted ring
-// once past it), what it just did the flash ring. Used by the world's picture and by its legend.
-function drawCreature(g, x, y, r, c, wanderers, line, color) {
-  const s = creatureShape(c), [fx, fy] = c.facing || c.heading || [1, 0];
-  const lived = c.lifespan ? c.age / c.lifespan : 0;
-  g.save();
-  g.translate(x, y);
-  g.rotate(Math.atan2(fy, fx) || 0);
-  g.fillStyle = "rgba(0,0,0,0.5)";  // quills along the back
-  for (let i = 0; i < s.quills; i++) {
-    const a = Math.PI * 0.55 + (s.quills > 1 ? i / (s.quills - 1) : 0.5) * Math.PI * 0.9, len = r * s.quillLength;
-    g.beginPath(); g.moveTo(Math.cos(a - 0.08) * r * 0.95, Math.sin(a - 0.08) * r * 0.95);
-    g.lineTo(Math.cos(a) * (r + len), Math.sin(a) * (r + len));
-    g.lineTo(Math.cos(a + 0.08) * r * 0.95, Math.sin(a + 0.08) * r * 0.95); g.closePath(); g.fill();
-  }
-  for (const side of [-1, 1]) {  // ears
-    const er = r * s.earSize;
-    g.fillStyle = "rgba(0,0,0,0.5)"; g.beginPath(); g.ellipse(-r * 0.15, side * r * 0.92, er * 0.75, er, 0, 0, Math.PI * 2); g.fill();
-    g.fillStyle = "#f2c9b8"; g.beginPath(); g.ellipse(-r * 0.15, side * r * 0.92, er * 0.42, er * 0.62, 0, 0, Math.PI * 2); g.fill();
-  }
-  g.fillStyle = hungerColour(c.energy);  // the body: hunger its colour, love of babies its roundness
-  g.beginPath();
-  for (let t = 0; t <= 48; t++) {
-    const a = t / 48 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
-    const px = r * Math.sign(ca) * Math.abs(ca) ** (2 / s.roundness), py = r * 0.92 * Math.sign(sa) * Math.abs(sa) ** (2 / s.roundness);
-    t ? g.lineTo(px, py) : g.moveTo(px, py);
-  }
-  g.closePath();
-  g.fillStyle = c.did === "HIT_BY_ATTACK" ? SIGN.attack : hungerColour(c.energy);  // hit: it turns red
-  g.fill();
-  g.lineWidth = Math.max(line, r * 0.12); g.strokeStyle = meatColour(c.diet ?? 0); g.stroke();  // its outline: its diet
-  g.strokeStyle = "rgba(0,0,0,0.45)"; g.lineWidth = Math.max(0.8, r * 0.05);  // stripes: learning speed
-  for (let i = 0; i < s.stripes; i++) {
-    const sx = -r * (0.2 + i * 0.13);
-    g.beginPath(); g.moveTo(sx, -r * 0.55); g.lineTo(sx - r * 0.06, r * 0.55); g.stroke();
-  }
-  if (s.folds) {  // the head: neurons its size, layers its folds
-    const hx = r * 0.12, hr = r * s.headSize;
-    g.fillStyle = "rgba(0,0,0,0.22)"; g.beginPath(); g.ellipse(hx, 0, hr * 1.1, hr, 0, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = "rgba(0,0,0,0.45)"; g.lineWidth = Math.max(0.8, r * 0.035);
-    for (let i = 0; i < s.folds; i++) {
-      const fold = hx - hr * 0.6 + (i + 1) * (hr * 1.2) / (s.folds + 1);
-      g.beginPath(); g.moveTo(fold, -hr * 0.8); g.quadraticCurveTo(fold + hr * 0.25, 0, fold, hr * 0.8); g.stroke();
-    }
-  }
-  const ant = s.antennae * r;  // antennae: learns from others
-  if (ant > 1) {
-    g.strokeStyle = color("--ink"); g.lineWidth = Math.max(0.8, line * 0.8);
-    for (const side of [-1, 1]) {
-      g.beginPath(); g.moveTo(r * 0.55, side * r * 0.25);
-      g.quadraticCurveTo(r * 0.9, side * (r * 0.25 + ant * 0.5), r * 0.55 + ant, side * (r * 0.35 + ant * 0.6)); g.stroke();
-    }
-  }
-  for (const side of [-1, 1]) {  // eyes: spacing from the cone's width, size from its reach
-    const ex = Math.cos(s.eyeAngle * side) * r * 0.66, ey = Math.sin(s.eyeAngle * side) * r * 0.66, er = r * s.eyeSize;
-    g.fillStyle = "#ffffff"; g.beginPath(); g.arc(ex, ey, er, 0, Math.PI * 2); g.fill();
-    g.fillStyle = "#111111"; g.beginPath(); g.arc(ex + er * 0.35, ey, er * 0.55, 0, Math.PI * 2); g.fill();
-  }
-  drawDoing(g, r, c, line, color);
-  g.restore();
-  g.strokeStyle = color("--muted"); g.lineWidth = line;  // age: an arc of its own lifespan
-  g.beginPath(); g.arc(x, y, r * 1.25 + line * 2, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, lived)); g.stroke();
-  if (lived >= 1) {  // past its lifespan: a dotted outer ring
-    g.setLineDash([line, line * 2]);
-    g.beginPath(); g.arc(x, y, r * 1.25 + line * 4, 0, 2 * Math.PI); g.stroke();
-    g.setLineDash([]);
-  }
-  return creatureSmarts(c, wanderers);
-}
-
-// What a creature senses: its vision cone, a faint wedge of its body colour where it faces, and its hearing, a faint
-// dotted circle all around. `strong` for the creature pointed at (and the legend).
 function drawSenses(g, x, y, c, unit, strong, color, cone = camera.cones) {
   if (c.vision_width === undefined) return;  // a picture from a world still on code from before senses were genes
   const [fx, fy] = c.facing, mid = Math.atan2(fy, fx), half = c.vision_width / 360 * Math.PI;

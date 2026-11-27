@@ -730,6 +730,26 @@ class TestControlRoom(unittest.TestCase):
         body = body[:body.index("\n}\n")]
         self.assertIn("if (canvas.hidden || !canvas.clientWidth) return;", body)  # hidden: no width to draw in
 
+    def test_the_legend_shows_the_3d_bodies(self):  # the owner, 2026-11-27: "match it to 3d"
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        with urllib.request.urlopen(self.server.base + "/static/beasts.js") as response:
+            self.assertIn("export function bodyPicture(", response.read().decode("utf-8"))
+        legend = page[page.index("function drawLegend() {"):page.index("async function jumpIn(")]
+        self.assertIn("Planet.bodyPicture(c.body)", legend)
+        self.assertNotIn("drawCreature(", page)  # the 2D bodies of before are gone
+        for words in ("plant eater", "meat eater", "swimmer", "rounder:, loves babies", "antennae:, learns from others",
+                      "coat bands:, learns fast", "eyes to the sides:, wide vision", "big eyes:, sees far",
+                      "bone plates:, armour", "duller coat:, stealth", "throat sac:, calls", "pale blaze:, cares for kin"):
+            self.assertIn(words, page)
+
+    def test_the_marks_sit_above_the_head(self):  # "the green apple for eating ... hides all the creature"
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            planet = response.read().decode("utf-8")
+        for words in ("Math.max(x.c.radius * 0.8, n.clone().multiplyScalar(R).distanceTo(eye) * 0.015)",
+                      "// a green open bite"):
+            self.assertIn(words, planet)
+
     def test_world_card_has_every_cost(self):  # the owner's cost sliders, never Auto's (2026-11-27)
         answer = self.server.get("/knobs")
         self.assertNotIn("move_cost", {k["name"] for k in answer["knobs"]})  # not Auto's knobs
@@ -761,16 +781,16 @@ class TestControlRoom(unittest.TestCase):
     def test_page_explains_the_creature_look(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ('id="watch-legend"', "ring under it:, its hunger: full", "hungry", "function creatureShape",
-                      "big ears:, hears far", "big head:, many neurons", "folds:, brain layers", "quills:, fears death",
-                      "its target:, a red line, from the attacker", "chasing", "fleeing", "function drawStrike"):
+        for words in ('id="watch-legend"', "ring under it:, its hunger: full", "hungry", "ears:, hears far",
+                      "big head:, many neurons", "horns or crest:, brain layers", "quills:, fears death",
+                      "its target:, a red line, from the attacker", "chasing", "fleeing"):
             self.assertIn(words, page)
         self.assertNotIn("tan diamond: food", page)  # the owner: the words-only key "is not helping"
 
     def test_page_draws_cones_and_hearing(self):
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        for words in ("function drawSenses", "c.vision_width", "c.hearing", "cone:, what it sees", "dotted circle:, what it hears",
+        for words in ("function drawSenses", "c.vision_width", "c.hearing", "cone:, what it sees",
                       '"vision_width"', '"hearing"'):
             self.assertIn(words, page)
 

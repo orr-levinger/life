@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { OrbitControls } from "/static/OrbitControls.js";
 import { mergeGeometries } from "/static/BufferGeometryUtils.js";
 import { BEASTS, NEAR, DOT } from "/static/beasts.js";
+export { bodyPicture } from "/static/beasts.js";  // the legend's bodies (the page has only this module)
 
 const UP = new THREE.Vector3(0, 1, 0);
 const NEAR_FAR = { near: 0.05, far: 4000 };
@@ -343,8 +344,9 @@ export function markCanvas(kind) {  // the picture of one kind of mark (the lege
   const c = document.createElement("canvas"); c.width = c.height = 64;
   const g = c.getContext("2d");
   const disc = (fill) => { g.fillStyle = fill; g.beginPath(); g.arc(32, 32, 26, 0, 7); g.fill(); };
-  if (kind === "eat") {  // a green bite
-    disc("#36c46a"); g.globalCompositeOperation = "destination-out"; g.beginPath(); g.arc(54, 14, 14, 0, 7); g.fill();
+  if (kind === "eat") {  // a green open bite: it is eating
+    g.strokeStyle = "#36c46a"; g.lineWidth = 9; g.lineCap = "round";
+    g.beginPath(); g.arc(32, 32, 20, 0.75, Math.PI * 2 - 0.75); g.stroke();
   } else if (kind === "miss") {  // a dotted yellow bite: it bit at nothing
     g.strokeStyle = "#f2c230"; g.lineWidth = 6; g.setLineDash([6, 7]); g.beginPath(); g.arc(32, 32, 24, 0, 7); g.stroke();
   } else if (kind === "hit") {  // a red flash: it was hit
@@ -430,8 +432,8 @@ function drawActions(shown, R) {
     }
     list.forEach((x, i) => {
       const n = x.p.clone().normalize(), up = stacked.get(x) || 0;
-      const size = Math.max(x.c.radius * 1.6, n.clone().multiplyScalar(R).distanceTo(eye) * 0.03);  // a few pixels at least
-      o.position.copy(n).multiplyScalar(R + x.c.radius * 2.4 + size * (0.6 + up));
+      const size = Math.max(x.c.radius * 0.8, n.clone().multiplyScalar(R).distanceTo(eye) * 0.015);  // small, a few pixels at least
+      o.position.copy(n).multiplyScalar(R + x.c.radius * 2.0 + size * (0.6 + up));  // above its head, never on its body
       o.quaternion.copy(state.camera.quaternion); o.scale.setScalar(size); o.updateMatrix(); mesh.setMatrixAt(i, o.matrix);
       stacked.set(x, up + 1.05);  // two marks on one creature: one above the other
     });

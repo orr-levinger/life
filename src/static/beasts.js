@@ -199,6 +199,32 @@ function farGeometry(key) {
   }
   return farModels.get(key);
 }
+// A small picture of one body as the planet draws it (genes 0..1, as `beastModel`), for the legend: drawn once each.
+let pictureRenderer = null;
+const pictures = new Map();
+export function bodyPicture(genes, size = 120) {
+  const key = JSON.stringify(genes);
+  if (pictures.has(key)) return pictures.get(key);
+  if (!pictureRenderer) {
+    pictureRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    pictureRenderer.setPixelRatio(1);
+  }
+  pictureRenderer.setSize(size, size, false);
+  pictureRenderer.setClearColor(0x000000, 0);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xe6f0ff, 0x40301c, 1.1));
+  const sun = new THREE.DirectionalLight(0xfff0d0, 2.0); sun.position.set(5, 10, 7); scene.add(sun);
+  const g = { ...PLAIN, diet: 0, water: 0, ...genes }, body = beastModel(g, "near");
+  body.scale.setScalar(Math.min(g.size, 1.4)); body.rotation.y = -0.75; scene.add(body);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+  camera.position.set(0, 2.4, 6.4); camera.lookAt(0, 0.75, 0);
+  pictureRenderer.render(scene, camera);
+  const c = document.createElement("canvas"); c.width = c.height = size;
+  c.getContext("2d").drawImage(pictureRenderer.domElement, 0, 0);
+  pictures.set(key, c);
+  return c;
+}
+
 export const BEASTS = {
   key: (c) => keyOf(genesOf(c)),
   make(c) {  // a full body, for a creature near the camera

@@ -306,6 +306,8 @@ def run(args: argparse.Namespace) -> Path:
                 exam = run_exam(_exam_brains(world, sample), [c.size for c in sample], exam_seed, r)
 
             if step % round(r["row_every"]) == 0:
+                world.species_book.look(world, step)  # the tree of species, at every chart point
+                write_json(out / "species.json", world.species_book.state())
                 row = board.row(world, exam, knobs.control.mode == "manual")
                 exam = None  # each exam appears in exactly one row
                 writer.writerow(row)

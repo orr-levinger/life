@@ -125,6 +125,7 @@ class Creature:
         self.kin = HAND_MADE["kin"]  # how much what happens to those like it counts as its own: a gene
         self.stealth = HAND_MADE["stealth"]  # how hard it is to notice: a gene
         self.armour = HAND_MADE["armour"]  # how well it takes a hit, slower and dearer to keep: a gene
+        self.species = 1  # its species in the world's tree (src/species.py): its parent's, or 1, first life
         self.eye_pixels = HAND_MADE["eye_pixels"]  # how sharp its eye is (real pixels, 1-16), dearer when sharper: a gene
         self.water = HAND_MADE["water"]  # 0 cannot enter a pond; above 0 it swims at this share of its speed: a gene
         self.called: Optional[Tuple[int, float]] = None  # this step's call: its kind and how far it carries (display)

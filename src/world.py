@@ -16,6 +16,7 @@ from .sphere import arc, exp_map, local_frame, random_point, walk
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, perceived, sense_all
+from .species import SpeciesBook
 from .rules import EDITABLE_GENES, Rules, gene_limits, starting_rules
 from .terrain import Terrain
 from .settings import Settings
@@ -53,6 +54,7 @@ class World:
         self.rules["planet_radius"] = float(radius)
         self.settings = settings  # how hard survival is right now; the dial changes it
         self.level = 0  # how many of the dial's nudges are in force
+        self.species_book = SpeciesBook()  # the tree of species (src/species.py)
         self.species = species
         self.rng = rng  # decisions, placement and size mutation
         self.np_rng = np_rng  # brains and their mutation
@@ -127,6 +129,7 @@ class World:
 
     def kill(self, creature: Creature, cause: str) -> None:
         self.creatures.remove(creature)
+        self.species_book.died(creature.species, cause)
         self.deaths[cause] += 1
         self.dead_this_step.append(creature)
 
@@ -400,6 +403,8 @@ class World:
         low, high = gene_limits(self.rules, "eye_pixels")
         step = self.rng.choice((-1, 1)) if "eye_pixels" in picked else 0  # a pixel sharper or blurrier
         baby.eye_pixels = int(min(max(parent.eye_pixels + step, low), high))
+        baby.species = parent.species  # a baby is in its parent's species
+        self.species_book.born(parent.species)
         self._brain_size(baby)
         self.creatures.append(baby)
         self.births += 1

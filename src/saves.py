@@ -26,6 +26,7 @@ from .creature import Creature
 from .dial import Dial, settings_from_state, settings_state
 from .food import Food
 from .rules import COST_NAMES, ROOM_SLOTS, TODAY_COSTS, starting_rules
+from .species import SpeciesBook
 from .terrain import Terrain
 from .water import Water
 from .world import World
@@ -70,7 +71,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
     about = {
         "format": SAVE_FORMAT, "step": world.step_count, "species": world.species, "inherit": world.inherit,
         "rules": dict(world.rules), "settings": settings_state(world.settings), "level": world.level,
-        "terrain": world.terrain.state(),
+        "terrain": world.terrain.state(), "species_book": world.species_book.state(),
         "water": None if world.terrain.water is None else world.terrain.water.state(),
         "dial": dial.state(),
         "counters": {"births": world.births, "newcomers": world.newcomers, "deaths": dict(world.deaths),
@@ -88,7 +89,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                        "fear_of_death": c.fear_of_death, "love_of_babies": c.love_of_babies,
                        "learns_from_others": c.learns_from_others, "mutations": c.mutations,
                        "mutation_size": c.mutation_size, "diet": c.diet, "calls": c.calls, "kin": c.kin, "water": c.water, "moved": c.moved, "stealth": c.stealth, "armour": c.armour,
-                       "eye_pixels": c.eye_pixels,
+                       "eye_pixels": c.eye_pixels, "species": c.species,
                        "hurt": None if c.hurt is None else list(c.hurt)}
                       for c, brain in zip(world.creatures, brain_of)],
         "foods": [{"p": list(map(float, f.p)), "energy": f.energy, "remaining_duration": f.remaining_duration, "fruit": f.fruit,
@@ -189,6 +190,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.mutations, creature.mutation_size = saved["mutations"], saved["mutation_size"]
         creature.diet, creature.calls, creature.kin = saved["diet"], saved["calls"], saved["kin"]
         creature.eye_pixels = saved.get("eye_pixels", creature.eye_pixels)  # saved before eyes had pixels: a sharp eye
+        creature.species = saved.get("species", 1)  # saved before species: first life
         creature.water, creature.moved = saved["water"], saved["moved"]  # a mover is heard next step
         creature.stealth, creature.armour = saved["stealth"], saved["armour"]
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])
@@ -196,6 +198,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
     world.foods = [_food(f) for f in about["foods"]]
     water = about.get("water")  # none in a format-27 save: its ponds are its water
     world.terrain = Terrain.from_state(about["terrain"], None if water is None else Water.from_state(water))
+    world.species_book = SpeciesBook.from_state(about.get("species_book"))  # a save of before: everyone first life
     living = {c.id: c for c in world.creatures}
     world.calls = [(living.get(saved["id"]) or SimpleNamespace(p=np.array(saved["p"]), **{k: saved[k] for k in (
                         "id", "size", "diet", "water", "stealth")}),

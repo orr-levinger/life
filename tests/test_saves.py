@@ -265,6 +265,19 @@ class TestSaves(unittest.TestCase):
         np.testing.assert_array_equal(w1[:47], old[0])
         self.assertFalse(w1[47:].any())
 
+    def test_the_book_survives_a_save(self):  # the tree of species goes on after a resume
+        world = make_world(seed=9)
+        everyone = [add(world, 3.0 * k, 0.0) for k in range(12)]
+        for c in everyone[:6]:
+            c.diet, c.armour = 1.0, 1.0
+        world.species_book.look(world, 250)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual(loaded.species_book.state(), world.species_book.state())
+        self.assertEqual([c.species for c in loaded.creatures], [c.species for c in world.creatures])
+
     def test_a_flat_save_is_refused_in_plain_words(self):
         world = make_world(seed=24)
         populate(world, 3)

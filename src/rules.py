@@ -192,6 +192,9 @@ RULES += tuple(Rule(f"knob.{name}.{end}", "knobs", f"{words}: its {end} end", st
                for name, easy, hard, words in KNOB_ENDS for end, start in (("easy", easy), ("hard", hard)))
 
 RULES += (
+    Rule("species_apart", "genes", "Two creatures are close kin when their genes differ by at most this (a share of each "
+         "gene's range, on average)", 0.10, 0.01, 0.5),
+    Rule("species_group", "genes", "A group apart becomes a species when it has at least this many", 5.0, 2.0, 50.0),
     Rule("gene_min_change", "genes", "A changed gene moves by at least up to this share of its range", 0.01, 0.0, 0.2),
     Rule("gene.weights.share", "genes", "Brain weights: the share that changes when they are a baby's changed gene", 0.02,
          0.0, 1.0),
@@ -219,6 +222,10 @@ MEANS = {
     "vision_cost": "Energy its eyes cost every step, per square unit of its vision cone.",
     "hearing_cost": "Energy its ears cost every step, per square unit of its hearing circle.",
     "neuron_cost": "Energy each neuron of its brain costs every step. 0.0006: 32 neurons cost about a fifth of living.",
+    "species_apart": "How far apart two creatures' genes may be (the mean difference, each gene a share of its range) "
+                     "and still link a species together. A species whose members fall into groups that no chain of such "
+                     "close kin links splits: each group of at least 'species_group' but the biggest is a new species.",
+    "species_group": "How many a group apart needs to become a new species; a smaller one stays (mutants, not a species).",
     "pixel_cost": "Energy each pixel of its eye costs every step. 0.0006: a sharp eye of 16 costs about a tenth of living.",
     "stealth_cost": "How much more living costs a stealthy creature: × (1 + stealth × this).",
     "armour_cost": "How much more living costs an armoured creature: × (1 + armour × this).",

@@ -12,8 +12,8 @@ import math
 from dataclasses import asdict, dataclass, fields, replace
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
-from .rules import Rules, starting_rules
-from .settings import SEEING, START, Settings
+from .rules import KNOB_ENDS, Rules, starting_rules
+from .settings import START, Settings
 
 TOLERANCE = 1e-9
 LEAST = 0.01  # a nudge moves a knob at least this share of its range (the owner: "1% of the total range should be the min change")
@@ -49,30 +49,21 @@ class Knob:
         return (number - floor) / (least * self.span) if floor > 0 else math.log(max(number, 1e-300))
 
 
-KNOBS = (
-    Knob("max_food", -1, easiest=800.0, hardest=20.0),
-    Knob("food_energy", -1, easiest=100.0, hardest=3.0),
-    Knob("move_cost", +1, easiest=0.0, hardest=3.0),
-    Knob("step_cost", +1, easiest=0.0, hardest=0.5),
-    Knob("lifespan", -1, easiest=10000.0, hardest=625.0),
-    Knob("food_per_step", -1, easiest=20.0, hardest=0.2),
-    Knob("fruit_rate", -1, easiest=1.0, hardest=0.002),
-    # every other cost, 0 at its easy end (the owner, 2026-11-26)
-    Knob("sprint_power", +1, easiest=0.0, hardest=4.0),
-    Knob("eat_miss", +1, easiest=0.0, hardest=2.0),
-    Knob("attack_cost", +1, easiest=0.0, hardest=5.0),
-    Knob("attack_damage", +1, easiest=0.0, hardest=25.0),
-    Knob("bump_cost", +1, easiest=0.0, hardest=3.0),
-    Knob("vision_cost", +1, easiest=0.0, hardest=10.0 * SEEING),
-    Knob("hearing_cost", +1, easiest=0.0, hardest=10.0 * SEEING),
-    Knob("neuron_cost", +1, easiest=0.0, hardest=0.005),
-    Knob("stealth_cost", +1, easiest=0.0, hardest=3.0),
-    Knob("armour_cost", +1, easiest=0.0, hardest=3.0),
-)
+# Today's ends (src/rules.py, KNOB_ENDS): every cost 0 at its easy end (the owner, 2026-11-26). The difficulty is
+# counted on these; a world's own ends are its rules (`knobs_of`).
+KNOBS = tuple(Knob(name, -1 if easy > hard else +1, easiest=easy, hardest=hard) for name, easy, hard, _ in KNOB_ENDS)
 
 
-def knob_named(name: str) -> Knob:
-    for knob in KNOBS:
+def knobs_of(rules: Optional[Mapping[str, float]]) -> Tuple[Knob, ...]:
+    """The knobs with a world's own ends (its rules `knob.<name>.easy` and `.hard`; today's without them)."""
+    if not rules:
+        return KNOBS
+    return tuple(replace(k, easiest=rules.get(f"knob.{k.name}.easy", k.easiest),
+                         hardest=rules.get(f"knob.{k.name}.hard", k.hardest)) for k in KNOBS)
+
+
+def knob_named(name: str, rules: Optional[Mapping[str, float]] = None) -> Knob:
+    for knob in knobs_of(rules):
         if knob.name == name:
             return knob
     raise ValueError(f"no knob called {name!r}; the knobs are {', '.join(k.name for k in KNOBS)}")
@@ -89,14 +80,26 @@ def _held(knob: Knob, number: float) -> float:
     return min(max(number, low), high)
 
 
-def with_value(settings: Settings, name: str, number: float) -> Settings:
-    """`settings` with one knob at `number`, held within the knob's ends; a range keeps its shape around its middle."""
-    number = _held(knob_named(name), number)
+def with_value(settings: Settings, name: str, number: float, rules: Optional[Mapping[str, float]] = None,
+               hold: bool = True) -> Settings:
+    """`settings` with one knob at `number`, held within the knob's ends (the world's, by its `rules`) unless `hold` is
+    off; a range keeps its shape around its middle."""
+    if hold:
+        number = _held(knob_named(name, rules), number)
     current = getattr(settings, name)
     if isinstance(current, tuple):
         scale = number / value(settings, name)
         return replace(settings, **{name: tuple(end * scale for end in current)})
     return replace(settings, **{name: number})
+
+
+def within_ends(settings: Settings, rules: Optional[Mapping[str, float]]) -> Settings:
+    """`settings` with every knob outside the world's ends brought to the nearer end."""
+    for knob in knobs_of(rules):
+        number = value(settings, knob.name)
+        if _held(knob, number) != number:
+            settings = with_value(settings, knob.name, number, rules)
+    return settings
 
 
 def difficulty(settings: Settings, nudge: float, least: float = LEAST) -> float:
@@ -199,6 +202,7 @@ class Dial:
 
     def review(self, alive: int, alive_rate: Optional[float], energy_rate: Optional[float], newcomers: int) -> int:
         """One look: takes the step `step_for` says and returns the nudges it made (+ harder, - easier, 0 none)."""
+        self._settings = within_ends(self._settings, self.rules)  # ends the owner narrowed since
         wanted, made = step_for(alive, alive_rate, energy_rate, newcomers, self.rules), 0
         while made < wanted and self._harder() == "harder":
             made += 1
@@ -216,12 +220,14 @@ class Dial:
             return "hold"
         if self._hunters is None and not self._settings.attacks and self.level >= self.rules["auto_hunters_at"] - TOLERANCE:
             return self._nudge(replace(self._settings, attacks=True))
-        for _ in KNOBS:
-            knob = KNOBS[self._next_harder % len(KNOBS)]
+        knobs = knobs_of(self.rules)  # the world's own ends
+        for _ in knobs:
+            knob = knobs[self._next_harder % len(knobs)]
             self._next_harder += 1
             if not _at(knob, self._settings, knob.hardest):
                 return self._nudge(with_value(self._settings, knob.name, knob.nudged(
-                    value(self._settings, knob.name), self.rules["auto_nudge"], True, self.rules["auto_least_nudge"])))
+                    value(self._settings, knob.name), self.rules["auto_nudge"], True, self.rules["auto_least_nudge"]),
+                    self.rules))
         return "hold"  # every knob is at its hardest
 
     def _nudge(self, harder: Settings) -> str:
@@ -237,11 +243,13 @@ class Dial:
         if self._hunters is None and self._settings.attacks:
             self._settings = replace(self._settings, attacks=False)
             return "easier"
-        for _ in KNOBS:
-            knob = KNOBS[self._next_easier % len(KNOBS)]
+        knobs = knobs_of(self.rules)
+        for _ in knobs:
+            knob = knobs[self._next_easier % len(knobs)]
             self._next_easier += 1
             if not _at(knob, self._settings, knob.easiest):
                 self._settings = with_value(self._settings, knob.name, knob.nudged(
-                    value(self._settings, knob.name), self.rules["auto_nudge"], False, self.rules["auto_least_nudge"]))
+                    value(self._settings, knob.name), self.rules["auto_nudge"], False, self.rules["auto_least_nudge"]),
+                    self.rules)
                 return "easier"
         return "hold"  # every knob is at its easiest

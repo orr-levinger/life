@@ -55,6 +55,15 @@ class TestControl(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "hunters must be true or false"):
             settings_from({"hunters": 1}, START)
 
+    def test_manual_takes_values_within_the_worlds_ends(self):  # the world's knob ends (the owner, 2026-11-27)
+        from src.rules import starting_rules
+        rules = {**starting_rules(), "knob.fruit_rate.easy": 5.0}
+        self.assertEqual(settings_from({"fruit_rate": 3.0}, START, rules).fruit_rate, 3.0)
+        with self.assertRaisesRegex(ValueError, "fruit_rate must be between 0.002 and 5, not 6"):
+            settings_from({"fruit_rate": 6.0}, START, rules)
+        with self.assertRaisesRegex(ValueError, "between 0.002 and 1, not 3"):
+            settings_from({"fruit_rate": 3.0}, START)  # a world on today's ends
+
     def test_a_bad_mode_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(ValueError, "mode must be one of"):
             write_control(Path(tmp), Control("turbo", None, False))

@@ -63,6 +63,26 @@ class TestRules(unittest.TestCase):
         self.assertEqual((r.start, r.low, r.high, r.group), (40.0, 0.0, 200.0, "world"))
         self.assertGreater(len(means("lone_trees")), 15)
 
+    def test_the_knob_ends_are_rules(self):  # the owner, 2026-11-27: a knob's min and max set on the Rules page
+        from src.dial import KNOBS
+        from src.rules import GROUPS, means
+        by_name = {r.name: r for r in RULES}
+        self.assertIn(("knobs", "Knob ends"), GROUPS)
+        for k in KNOBS:
+            top = 10.0 * max(abs(k.easiest), abs(k.hardest))
+            for end, today in (("easy", k.easiest), ("hard", k.hardest)):
+                r = by_name[f"knob.{k.name}.{end}"]
+                self.assertEqual((r.start, r.low, r.high, r.group), (today, 0.0, top, "knobs"), r.name)
+                self.assertGreater(len(means(r.name)), 15, r.name)
+
+    def test_a_wrong_way_knob_end_is_refused(self):  # an easy end stays on its easy side of the hard end
+        rules = starting_rules()
+        self.assertIsNone(check(rules, "knob.fruit_rate.easy", 5.0))
+        self.assertIn("easy end", check(rules, "knob.fruit_rate.easy", 0.001))  # less fruit than the hard end
+        self.assertIn("easy end", check(rules, "knob.fruit_rate.hard", 2.0))
+        self.assertIn("easy end", check(rules, "knob.move_cost.hard", 0.0))  # a cost's hard end above its easy end
+        self.assertIsNone(check(rules, "knob.move_cost.easy", 0.2))
+
     def test_every_rule_and_gene_says_what_it_means(self):
         from src.rules import GENE_MEANS, means
         for r in RULES:
@@ -99,7 +119,7 @@ class TestRules(unittest.TestCase):
 
     def test_every_rule_has_a_group(self):
         from src.rules import GROUPS
-        self.assertEqual([g for g, _ in GROUPS], ["costs", "world", "body", "senses", "birth", "genes", "learning", "auto", "exam", "runner"])
+        self.assertEqual([g for g, _ in GROUPS], ["costs", "knobs", "world", "body", "senses", "birth", "genes", "learning", "auto", "exam", "runner"])
         for r in RULES:
             self.assertIn(r.group, dict(GROUPS))
         for name in ("learn_rollout", "learn_passes", "learn_clip", "learn_discount", "learn_credit", "learn_explore",

@@ -48,9 +48,10 @@ def knob_values(settings: Settings) -> dict:
     return {**{k.name: value(settings, k.name) for k in KNOBS}, HUNTERS: settings.attacks}
 
 
-def settings_from(values: Mapping[str, object], base: Settings) -> Settings:
+def settings_from(values: Mapping[str, object], base: Settings, rules: Optional[Mapping[str, float]] = None,
+                  ends: bool = True) -> Settings:
     """`base` with the knobs named in `values` set. Refuses, in plain words, an unknown knob, a value that is not a
-    number, and one outside the knob's ends."""
+    number, and (with `ends`) one outside the knob's ends: the world's, by its `rules` (today's without them)."""
     settings = base
     for name, given in values.items():
         if name == HUNTERS:
@@ -58,13 +59,13 @@ def settings_from(values: Mapping[str, object], base: Settings) -> Settings:
                 raise ValueError(f"hunters must be true or false, not {given!r}")
             settings = replace(settings, attacks=given)
             continue
-        knob = knob_named(name)
+        knob = knob_named(name, rules)
         if isinstance(given, bool) or not isinstance(given, (int, float)) or not math.isfinite(given):
             raise ValueError(f"{name} must be a number, not {given!r}")
         low, high = sorted((knob.easiest, knob.hardest))
-        if not low <= given <= high:
+        if ends and not low <= given <= high:
             raise ValueError(f"{name} must be between {low:g} and {high:g}, not {given:g}")
-        settings = with_value(settings, name, float(given))
+        settings = with_value(settings, name, float(given), rules, hold=ends)
     return settings
 
 
@@ -87,7 +88,7 @@ def read_control(folder: Path) -> Optional[Control]:
         return None
     if raw["mode"] not in MODES:
         raise ValueError(f"{path}: mode must be one of {MODES}, not {raw['mode']!r}")
-    settings = None if raw["settings"] is None else settings_from(raw["settings"], START)
+    settings = None if raw["settings"] is None else settings_from(raw["settings"], START, ends=False)  # checked by the page
     if raw["hunters"] not in (None, True, False):
         raise ValueError(f"{path}: hunters must be true, false or null, not {raw['hunters']!r}")
     rules = raw.get("rules")  # optional: a control file without it holds no rule changes

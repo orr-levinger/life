@@ -203,6 +203,33 @@ class TestDial(unittest.TestCase):
         self.assertTrue(hard.settings.attacks)
         self.assertEqual(hard.review(80, 1.0, 0.0, 0), 0)  # nothing left to make harder
 
+    def test_auto_eases_up_to_the_worlds_end(self):  # a knob's ends are the world's rules (the owner, 2026-11-27)
+        d = Dial(replace(START, fruit_rate=1.0))
+        d.rules = {**RULES, "knob.fruit_rate.easy": 5.0}
+        seen = []
+        for _ in range(3000):
+            d._easier()
+            seen.append(d.settings.fruit_rate)
+        self.assertGreater(max(seen), 1.0)  # past today's end
+        self.assertAlmostEqual(max(seen), 5.0)  # and never past the world's
+
+    def test_the_least_nudge_uses_the_worlds_range(self):
+        from src.dial import knobs_of
+        fruit = next(k for k in knobs_of({**RULES, "knob.fruit_rate.easy": 5.0}) if k.name == "fruit_rate")
+        self.assertAlmostEqual(fruit.nudged(0.002, 0.05, False, 0.01), 0.002 + 0.01 * (5.0 - 0.002))
+
+    def test_difficulty_does_not_move_with_the_ends(self):  # counted on today's ends: the line never jumps
+        settings = replace(START, fruit_rate=0.5, move_cost=0.3)
+        a, b = Dial(settings), Dial(settings)
+        b.rules = {**RULES, "knob.fruit_rate.easy": 5.0, "knob.move_cost.hard": 30.0}
+        self.assertEqual(a.level, b.level)
+
+    def test_a_knob_outside_narrower_ends_comes_inside(self):
+        d = Dial(replace(START, fruit_rate=1.0))
+        d.rules = {**RULES, "knob.fruit_rate.easy": 0.5}
+        d.review(round(RULES["auto_target"]), 0.0, 0.0, 0)  # at the target: no nudge, but within the world's ends
+        self.assertLessEqual(d.settings.fruit_rate, 0.5)
+
     def test_hunters_come_as_their_own_nudge(self):
         dial = Dial()
         while dial.level < HUNTERS_AT - 1e-9:

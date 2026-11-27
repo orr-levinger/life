@@ -10,7 +10,32 @@ import math
 from dataclasses import dataclass
 from typing import Dict, Optional
 
+from .settings import SEEING
+
 Rules = Dict[str, float]
+
+# Auto's knobs (src/dial.py): each knob's easy end and hard end today (the start of its two rules, `knob.<name>.easy`
+# and `.hard`, the owner's to change: 2026-11-27) and what it is, in plain words. More is easier when the easy end is
+# the bigger.
+KNOB_ENDS = (
+    ("max_food", 800.0, 20.0, "Food pieces at most"),
+    ("food_energy", 100.0, 3.0, "Energy per food"),
+    ("move_cost", 0.0, 3.0, "Cost of moving"),
+    ("step_cost", 0.0, 0.5, "Cost of living"),
+    ("lifespan", 10000.0, 625.0, "Lifespan"),
+    ("food_per_step", 20.0, 0.2, "New food per step"),
+    ("fruit_rate", 1.0, 0.002, "Fruit a tree drops per step"),
+    ("sprint_power", 0.0, 4.0, "Cost of sprinting"),
+    ("eat_miss", 0.0, 2.0, "Cost of eating at nothing"),
+    ("attack_cost", 0.0, 5.0, "Cost of an attack"),
+    ("attack_damage", 0.0, 25.0, "Damage of a hit"),
+    ("bump_cost", 0.0, 3.0, "Cost of bumping into a rock"),
+    ("vision_cost", 0.0, 10.0 * SEEING, "Cost of seeing"),
+    ("hearing_cost", 0.0, 10.0 * SEEING, "Cost of hearing"),
+    ("neuron_cost", 0.0, 0.005, "Cost of each neuron"),
+    ("stealth_cost", 0.0, 3.0, "Cost of stealth"),
+    ("armour_cost", 0.0, 3.0, "Cost of armour"),
+)
 
 
 @dataclass(frozen=True)
@@ -147,6 +172,9 @@ RULES = (
   + _gene("stealth", "Stealth", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("armour", "Armour", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
 
+RULES += tuple(Rule(f"knob.{name}.{end}", "knobs", f"{words}: its {end} end", start, 0.0, 10.0 * max(abs(easy), abs(hard)))
+               for name, easy, hard, words in KNOB_ENDS for end, start in (("easy", easy), ("hard", hard)))
+
 RULES += (
     Rule("gene_min_change", "genes", "A changed gene moves by at least up to this share of its range", 0.01, 0.0, 0.2),
     Rule("gene.weights.share", "genes", "Brain weights: the share that changes when they are a baby's changed gene", 0.02,
@@ -154,7 +182,7 @@ RULES += (
     Rule("gene.weights.size", "genes", "Brain weights: how much a changed weight moves", 0.02, 0.0, 1.0),
 )
 
-GROUPS = (("costs", "Costs"), ("world", "World"), ("body", "Body: energy, size and speed"), ("senses", "Eating and hunting"),
+GROUPS = (("costs", "Costs"), ("knobs", "Knob ends"), ("world", "World"), ("body", "Body: energy, size and speed"), ("senses", "Eating and hunting"),
           ("birth", "Birth and death"), ("genes", "Genes"), ("learning", "Learning"), ("auto", "Auto"), ("exam", "Exam"),
           ("runner", "Runner"))
 
@@ -316,7 +344,9 @@ GENE_MEANS = {
 
 _PART_MEANS = {"low": "No creature's {g} goes below this.", "high": "No creature's {g} goes above this.",
                "new_low": "A random newcomer gets at least this.",
-               "new_high": "A random newcomer gets at most this."}
+               "new_high": "A random newcomer gets at most this.",
+               "easy": "The easiest the {g} knob goes: Auto and its slider stop here.",
+               "hard": "The hardest the {g} knob goes: Auto and its slider stop here."}
 
 
 def means(name: str) -> str:
@@ -352,6 +382,14 @@ def check(rules: Rules, name: str, value: float) -> Optional[str]:
                 partner = rules.get(name[:-len(mine)] + other)
                 if partner is not None and (value > partner if below else value < partner):
                     return f"{found.words.split(':')[0]}: the lowest must not be above the highest"
+    if name.startswith("knob."):  # an easy end stays on its easy side of the hard end
+        base, end = name.rsplit(".", 1)
+        partner = rules.get(f"{base}.{'hard' if end == 'easy' else 'easy'}")
+        more_is_easier = _BY_NAME[f"{base}.easy"].start > _BY_NAME[f"{base}.hard"].start
+        easy, hard = (value, partner) if end == "easy" else (partner, value)
+        if partner is not None and (easy <= hard if more_is_easier else easy >= hard):
+            side = "above" if more_is_easier else "below"
+            return f"{found.words.split(':')[0]}: the easy end must stay {side} the hard end"
     return None
 
 

@@ -151,7 +151,8 @@ class Controls:
         mode = body.get("mode")
         if mode not in MODES:
             raise Refused(400, f"mode must be one of {', '.join(MODES)}")
-        settings = self._settings(body.get("settings"), START) if body.get("settings") is not None else None
+        settings = (self._settings(body.get("settings"), START, {**starting_rules(), **self._next_rules()})
+                    if body.get("settings") is not None else None)
         if body.get("from") is not None:
             save = self._save(body["from"])
             try:
@@ -272,7 +273,8 @@ class Controls:
             elif mode != "manual":
                 raise Refused(409, "switch to Manual to turn the knobs")
             else:
-                settings = self._settings(given, settings or self._now(running[name]))
+                settings = self._settings(given, settings or self._now(running[name]),
+                                          self._world_rules(self._run_folder(name)))
         stop, paused = body.get("stop", current.stop), body.get("paused", current.paused)
         if not isinstance(stop, bool):
             raise Refused(400, "stop must be true or false")
@@ -352,11 +354,12 @@ class Controls:
         return picture.read_bytes()
 
     @staticmethod
-    def _settings(given: object, base: Settings) -> Settings:
+    def _settings(given: object, base: Settings, rules: Dict[str, float]) -> Settings:
+        """The owner's knob values, each checked against the world's own knob ends."""
         if not isinstance(given, dict):
             raise Refused(400, "settings must be an object of knob values")
         try:
-            return settings_from(given, base)
+            return settings_from(given, base, rules)
         except ValueError as problem:
             raise Refused(400, str(problem)) from problem
 
@@ -367,7 +370,7 @@ class Controls:
             return START
         last = run["rows"][-1]  # a knob a row from before it has no number for keeps its start
         known = {k.name: last[k.name] for k in KNOBS if last.get(k.name) is not None}
-        return settings_from({**known, HUNTERS: bool(last["hunters"])}, START)
+        return settings_from({**known, HUNTERS: bool(last["hunters"])}, START, ends=False)  # the world's own numbers
 
 
 def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingHTTPServer:

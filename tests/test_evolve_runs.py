@@ -51,7 +51,7 @@ class TestEvolveRuns(unittest.TestCase):
         self.assertEqual(set(creature), {"id", "p", "radius", "energy", "heading", "did", "generation", "age",
                                          "lifespan", "earned", "spent", "size", "facing", "vision_width",
                                          "vision_reach", "hearing", "fear_of_death", "love_of_babies",
-                                         "learns_from_others", "neurons", "layers", "moved", "bumped", "brain", "mutations", "mutation_size", "diet", "calls", "call", "kin", "water", "stealth", "armour",
+                                         "learns_from_others", "neurons", "layers", "moved", "bumped", "brain", "mutations", "mutation_size", "grass_gut", "meat_gut", "calls", "call", "kin", "gills", "lungs", "stealth", "armour",
                                          "learning_speed", "intent", "target", "baby"})
         self.assertTrue(0.0 <= creature["energy"] <= 1.0)
         self.assertAlmostEqual(sum(v * v for v in creature["p"]), 1.0, places=4)  # a point on the planet

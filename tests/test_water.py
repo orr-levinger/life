@@ -46,14 +46,15 @@ class TestWater(unittest.TestCase):
     def test_without_water_a_pond_is_a_wall(self):
         w = pond_world()
         c = add(w, 16.5, 10, size=0.5)
-        c.water = 0.0
+        c.gills, c.lungs = 0.0, 1.0
         self.assertEqual(moved(w, c, 0.5), 0.0)
         self.assertTrue(c.bumped)
 
     def test_a_swimmer_swims_fast_and_walks_slowly(self):
         w = pond_world()
         swimmer, walker = add(w, 20, 10), add(w, 5, 5)
-        swimmer.water = walker.water = 1.0
+        for c in (swimmer, walker):
+            c.gills, c.lungs = 1.0, 0.0
         top = swimmer.top_speed
         self.assertAlmostEqual(moved(w, swimmer, 5.0), top * 1.0)  # in water: × its water
         self.assertAlmostEqual(moved(w, walker, 5.0), top * (1 - 1.0 * w.rules["land_penalty"]))  # on land: × 0.3
@@ -61,7 +62,7 @@ class TestWater(unittest.TestCase):
     def test_half_a_swimmer_enters_a_pond(self):
         w = pond_world()
         c = add(w, 16.5, 10, size=0.5)
-        c.water = 0.5
+        c.gills, c.lungs = 0.5, 0.5
         self.assertGreater(moved(w, c, 0.4), 0.0)
 
     def test_food_grows_in_ponds_too(self):
@@ -99,7 +100,7 @@ class TestWater(unittest.TestCase):
         for water in (0.0, 1.0):
             w = sea_world()
             c = add(w, 1.5, 0.0, energy=1000.0)
-            c.water = water
+            c.gills, c.lungs = water, 1.0 - water
             for _ in range(40):  # it walks west, into the sea
                 face(c, -1.0, 0.0)
                 c.apply_action(("MOVE", (1.0, 0.0)), w)
@@ -161,7 +162,7 @@ class TestWater(unittest.TestCase):
             w.rules.update(move_cost=1.0, step_cost=0.1, sprint_power=0.0, vision_cost=0.0,
                            hearing_cost=0.0, neuron_cost=0.0, stealth_cost=0.0, armour_cost=0.0)
             c = add(w, x, y, energy=50.0)
-            c.water = water
+            c.gills, c.lungs = water, 1.0 - water
             c.apply_action(("MOVE", (0.1, 0.0)), w)  # a short move and a step alive, staying where it is (pond or land)
             self.assertAlmostEqual(float(arc(c.p, at(x + 0.1, y), w.radius)), 0.0, places=6)
             return 50.0 - c.energy
@@ -174,7 +175,7 @@ class TestWater(unittest.TestCase):
 
     def test_newcomers_draw_their_water(self):
         w = make_world(seed=6)
-        waters = [w.add_newcomer().water for _ in range(30)]
+        waters = [w.add_newcomer().gills for _ in range(30)]
         self.assertTrue(all(0.0 <= x <= 1.0 for x in waters))
         self.assertGreater(max(waters) - min(waters), 0.5)
 
@@ -182,9 +183,10 @@ class TestWater(unittest.TestCase):
     def test_the_page_gets_each_ones_water(self):
         from src.evolve import world_now, world_view
         w = pond_world()
-        add(w, 5, 5).water = 0.6
-        self.assertEqual(world_view(w)["creatures"][0]["water"], 0.6)
-        self.assertEqual(world_now(w)["genes"]["water"], [0.6, 0.6, 0.6])
+        c = add(w, 5, 5)
+        c.gills, c.lungs = 0.6, 0.4
+        self.assertEqual((world_view(w)["creatures"][0]["gills"], world_view(w)["creatures"][0]["lungs"]), (0.6, 0.4))
+        self.assertEqual(world_now(w)["genes"]["gills"], [0.6, 0.6, 0.6])
 
 
 if __name__ == "__main__":

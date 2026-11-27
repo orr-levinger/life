@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tupl
 import numpy as np
 
 from .brain import Brain
-from .creature import Creature, full_tank, kin_genes, similarity
+from .creature import Creature, alike, full_tank, kin_genes, similarity
 from .sphere import arc, exp_map, local_frame, random_point, walk
 from .food import Food
 from .policies import Action, decide_all
@@ -29,7 +29,8 @@ INHERIT = ("learned", "inborn")
 FOOD_SPOT_TRIES = 50  # tries for a food spot by the pond edges' thickness
 FREE_SPOT_TRIES = 1000  # tries to find a newcomer a spot that no obstacle covers
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
-         "layers", "neurons", "weights", "mutations", "mutation_size", "diet", "calls", "kin", "water", "stealth", "armour",
+         "layers", "neurons", "weights", "mutations", "mutation_size", "grass_gut", "meat_gut", "calls", "kin", "gills",
+         "lungs", "stealth", "armour",
          "eye_pixels")  # a baby changes its parent's `mutations` of them
 
 
@@ -161,10 +162,10 @@ class World:
         newcomer.hearing = self.rng.uniform(r["gene.hearing.new_low"], r["gene.hearing.new_high"])
         newcomer.fear_of_death, newcomer.love_of_babies = drawn("fear"), drawn("love")
         newcomer.learns_from_others = drawn("learns")
-        newcomer.diet = drawn("diet")
+        newcomer.grass_gut, newcomer.meat_gut = drawn("grass_gut"), drawn("meat_gut")
         newcomer.calls = whole("calls")
         newcomer.kin = drawn("kin")
-        newcomer.water = drawn("water")
+        newcomer.gills, newcomer.lungs = drawn("gills"), drawn("lungs")
         newcomer.stealth = drawn("stealth")
         newcomer.armour = drawn("armour")
         newcomer.eye_pixels = whole("eye_pixels")
@@ -323,14 +324,14 @@ class World:
         sees = perceived(carers, acting, self).T & (np.array([id(c) for c in carers])[:, None]
                                                     != np.array([id(c) for c in acting])[None, :])
         carer, actor = np.nonzero(sees)  # only the pairs that perceive each other: how alike is asked of those alone
-        alike = np.ones(len(carer))
+        how_alike = np.ones(len(carer))
         genes = kin_genes(self.rules)  # with no gene to tell them apart, all are alike
         if genes and len(carer):
             spans = np.array([self.rules[f"gene.{g}.high"] - self.rules[f"gene.{g}.low"] for g in genes])
             mine = np.array([[getattr(c, g) for g in genes] for c in carers]) / spans
             theirs = np.array([[getattr(c, g) for g in genes] for c in acting]) / spans
-            alike = 1.0 - np.abs(mine[carer] - theirs[actor]).mean(axis=1)
-        share = np.bincount(carer, weights=alike * changes[actor], minlength=len(carers))
+            how_alike = alike(mine[carer], theirs[actor], genes)
+        share = np.bincount(carer, weights=how_alike * changes[actor], minlength=len(carers))
         return {id(c): c.kin * s for c, s in zip(carers, share)}
 
     @staticmethod
@@ -395,9 +396,11 @@ class World:
         baby.love_of_babies = self._inherited(parent.love_of_babies, "love", picked, change)
         baby.learns_from_others = self._inherited(parent.learns_from_others, "learns", picked, change)
         baby.mutation_size = self._inherited(parent.mutation_size, "mutation_size", picked, change)
-        baby.diet = self._inherited(parent.diet, "diet", picked, change)
+        baby.grass_gut = self._inherited(parent.grass_gut, "grass_gut", picked, change)
+        baby.meat_gut = self._inherited(parent.meat_gut, "meat_gut", picked, change)
         baby.kin = self._inherited(parent.kin, "kin", picked, change)
-        baby.water = self._inherited(parent.water, "water", picked, change)
+        baby.gills = self._inherited(parent.gills, "gills", picked, change)
+        baby.lungs = self._inherited(parent.lungs, "lungs", picked, change)
         baby.stealth = self._inherited(parent.stealth, "stealth", picked, change)
         baby.armour = self._inherited(parent.armour, "armour", picked, change)
         low, high = gene_limits(self.rules, "mutations")

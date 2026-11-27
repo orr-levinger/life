@@ -12,7 +12,8 @@ from tests.helpers import add, make_world
 NATURE = {"step_cost": 0.1, "neuron_cost": 0.0006, "vision_cost": 0.025 / (math.pi * 9.0),
           "hearing_cost": 0.025 / (math.pi * 9.0), "move_cost": 0.4, "sprint_power": 1.0, "eat_miss": 0.1,
           "bump_cost": 0.2, "attack_cost": 1.0, "attack_damage": 10.0, "stealth_cost": 0.3, "armour_cost": 0.3,
-          "pixel_cost": 0.0006}  # each pixel of its eye (2026-11-27)
+          "pixel_cost": 0.0006,  # each pixel of its eye (2026-11-27)
+          "gut_cost": 0.15, "breath_cost": 0.15}  # each gut, gill and lung (2026-11-27)
 FREE = {name: 0.0 for name in NATURE}
 RULES_NOW = starting_rules()
 HARDER = (round(RULES_NOW["auto_target"]) + 40, 0.0, 0.0, 0)  # many above the target, steady: harder

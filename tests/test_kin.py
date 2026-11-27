@@ -15,7 +15,8 @@ from tests.helpers import at, face, NO_FOOD, NO_FOOD_ATTACKS, add, make_world
 
 def opposite(a, b, rules):
     """`b` as unlike `a` as the genes allow."""
-    for gene, attr in (("size", "size"), ("diet", "diet"), ("water", "water"), ("stealth", "stealth"), ("armour", "armour"), ("vision_width", "vision_width"),
+    for gene, attr in (("size", "size"), ("grass_gut", "grass_gut"), ("meat_gut", "meat_gut"), ("gills", "gills"),
+                       ("lungs", "lungs"), ("stealth", "stealth"), ("armour", "armour"), ("vision_width", "vision_width"),
                        ("vision_reach", "vision_reach"), ("hearing", "hearing")):
         low, high = rules[f"gene.{gene}.low"], rules[f"gene.{gene}.high"]
         setattr(a, attr, low)
@@ -38,7 +39,7 @@ class TestKin(unittest.TestCase):
         watcher.p, other.p = at(10.0, 10.0), at(12.0, 10.0)
         face(watcher, 1.0, 0.0)
         watcher.vision_width, watcher.vision_reach = 120.0, 5.0
-        for gene in ("size", "diet", "water", "vision_width", "vision_reach", "hearing"):
+        for gene in ("size", "grass_gut", "meat_gut", "gills", "lungs", "vision_width", "vision_reach", "hearing"):
             setattr(other, gene, getattr(watcher, gene))
         if not alike:
             opposite(watcher, other, w.rules)

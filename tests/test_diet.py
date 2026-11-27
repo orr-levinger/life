@@ -1,4 +1,4 @@
-"""The diet gene (spec decision 2): 0 lives on plants, 1 on meat; between, a share of each."""
+"""What it lives on (spec decision 2; since 2026-11-27 two guts): a diet d is a meat gut d and a grass gut 1 - d."""
 import unittest
 from dataclasses import replace
 
@@ -18,7 +18,7 @@ def eats(diet, **food):
     """What a creature of `diet` gains from one bite of a food."""
     w = quiet(make_world(NO_FOOD))
     c = add(w, 10, 10, energy=20.0)
-    c.diet = diet
+    c.meat_gut, c.grass_gut = diet, 1.0 - diet
     piece = Food(at(10.0, 10.0), remaining_duration=-1, energy=10.0, **food)
     w.foods.append(piece)
     c.apply_action(("EAT", piece), w)
@@ -42,7 +42,7 @@ class TestDiet(unittest.TestCase):
         w = quiet(make_world(NO_FOOD_ATTACKS))
         hunter = add(w, 10, 10, energy=20.0)
         prey = add(w, 11, 10, energy=50.0)
-        hunter.diet = 0.5
+        hunter.meat_gut = 0.5
         damage = hunter.attack_damage(w)
         self.assertAlmostEqual(damage, hunter.size * w.rules["attack_damage"] * (1 + 0.5 * w.rules["diet_bite"]))
         hunter.apply_action(("ATTACK", prey), w)
@@ -59,7 +59,7 @@ class TestDiet(unittest.TestCase):
     def test_it_senses_meat_and_its_own_diet(self):
         w = make_world(NO_FOOD)
         me = add(w, 10, 10)
-        me.vision_width, me.vision_reach, me.diet = 120.0, 5.0, 0.7
+        me.vision_width, me.vision_reach, me.meat_gut = 120.0, 5.0, 0.7
         face(me, 1.0, 0.0)
         w.foods.append(Food(at(12.0, 10.0), remaining_duration=5, energy=8.0, meat=True))
         v = sense(me, w).vector
@@ -69,7 +69,7 @@ class TestDiet(unittest.TestCase):
 
     def test_newcomers_draw_a_diet_and_babies_inherit_it(self):
         w = make_world(seed=4)
-        diets = [w.add_newcomer().diet for _ in range(30)]
+        diets = [w.add_newcomer().meat_gut for _ in range(30)]
         self.assertTrue(all(0.0 <= d <= 1.0 for d in diets))
         self.assertGreater(max(diets) - min(diets), 0.5)  # every kind among them
 
@@ -78,11 +78,11 @@ class TestDiet(unittest.TestCase):
         from src.evolve import world_now, world_view
         w = make_world(NO_FOOD)
         c = add(w, 10, 10)
-        c.diet = 0.8
+        c.meat_gut = 0.8
         w.foods.append(Food(at(12.0, 10.0), remaining_duration=5, energy=8.0, meat=True))
         view = world_view(w)
-        self.assertEqual((view["creatures"][0]["diet"], view["foods"][0]["meat"]), (0.8, True))
-        self.assertEqual(world_now(w)["genes"]["diet"], [0.8, 0.8, 0.8])
+        self.assertEqual((view["creatures"][0]["meat_gut"], view["foods"][0]["meat"]), (0.8, True))
+        self.assertEqual(world_now(w)["genes"]["meat_gut"], [0.8, 0.8, 0.8])
 
 
 if __name__ == "__main__":

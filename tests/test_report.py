@@ -39,7 +39,7 @@ class TestReport(unittest.TestCase):
         w = make_world(NO_FOOD)
         everyone = [add(w, 3.0 * k, 0.0) for k in range(20)]
         for c in everyone[:6]:
-            c.diet, c.armour = 1.0, 1.0
+            c.meat_gut, c.grass_gut, c.armour = 1.0, 0.0, 1.0
         self.assertEqual(w.species_book.look(w, 250), [{"kind": "species_split", "species": 2, "parent": 1, "size": 6}])
         for c in everyone[:6]:
             w.kill(c, "hunger")

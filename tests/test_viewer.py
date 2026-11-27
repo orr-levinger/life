@@ -197,7 +197,7 @@ class TestControlRoom(unittest.TestCase):
     def test_a_rule_change_out_of_range_is_refused(self):
         name = self.running_world()
         status, answer = self.server.post("/control", {"run": name, "rules": {"diet_bite": 9}})
-        self.assertEqual((status, answer["error"]), (400, "A meat eater's hit takes more: × (1 + diet × this) can be at most 5"))
+        self.assertEqual((status, answer["error"]), (400, "A meat eater's hit takes more: × (1 + meat gut × this) can be at most 5"))
         status, answer = self.server.post("/control", {"run": name, "rules": {"gene.size.low": 3}})
         self.assertEqual(status, 400)
         self.assertIsNone(read_control(self.root / name).rules)
@@ -815,7 +815,7 @@ class TestControlRoom(unittest.TestCase):
         costs = {c["name"]: c for c in answer["costs"]}
         self.assertEqual(set(costs), {"move_cost", "step_cost", "sprint_power", "eat_miss", "attack_cost", "attack_damage",
                                       "bump_cost", "vision_cost", "hearing_cost", "neuron_cost", "stealth_cost",
-                                      "armour_cost", "pixel_cost"})
+                                      "armour_cost", "pixel_cost", "gut_cost", "breath_cost"})
         self.assertEqual((costs["vision_cost"]["label"][:14], costs["step_cost"]["low"], costs["step_cost"]["high"]),
                          ("Cost of seeing", 0.0, 0.1))  # from 0 to nature
 

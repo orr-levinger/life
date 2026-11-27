@@ -55,7 +55,7 @@ class TestPixels(unittest.TestCase):
         kin = add(w, 3.0, 1.5)  # ahead-left: 26.6 degrees left, pixel 4 of 16 (left edge 0)
         kin.vision_width, kin.vision_reach, kin.hearing = me.vision_width, me.vision_reach, me.hearing  # its genes alike
         hunter = add(w, 3.0, -1.5)  # ahead-right: pixel 11
-        hunter.diet, hunter.size = 1.0, 1.6
+        hunter.meat_gut, hunter.size = 1.0, 1.6
         w.foods.append(Food(at(2.0, 0.0), remaining_duration=-1, energy=10.0))  # straight ahead: pixel 7 or 8
         eye = eye_of(sense(me, w).vector)
         self.assertGreater(eye[4, 0], 0.3)  # a creature, close

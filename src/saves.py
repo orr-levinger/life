@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 
 from .brain import Brain
-from .creature import Creature
+from .creature import FIRST_SEEN, Creature
 from .dial import Dial, settings_from_state, settings_state
 from .food import Food
 from .rules import COST_NAMES, ROOM_SLOTS, TODAY_COSTS, starting_rules
@@ -88,13 +88,16 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                        "vision_reach": c.vision_reach, "hearing": c.hearing, "facing": list(map(float, c.facing)),
                        "fear_of_death": c.fear_of_death, "love_of_babies": c.love_of_babies,
                        "learns_from_others": c.learns_from_others, "mutations": c.mutations,
-                       "mutation_size": c.mutation_size, "diet": c.diet, "calls": c.calls, "kin": c.kin, "water": c.water, "moved": c.moved, "stealth": c.stealth, "armour": c.armour,
+                       "mutation_size": c.mutation_size, "grass_gut": c.grass_gut, "meat_gut": c.meat_gut, "calls": c.calls,
+                       "kin": c.kin, "gills": c.gills, "lungs": c.lungs, "moved": c.moved, "stealth": c.stealth,
+                       "armour": c.armour,
                        "eye_pixels": c.eye_pixels, "species": c.species,
                        "hurt": None if c.hurt is None else list(c.hurt)}
                       for c, brain in zip(world.creatures, brain_of)],
         "foods": [{"p": list(map(float, f.p)), "energy": f.energy, "remaining_duration": f.remaining_duration, "fruit": f.fruit,
                    "meat": f.meat, "radius": f.radius} for f in world.foods],  # a food keeps the radius it was made with as it is eaten
-        "calls": [{"id": c.id, "p": list(map(float, c.p)), "size": c.size, "diet": c.diet, "water": c.water, "stealth": c.stealth,
+        "calls": [{"id": c.id, "p": list(map(float, c.p)), "size": c.size, "meat_gut": c.meat_gut, "gills": c.gills,
+                   "stealth": c.stealth,
                    "kind": kind, "volume": volume} for c, kind, volume in world.calls],  # heard in the next step
         "extra": extra,
     }
@@ -146,6 +149,25 @@ def save_header(path: Path) -> Dict[str, Any]:
     return {"step": about["step"], "seed": about["extra"]["seed"], "kind": about["extra"]["kind"]}
 
 
+def _two_guts(about: Dict[str, Any]) -> None:
+    """A save of before the two guts (2026-11-27), made one of now in place: diet d becomes a meat gut d and a grass gut
+    1 - d, water w gills w and lungs 1 - w, so each creature eats, moves and pays as it did; the hit it felt shows the
+    hitter's grass gut and lungs the same way; the old genes' limits are dropped (the new ones start at theirs)."""
+    for saved in about["creatures"]:
+        if "diet" in saved:
+            diet, water = saved.pop("diet"), saved.pop("water")
+            saved.update(meat_gut=diet, grass_gut=1.0 - diet, gills=water, lungs=1.0 - water)
+            hurt = saved.get("hurt")
+            if hurt is not None and len(hurt) == 4 + FIRST_SEEN:  # share, where, how far, then the hitter's 18 genes
+                saved["hurt"] = [*hurt, 1.0 - hurt[5], 1.0 - hurt[6]]  # its diet and water stood 2nd and 3rd (0-1)
+    for saved in about.get("calls", []):
+        if "diet" in saved:
+            saved["meat_gut"], saved["gills"] = saved.pop("diet"), saved.pop("water")
+    for gene in ("diet", "water"):
+        for part in ("low", "high", "new_low", "new_high"):
+            about["rules"].pop(f"gene.{gene}.{part}", None)
+
+
 def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, Any]]:
     """The saved world, Auto's state, and the extra the runner kept with it."""
     arrays = _read(path)
@@ -156,10 +178,14 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
 
         learner = Learner(ROOM_SLOTS, learner_seed)
         learner.load_state({key[len(LEARNER):]: value for key, value in arrays.items() if key.startswith(LEARNER)})
+    _two_guts(about)
     rules = {**starting_rules(), **about["rules"]}  # a rule born after the save starts at its start value
     if "step_cost" not in about["rules"]:  # saved before the costs were rules (2026-11-27): it keeps the costs it paid
         for name in COST_NAMES:
             rules[name] = about["settings"].get(name, about["rules"].get(name, TODAY_COSTS[name]))
+    for name in COST_NAMES:  # a cost born after the save: what it was then (nothing to pay for, as before)
+        if name not in about["rules"] and "step_cost" in about["rules"]:
+            rules[name] = TODAY_COSTS[name]
     world = World(rules["planet_radius"], settings_from_state(about["settings"], rules), about["species"],
                   random.Random(), np.random.default_rng(), random.Random(), learner=learner, inherit=about["inherit"],
                   rules=dict(rules))
@@ -188,10 +214,12 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.fear_of_death, creature.love_of_babies = saved["fear_of_death"], saved["love_of_babies"]
         creature.learns_from_others = saved["learns_from_others"]
         creature.mutations, creature.mutation_size = saved["mutations"], saved["mutation_size"]
-        creature.diet, creature.calls, creature.kin = saved["diet"], saved["calls"], saved["kin"]
+        creature.grass_gut, creature.meat_gut = saved["grass_gut"], saved["meat_gut"]
+        creature.calls, creature.kin = saved["calls"], saved["kin"]
         creature.eye_pixels = saved.get("eye_pixels", creature.eye_pixels)  # saved before eyes had pixels: a sharp eye
         creature.species = saved.get("species", 1)  # saved before species: first life
-        creature.water, creature.moved = saved["water"], saved["moved"]  # a mover is heard next step
+        creature.gills, creature.lungs = saved["gills"], saved["lungs"]
+        creature.moved = saved["moved"]  # a mover is heard next step
         creature.stealth, creature.armour = saved["stealth"], saved["armour"]
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])
         world.add_creature(creature)
@@ -201,7 +229,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
     world.species_book = SpeciesBook.from_state(about.get("species_book"))  # a save of before: everyone first life
     living = {c.id: c for c in world.creatures}
     world.calls = [(living.get(saved["id"]) or SimpleNamespace(p=np.array(saved["p"]), **{k: saved[k] for k in (
-                        "id", "size", "diet", "water", "stealth")}),
+                        "id", "size", "meat_gut", "gills", "stealth")}),
                     saved["kind"], saved["volume"]) for saved in about.get("calls", [])]  # a caller since gone still heard
     world.count_neurons()
     return world, Dial.from_state(about["dial"], rules), about["extra"]

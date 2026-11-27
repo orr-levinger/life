@@ -42,13 +42,16 @@ COSTS = (
     ("pixel_cost", 0.0006, "Cost of each pixel of its eye (its sharpness), each step"),
     ("stealth_cost", 0.3, "Cost of stealth: living × (1 + stealth × this)"),
     ("armour_cost", 0.3, "Cost of armour: living × (1 + armour × this)"),
+    ("gut_cost", 0.15, "Cost of keeping guts: living × (1 + (grass gut + meat gut) × this)"),  # a gut: 10-20 % of resting energy
+    ("breath_cost", 0.15, "Cost of keeping gills and lungs: living × (1 + (gills + lungs) × this)"),
 )
 COST_NAMES = tuple(name for name, _, _ in COSTS)
 # What everything cost before 2026-11-27: the exam's world and saves from before keep these.
 TODAY_COSTS = {"step_cost": 0.05, "move_cost": 0.5, "sprint_power": 2.0, "eat_miss": 0.2, "bump_cost": 0.5,
                "attack_cost": 1.0, "attack_damage": 5.0, "vision_cost": SEEING, "hearing_cost": SEEING,
                "neuron_cost": 0.0005, "stealth_cost": 0.3, "armour_cost": 0.3,
-               "pixel_cost": 0.0}  # eyes had no pixels to pay for
+               "pixel_cost": 0.0,  # eyes had no pixels to pay for
+               "gut_cost": 0.0, "breath_cost": 0.0}  # one diet, one water: no organs to pay for
 
 
 @dataclass(frozen=True)
@@ -64,8 +67,9 @@ class Rule:
 # A creature made by hand, outside a world (the tests, the yardstick), gets these genes; the world never uses them:
 # its newcomers draw every gene from its newcomer range, and babies copy their parents.
 HAND_MADE = {"fear": 10.0, "love": 10.0, "learns": 0.5, "learning_speed": 3e-4, "mutations": 1.0, "mutation_size": 0.05,
-             "neurons": 32.0, "layers": 1.0, "diet": 0.0, "calls": 0.0,
-             "kin": 0.0, "water": 0.0, "stealth": 0.0, "armour": 0.0, "eye_pixels": 16}  # one made by hand eats plants, never calls, cares for nobody, cannot swim
+             "neurons": 32.0, "layers": 1.0, "grass_gut": 1.0, "meat_gut": 0.0, "calls": 0.0, "kin": 0.0,
+             "gills": 0.0, "lungs": 1.0, "stealth": 0.0, "armour": 0.0,
+             "eye_pixels": 16}  # one made by hand eats plants, never calls, cares for nobody, cannot swim
 
 
 def _gene(name: str, words: str, low: float, high: float, limits: tuple, new: tuple) -> tuple:
@@ -98,7 +102,7 @@ RULES = (
     Rule("low_energy", "birth", "Past its lifespan it dies below this share of its tank", 0.3, 0.0, 0.9),
     Rule("reach", "senses", "Reach for eating and attacking, × both radii", 3.0, 1.0, 10.0),
     Rule("call_reach", "senses", "A call at full volume carries this far", 12.0, 0.5, 60.0),
-    Rule("diet_bite", "senses", "A meat eater's hit takes more: × (1 + diet × this)", 1.0, 0.0, 5.0),
+    Rule("diet_bite", "senses", "A meat eater's hit takes more: × (1 + meat gut × this)", 1.0, 0.0, 5.0),
     Rule("hunter_share", "senses", "A hunter keeps this share of what it takes", 0.8, 0.0, 1.0),
     Rule("corpse_energy", "senses", "A corpse's food, × the dead one's size", 8.0, 0.0, 50.0),
     Rule("corpse_steps", "senses", "A corpse lasts this many steps", 5.0, 1.0, 100.0),
@@ -118,9 +122,9 @@ RULES = (
     Rule("armour_strength", "body", "A hit takes × (1 - armour × this) from an armoured body", 0.7, 0.0, 1.0),
     Rule("armour_slow", "body", "Armour slows: speed × (1 - armour × this)", 0.3, 0.0, 1.0),
     Rule("stealth_strength", "body", "A stealthy body is seen and heard from × (1 - stealth × this)", 0.7, 0.0, 1.0),
-    Rule("land_penalty", "body", "A swimmer walks slower on land: × (1 - water × this)", 0.7, 0.0, 1.0),
-    Rule("swim_saving", "body", "In water a swimmer pays less to move and live: × (1 - water × this)", 0.5, 0.0, 1.0),
-    Rule("land_cost", "body", "On land a swimmer pays more to move and live: × (1 + water × this)", 0.5, 0.0, 2.0),
+    Rule("land_penalty", "body", "Without full lungs it walks slower on land: × (1 - (1 - lungs) × this)", 0.7, 0.0, 1.0),
+    Rule("swim_saving", "body", "In water gills pay less to move and live: × (1 - gills × this)", 0.5, 0.0, 1.0),
+    Rule("land_cost", "body", "Without full lungs it pays more on land: × (1 + (1 - lungs) × this)", 0.5, 0.0, 2.0),
     Rule("pond_food_share", "world", "Share of new food that grows in ponds", 0.2, 0.0, 1.0),
     Rule("year_steps", "world", "A year lasts this many steps (food rises and falls over it)", 20000.0, 1000.0, 200000.0),
     Rule("season_depth", "world", "Seasons: food and fruit × (1 ± this) at the year's best and worst", 0.5, 0.0, 1.0),
@@ -181,10 +185,10 @@ RULES = (
   + _gene("mutation_size", "How much a changed gene changes (share)", 0.01, 0.2, (0.0, 1.0), new=(0.01, 0.1)) \
   + _gene("neurons", "Neurons in a layer", 1.0, 64.0, (1.0, 64.0), new=(8.0, 64.0)) \
   + _gene("layers", "Layers", 1.0, 3.0, (1.0, 3.0), new=(1.0, 3.0)) \
-  + _gene("diet", "Diet (0 plants, 1 meat)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
+  + _gene("grass_gut", "Grass gut (what a plant bite gives)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))   + _gene("meat_gut", "Meat gut (what a meat bite gives)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("calls", "Calls it can make", 0.0, 10.0, (0.0, 10.0), new=(0.0, 0.0)) \
   + _gene("kin", "Care for kin", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
-  + _gene("water", "Water (0 land, 1 swimmer)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
+  + _gene("gills", "Gills (at home in water)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))   + _gene("lungs", "Lungs (at home on land)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("stealth", "Stealth", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("armour", "Armour", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("eye_pixels", "Eye sharpness (pixels)", 1.0, 16.0, (1.0, 16.0), new=(2.0, 8.0))
@@ -231,6 +235,10 @@ MEANS = {
     "pixel_cost": "Energy each pixel of its eye costs every step. 0.0006: a sharp eye of 16 costs about a tenth of living.",
     "stealth_cost": "How much more living costs a stealthy creature: × (1 + stealth × this).",
     "armour_cost": "How much more living costs an armoured creature: × (1 + armour × this).",
+    "gut_cost": "What keeping its guts costs: living × (1 + (grass gut + meat gut) × this). A gut uses 10-20 % of a "
+                "mammal's resting energy; 0.15: having both full guts costs 30 % more living than having none.",
+    "breath_cost": "What keeping gills and lungs costs: living × (1 + (gills + lungs) × this). 0.15: both full cost "
+                   "30 % more living.",
     "baby_share": "When it has a baby, this share of its energy goes into the baby (0.4 = 40 %).",
     "tank_power": "How much more energy a bigger body holds: its tank is the tank × size to this power (1.3: twice the "
                   "size holds about 2.5 times the energy).",
@@ -266,17 +274,17 @@ MEANS = {
                   "quarters into it.",
     "season_depth": "How strong the seasons are: food and fruit grow × (1 + this × sin(2π × step ÷ year)). 0.5: "
                     "half again as much in the best season, half as much in the worst; 0: no seasons.",
-    "swim_saving": "How much less a swimmer pays in water: its moving and living cost × (1 - its water × this). 0.5: "
-                   "a pure swimmer pays half in water.",
-    "land_cost": "How much more a swimmer pays on land: its moving and living cost × (1 + its water × this). 0.5: a "
-                 "pure swimmer pays 1.5 times on land.",
-    "land_penalty": "How much slower a swimmer walks on land: its land speed × (1 - its water × this). 0.7: a "
-                    "full swimmer walks at 30 % of its speed.",
+    "swim_saving": "How much less a creature with gills pays in water: its moving and living cost × (1 - its gills × "
+                   "this). 0.5: full gills pay half in water.",
+    "land_cost": "How much more a creature without full lungs pays on land: its moving and living cost × (1 + (1 - its "
+                 "lungs) × this). 0.5: no lungs pays 1.5 times on land.",
+    "land_penalty": "How much slower a creature without full lungs walks on land: its land speed × (1 - (1 - its "
+                    "lungs) × this). 0.7: no lungs walks at 30 % of its speed.",
     "pond_food_share": "The share of new food that grows inside ponds, where only swimmers reach it.",
     "call_reach": "How far a call carries at full volume; a quieter call carries volume × this. Everyone within it "
                   "hears it, hunters too.",
-    "diet_bite": "How much harder a meat eater hits: a hit takes × (1 + its diet × this). 1: a pure meat eater hits "
-                 "twice as hard as a plant eater of its size.",
+    "diet_bite": "How much harder a meat eater hits: a hit takes × (1 + its meat gut × this). 1: a full meat gut "
+                 "hits twice as hard as no meat gut, at the same size.",
     "planet_radius": "How big a new world's planet is: its radius. Walking all the way round takes 2π × this "
                      "(37: about 232). A running world keeps its own.",
     "room": "The most creatures that can live at once. While it is full, nobody has a baby.",
@@ -376,15 +384,20 @@ GENE_MEANS = {
               "cost).",
     "stealth": "How hard it is to notice: others see and hear it only from (1 - stealth × the stealth strength) as "
                "far; it pays more to stay alive (× 1 + stealth × the stealth cost).",
-    "water": "How much it is at home in water: 0 cannot enter a pond; above 0 it can, and swims at this share of "
-             "its speed, but walks slower on land (× 1 - water × the land penalty); it pays less to move and live in "
-             "water (× 1 - water × the swim saving) and more on land (× 1 + water × the land cost).",
+    "gills": "How much it is at home in water: 0 cannot enter a pond; above 0 it can, swims at this share of its "
+             "speed and pays less to move and live there (× 1 - gills × the swim saving). Gills cost upkeep (the "
+             "breath cost).",
+    "lungs": "How much it is at home on land: 1 walks at full speed and pays nothing more there; less walks slower "
+             "(× 1 - (1 - lungs) × the land penalty) and pays more (× 1 + (1 - lungs) × the land cost). Lungs cost "
+             "upkeep (the breath cost).",
     "kin": "How much what happens to creatures like it counts as its own: when one it sees or hears gains or "
            "loses energy, it feels this share of it, times how alike their genes are (0 = not at all, 1 = twins).",
     "calls": "How many different calls it can make (0 to 10). A new world's creatures make none; a baby may get one "
              "more or one fewer. No call means anything until evolution gives it a meaning.",
-    "diet": "What it lives on: 0 = plants and fruit only, 1 = meat only (corpses and hits). In between it gets that "
-            "share of each: 0.3 gets 70 % of a plant bite and 30 % of a meat bite. A meat eater also hits harder.",
+    "grass_gut": "What a bite of a plant or fruit gives it: this share of the bite (1 = all of it). A gut costs "
+                 "upkeep (the gut cost), so a gut whose food is rare does not pay.",
+    "meat_gut": "What a bite of meat (a corpse) or a hit gives it: this share. A bigger meat gut also hits harder. A "
+                "gut costs upkeep (the gut cost).",
 }
 
 _PART_MEANS = {"low": "No creature's {g} goes below this.", "high": "No creature's {g} goes above this.",
@@ -442,7 +455,8 @@ def check(rules: Rules, name: str, value: float) -> Optional[str]:
 EDITABLE_GENES = {"size": "size", "vision_width": "vision_width", "vision_reach": "vision_reach", "hearing": "hearing",
                   "fear_of_death": "fear", "love_of_babies": "love", "learns_from_others": "learns",
                   "learning_speed": "learning_speed", "mutations": "mutations", "mutation_size": "mutation_size",
-                  "diet": "diet", "calls": "calls", "kin": "kin", "water": "water", "stealth": "stealth", "armour": "armour"}
+                  "grass_gut": "grass_gut", "meat_gut": "meat_gut", "calls": "calls", "kin": "kin", "gills": "gills",
+                  "lungs": "lungs", "stealth": "stealth", "armour": "armour"}
 
 
 def check_genes(rules: Rules, genes: object) -> Optional[str]:

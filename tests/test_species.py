@@ -11,9 +11,9 @@ def herd(w, n=20):
 
 
 def drift(creatures):
-    """Two genes moved across their whole range: 2/18 of the way apart, more than 10 %."""
+    """Three genes moved across their whole range (a meat eater, armoured): 3/20 of the way apart, more than 10 %."""
     for c in creatures:
-        c.diet, c.armour = 1.0, 1.0
+        c.meat_gut, c.grass_gut, c.armour = 1.0, 0.0, 1.0
 
 
 class TestSpecies(unittest.TestCase):
@@ -80,7 +80,7 @@ class TestSpecies(unittest.TestCase):
         self.assertEqual((facts["size"][0], facts["size"][2]), (1.0, 1.8))  # smallest, largest
         self.assertEqual(facts["oldest"], 800)
         self.assertEqual(entry["deaths"]["attack"], 1)
-        self.assertIn("diet", entry["now"])  # its typical member, gene by gene
+        self.assertIn("meat_gut", entry["now"])  # its typical member, gene by gene
         self.assertEqual(entry["now"]["eye_pixels"], 16.0)  # its eye's sharpness too
         self.assertEqual(entry["start"], entry["now"])  # its first look: it began like this
 

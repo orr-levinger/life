@@ -236,29 +236,34 @@ class TestTheOthersGenes(unittest.TestCase):  # the owner, 2026-11-27: "they sho
         from tests.helpers import NO_FOOD, add, make_world
         w = make_world(NO_FOOD)
         me, other = add(w, 0.0, 0.0), add(w, 2.0, 0.0)  # it faces east, the other 2 ahead (it sees 3 far)
-        other.diet, other.armour, other.water, other.neurons, other.layers = 1.0, 0.5, 0.25, 32, 2
-        genes = sense(me, w).vector[GENES_AT:GENES_AT + len(SEEN_GENES)]
-        self.assertEqual(len(SEEN_GENES), 18)
+        other.meat_gut, other.armour, other.gills, other.neurons, other.layers = 1.0, 0.5, 0.25, 32, 2
+        from src.senses import LATE_SEEN_AT
+        vector = sense(me, w).vector
+        genes = np.concatenate([vector[GENES_AT:GENES_AT + 18], vector[LATE_SEEN_AT:LATE_SEEN_AT + 2]])
+        self.assertEqual(len(SEEN_GENES), 20)
         np.testing.assert_allclose(genes, genes_seen(other, w))
-        self.assertEqual(genes[SEEN_GENES.index("diet")], 1.0)
+        self.assertEqual(genes[SEEN_GENES.index("meat_gut")], 1.0)
+        self.assertEqual(genes[SEEN_GENES.index("lungs")], 1.0)  # made by hand: full lungs
         self.assertEqual(genes[SEEN_GENES.index("armour")], 0.5)
         self.assertTrue(np.all((genes >= 0.0) & (genes <= 1.0)))
         other.p = at(50.0, 0.0)  # out of sight: nothing
         self.assertFalse(sense(me, w).vector[GENES_AT:GENES_AT + 18].any())
 
     def test_it_knows_who_hit_it_and_how_far(self):
-        from src.senses import HITTER_AT, genes_seen
+        from src.senses import HITTER_AT, LATE_HITTER_AT, genes_seen
         from tests.helpers import NO_FOOD_ATTACKS, add, make_world
         w = make_world(NO_FOOD_ATTACKS)
         hunter, prey = add(w, 0.0, 0.0), add(w, 1.0, 0.0, energy=40.0)
-        hunter.diet = 0.8
+        hunter.meat_gut = 0.8
         hunter.apply_action(("ATTACK", prey), w)
         felt = sense(prey, w).vector
         self.assertEqual(felt[16], 1.0)  # it was hit
         self.assertAlmostEqual(felt[HITTER_AT], 1.0 / prey.vision_reach)  # 1 away, of its vision reach
-        np.testing.assert_allclose(felt[HITTER_AT + 1:HITTER_AT + 19], genes_seen(hunter, w))
+        np.testing.assert_allclose(np.concatenate([felt[HITTER_AT + 1:HITTER_AT + 19], felt[LATE_HITTER_AT:LATE_HITTER_AT + 2]]),
+                                   genes_seen(hunter, w))
         prey.hurt = None  # a step later: gone
-        self.assertFalse(sense(prey, w).vector[HITTER_AT:HITTER_AT + 19].any())
+        gone = sense(prey, w).vector
+        self.assertFalse(gone[HITTER_AT:HITTER_AT + 19].any() or gone[LATE_HITTER_AT:LATE_HITTER_AT + 2].any())
 
 
 if __name__ == "__main__":

@@ -64,7 +64,7 @@ class TestCalls(unittest.TestCase):
     def test_the_voice_is_the_callers_genes(self):
         w = self.world()
         a, b, c, listener = add(w, 10, 10, size=1.0), add(w, 10, 12, size=1.02), add(w, 10, 14, size=1.9), add(w, 12, 10)
-        a.diet, b.diet, c.diet = 0.3, 0.31, 0.9
+        a.meat_gut, b.meat_gut, c.meat_gut = 0.3, 0.31, 0.9
         voices = []
         for caller in (a, b, c):
             w.calls = []

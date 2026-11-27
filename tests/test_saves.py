@@ -269,7 +269,7 @@ class TestSaves(unittest.TestCase):
         world = make_world(seed=9)
         everyone = [add(world, 3.0 * k, 0.0) for k in range(12)]
         for c in everyone[:6]:
-            c.diet, c.armour = 1.0, 1.0
+            c.meat_gut, c.grass_gut, c.armour = 1.0, 0.0, 1.0
         world.species_book.look(world, 250)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "step.npz"

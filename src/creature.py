@@ -18,9 +18,13 @@ if TYPE_CHECKING:
 
 
 # Every gene another creature shows to one that sees it, or that it hits (the owner, 2026-11-27: "they should see all
-# the DNA of the other creature"); each scaled 0-1 by the gene's range, learning speed on a log scale.
-SEEN_GENES = ("size", "diet", "water", "stealth", "armour", "vision_width", "vision_reach", "hearing", "calls", "kin",
-              "fear", "love", "learns", "learning_speed", "mutations", "mutation_size", "neurons", "layers")
+# the DNA of the other creature"); each scaled 0-1 by the gene's range, learning speed on a log scale. The meat gut
+# and gills stand where diet and water stood (the same values in a world of before); the grass gut and lungs, born
+# 2026-11-27, come last (their senses are at the end of a brain's senses: src/senses.py).
+SEEN_GENES = ("size", "meat_gut", "gills", "stealth", "armour", "vision_width", "vision_reach", "hearing", "calls", "kin",
+              "fear", "love", "learns", "learning_speed", "mutations", "mutation_size", "neurons", "layers",
+              "grass_gut", "lungs")
+FIRST_SEEN = 18  # the seen genes a brain had before the grass gut and lungs
 _GENE_ATTRS = {"fear": "fear_of_death", "love": "love_of_babies", "learns": "learns_from_others"}
 
 
@@ -50,7 +54,13 @@ def genes_seen(other: "Creature", world: Any) -> np.ndarray:
     return genes_table([other], world)[0]
 
 
-KIN_GENES = ("size", "diet", "water", "stealth", "armour", "vision_width", "vision_reach", "hearing")
+KIN_GENES = ("size", "grass_gut", "meat_gut", "gills", "lungs", "stealth", "armour", "vision_width", "vision_reach",
+             "hearing")
+
+
+HALF_TRAITS = ("grass_gut", "meat_gut", "gills", "lungs")  # each pair is one trait (what it eats, where it lives):
+# each organ weighs half, so a world of before (grass = 1 - meat, lungs = 1 - gills) is as alike as it was with diet
+# and water
 
 
 def kin_genes(rules: Rules) -> list:
@@ -58,15 +68,22 @@ def kin_genes(rules: Rules) -> list:
     return [g for g in KIN_GENES if f"gene.{g}.low" in rules and rules[f"gene.{g}.high"] > rules[f"gene.{g}.low"]]
 
 
+def alike(mine: np.ndarray, theirs: np.ndarray, genes: Sequence[str]) -> np.ndarray:
+    """How alike pairs are: 1 minus the weighted mean difference of `genes` (each row already a share of its range)."""
+    weights = np.array([0.5 if g in HALF_TRAITS else 1.0 for g in genes])
+    return 1.0 - (np.abs(mine - theirs) @ weights) / weights.sum()
+
+
 def similarity(a: Creature, b: Creature, rules: Rules) -> float:
-    """How alike two creatures' genes are: 1 minus the mean difference, each gene as a share of its range (1 =
+    """How alike two creatures' genes are: 1 minus the mean difference (`alike`), each gene as a share of its range (1 =
     twins, 0 = as unlike as the genes allow). A gene the world does not have yet, or one the owner closed to a single
     value, is left out."""
     genes = kin_genes(rules)
     if not genes:
         return 1.0
-    return 1.0 - sum(abs(getattr(a, g) - getattr(b, g)) / (rules[f"gene.{g}.high"] - rules[f"gene.{g}.low"])
-                     for g in genes) / len(genes)
+    spans = np.array([rules[f"gene.{g}.high"] - rules[f"gene.{g}.low"] for g in genes])
+    return float(alike(np.array([getattr(a, g) for g in genes]) / spans,
+                       np.array([getattr(b, g) for g in genes]) / spans, genes))
 
 
 def is_family(a: Creature, b: Creature) -> bool:
@@ -120,14 +137,16 @@ class Creature:
         self.learns_from_others = learns_from_others  # how much a lesson from another counts: a gene
         self.mutations = round(HAND_MADE["mutations"])  # how many genes each of its babies changes: a gene
         self.mutation_size = HAND_MADE["mutation_size"]  # how much each of those changes: a gene
-        self.diet = HAND_MADE["diet"]  # 0 lives on plants, 1 on meat: a gene
+        self.grass_gut = HAND_MADE["grass_gut"]  # the share of a plant or fruit bite it gets: a gene
+        self.meat_gut = HAND_MADE["meat_gut"]  # the share of a meat bite or a hit it gets: a gene
         self.calls = round(HAND_MADE["calls"])  # how many kinds of call it can make: a gene
         self.kin = HAND_MADE["kin"]  # how much what happens to those like it counts as its own: a gene
         self.stealth = HAND_MADE["stealth"]  # how hard it is to notice: a gene
         self.armour = HAND_MADE["armour"]  # how well it takes a hit, slower and dearer to keep: a gene
         self.species = 1  # its species in the world's tree (src/species.py): its parent's, or 1, first life
         self.eye_pixels = HAND_MADE["eye_pixels"]  # how sharp its eye is (real pixels, 1-16), dearer when sharper: a gene
-        self.water = HAND_MADE["water"]  # 0 cannot enter a pond; above 0 it swims at this share of its speed: a gene
+        self.gills = HAND_MADE["gills"]  # 0 cannot enter a pond; above 0 it swims at this share of its speed: a gene
+        self.lungs = HAND_MADE["lungs"]  # 1 walks at full speed on land; less walks slower and pays more there: a gene
         self.called: Optional[Tuple[int, float]] = None  # this step's call: its kind and how far it carries (display)
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
         self.had_baby_at: Optional[int] = None  # the step it last had a baby (display only)
@@ -162,7 +181,7 @@ class Creature:
 
     def attack_damage(self, world: Any) -> float:
         """What its hit takes, by the world's cost: × its size, more for a meat eater."""
-        return self.size * world.cost("attack_damage") * (1.0 + self.diet * self.rules["diet_bite"])
+        return self.size * world.cost("attack_damage") * (1.0 + self.meat_gut * self.rules["diet_bite"])
 
     def attack_cost(self, world: Any) -> float:
         """What an attack costs it, by the world's cost: × its size."""
@@ -210,22 +229,25 @@ class Creature:
         living = (cost("step_cost") * self.size ** self.rules["living_power"]  # a bigger body pays more, less than its size
                   * (1.0 + self.stealth * cost("stealth_cost"))  # and stealth costs
                   * (1.0 + self.armour * cost("armour_cost"))  # and armour costs
+                  * (1.0 + (self.grass_gut + self.meat_gut) * cost("gut_cost"))  # and its guts
+                  * (1.0 + (self.gills + self.lungs) * cost("breath_cost"))  # and its gills and lungs
                   + cost("vision_cost") * self.vision_area() + cost("hearing_cost") * self.hearing_area()
                   + cost("neuron_cost") * self.neurons + cost("pixel_cost") * self.eye_pixels) * self._home_factor(world)  # and each neuron; by where it is
         self.energy = min(self.energy - living, self.max_energy)
         self._spend(living, world)
 
     def _home_factor(self, world: World) -> float:
-        """What its water gene makes of its moving and living costs where it is: less in water, more on land."""
+        """What its gills and lungs make of its moving and living costs where it is: less in water by its gills, more
+        on land by the lungs it lacks."""
         if world.terrain.in_pond(self.p):
-            return 1.0 - self.water * self.rules["swim_saving"]
-        return 1.0 + self.water * self.rules["land_cost"]
+            return 1.0 - self.gills * self.rules["swim_saving"]
+        return 1.0 + (1.0 - self.lungs) * self.rules["land_cost"]
 
     def _pace(self, world: World) -> float:
-        """Its share of its speed where it is: its water in a pond, 1 - water × the land penalty on land."""
+        """Its share of its speed where it is: its gills in a pond, 1 - (1 - lungs) × the land penalty on land."""
         if world.terrain.in_pond(self.p):
-            return self.water
-        return 1.0 - self.water * self.rules["land_penalty"]
+            return self.gills
+        return 1.0 - (1.0 - self.lungs) * self.rules["land_penalty"]
 
     def _call(self, kind: int, volume: float, world: World) -> None:
         """A call of `kind` (one its genes let it make) at `volume` 0-1: everyone within volume × the call reach hears
@@ -247,7 +269,7 @@ class Creature:
             return
         amount = min(self.rules["bite"], food.energy)
         food.energy -= amount
-        gained = amount * (self.diet if food.meat else 1.0 - self.diet)  # what its diet makes of the bite
+        gained = amount * (self.meat_gut if food.meat else self.grass_gut)  # what its gut for that food makes of it
         self.energy += gained
         self.food_eaten += gained
         world.total_bites += 1
@@ -260,7 +282,7 @@ class Creature:
         """A move in its own view: (ahead, left), as long as it wants to go, capped by its pace there."""
         dx, dy = vector
         distance = math.hypot(dx, dy)
-        pace = self._pace(world)  # in water × its water, on land slower the more it is a swimmer
+        pace = self._pace(world)  # in water × its gills, on land slower by the lungs it lacks
         home = self._home_factor(world)  # a move is priced where it starts
         top, cruise = self.top_speed * pace, self.velocity * pace
         if distance > top:
@@ -269,7 +291,7 @@ class Creature:
         to, facing = walk(self.p, self.facing, dx, dy, distance, world.radius)
         if distance > 0:
             self.facing = facing  # it faces the way it moved, even when an obstacle stops it
-        if distance > 0 and world.terrain.blocked(to, self.radius, swims=self.water > 0):  # it runs into an obstacle: it stays, and it hurts
+        if distance > 0 and world.terrain.blocked(to, self.radius, swims=self.gills > 0):  # it runs into an obstacle: it stays, and it hurts
             self.bumped = True
             self.energy -= world.cost("bump_cost")
             self._spend(world.cost("bump_cost"), world)
@@ -299,7 +321,7 @@ class Creature:
         ahead, left = bearing(target.p, target.facing, self.p)  # in the one hit's own view: where the hitter stands
         target.hurt = (taken / target.max_energy, float(ahead), float(left),  # how much, and where the hitter stands
                        float(arc(self.p, target.p, world.radius)), *map(float, genes_seen(self, world)))  # how far, who
-        gained = self.rules["hunter_share"] * taken * self.diet  # a hit feeds a meat eater
+        gained = self.rules["hunter_share"] * taken * self.meat_gut  # a hit feeds a meat gut
         self.energy += gained
         self._earn(gained, world)
         self.last_action = "ATTACK"

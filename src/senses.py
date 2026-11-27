@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 import numpy as np
 
 from .brain import N_SENSES
-from .creature import SEEN_GENES, Creature, genes_seen, genes_table, kin_genes, similarity  # noqa: F401 (genes_seen: the tests')
+from .creature import FIRST_SEEN, SEEN_GENES, Creature, alike, genes_seen, genes_table, kin_genes, similarity  # noqa: F401 (genes_seen: the tests')
 from .sphere import arc, bearing, neighbours
 
 if TYPE_CHECKING:
@@ -23,14 +23,17 @@ KIN_INPUT = 44  # how alike the nearest creature it sees is
 IN_WATER = 45  # it is in a pond
 WATER_SEEN = 46  # the nearest obstacle in its field of vision is a pond
 CALL_INPUTS = 27  # where the heard call starts: its kind (10), how loud (1), from where (2), the voice (4)
-GENES_AT = 47  # the nearest one it sees: its 18 genes (SEEN_GENES), 0-1 each
-HITTER_AT = GENES_AT + len(SEEN_GENES)  # the one that hit it, for one step: its distance ÷ vision reach, then its genes
+GENES_AT = 47  # the nearest one it sees: its first 18 genes (SEEN_GENES), 0-1 each
+HITTER_AT = GENES_AT + FIRST_SEEN  # the one that hit it, for one step: its distance ÷ vision reach, then its 18 genes
 EYE_PIXELS, EYE_CHANNELS = 16, 6  # the eye: a row of pixels from its left edge of vision to its right, each: a creature's
 # closeness, its size against its own, how much of a hunter, how alike; food's closeness; a rock's or water's closeness
-EYE_AT = HITTER_AT + 1 + len(SEEN_GENES)
+EYE_AT = HITTER_AT + 1 + FIRST_SEEN
 EAR_DIRECTIONS = 8  # the ears: ahead, ahead-left, left, behind-left, behind, behind-right, right, ahead-right; each:
 # how loud the movers are that way, how loud the calls are
 EARS_AT = EYE_AT + EYE_PIXELS * EYE_CHANNELS
+LATE_GENES = len(SEEN_GENES) - FIRST_SEEN  # the genes born after (grass gut, lungs: 2026-11-27), at the very end so a
+LATE_SEEN_AT = EARS_AT + EAR_DIRECTIONS * 2  # brain of before learns them from zero: the seen one's,
+LATE_HITTER_AT = LATE_SEEN_AT + LATE_GENES  # then the hitter's
 EVERY_PAIR = False  # True: every pair measured, the slow way (the tests' yardstick for the k-d tree)
 
 
@@ -98,22 +101,24 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
         vector[IN_WATER] = 1.0 if world.terrain.in_pond(creature.p) else 0.0
         vector[WATER_SEEN] = water_ahead[i]
         if other is not None:
-            vector[GENES_AT:GENES_AT + len(SEEN_GENES)] = genes[nearest_seen[i]]
+            vector[GENES_AT:GENES_AT + FIRST_SEEN] = genes[nearest_seen[i]][:FIRST_SEEN]
+            vector[LATE_SEEN_AT:LATE_SEEN_AT + LATE_GENES] = genes[nearest_seen[i]][FIRST_SEEN:]
         vector[EYE_AT:EARS_AT] = eyes[i].ravel()
         vector[EARS_AT:EARS_AT + EAR_DIRECTIONS * 2] = ears[i].ravel()
         if creature.hurt is not None and len(creature.hurt) > 3:  # who hit it, and how far (a save of before: unknown)
             vector[HITTER_AT] = creature.hurt[3] / max(creature.vision_reach, 1e-9)
-            vector[HITTER_AT + 1:HITTER_AT + 1 + len(SEEN_GENES)] = creature.hurt[4:]
+            vector[HITTER_AT + 1:HITTER_AT + 1 + FIRST_SEEN] = creature.hurt[4:4 + FIRST_SEEN]
+            vector[LATE_HITTER_AT:LATE_HITTER_AT + LATE_GENES] = creature.hurt[4 + FIRST_SEEN:]
         sensed.append(Senses(vector=vector, food=food, other=other, on_food=on_food, heard=sound))
     return sensed
 
 
 def voice(caller: Creature, rules: Any) -> np.ndarray:
-    """How a caller sounds: its diet, size, water and stealth genes, each scaled 0-1 by its range (alike genes sound
-    alike; a gene it does not have yet says 0)."""
+    """How a caller sounds: its meat gut, size, gills and stealth genes, each scaled 0-1 by its range (alike genes
+    sound alike)."""
     low, high = rules["gene.size.low"], rules["gene.size.high"]
     size = (caller.size - low) / (high - low) if high > low else 0.0
-    return np.array([caller.diet, size, getattr(caller, "water", 0.0), getattr(caller, "stealth", 0.0)])
+    return np.array([caller.meat_gut, size, caller.gills, caller.stealth])
 
 
 def _calls_heard(me: '_Eyes', world: Any) -> np.ndarray:
@@ -170,7 +175,7 @@ def _eye_pixels(me: '_Eyes', world: Any, creatures: Sequence[Creature], everyone
     def closeness(distance: np.ndarray, rows: np.ndarray) -> np.ndarray:
         return np.clip(1.0 - distance / np.maximum(me.reach[rows], 1e-9), 0.0, 1.0)
 
-    rows, cols = np.nonzero(seen)  # creatures: the nearest of each slice, with its size, diet and likeness
+    rows, cols = np.nonzero(seen)  # creatures: the nearest of each slice, with its size, meat gut and likeness
     if len(rows):
         where = np.stack([everyone[j].p for j in cols])
         cut = slice_of(rows, _angles(me, rows, where))
@@ -180,7 +185,7 @@ def _eye_pixels(me: '_Eyes', world: Any, creatures: Sequence[Creature], everyone
         mine = np.array([c.size for c in creatures])
         slices[r, s, 0] = closeness(other_d[r, j], r)
         slices[r, s, 1] = (np.clip(np.log2(sizes[j] / mine[r]), -1.0, 1.0) + 1.0) / 2.0
-        slices[r, s, 2] = np.array([c.diet for c in everyone])[j]
+        slices[r, s, 2] = np.array([c.meat_gut for c in everyone])[j]  # how much of a hunter
         slices[r, s, 3] = _alike(creatures, everyone, r, j, world.rules)
     if food is not None:  # food: the nearest of each slice
         food_seen, food_d, food_p = food
@@ -218,7 +223,7 @@ def _alike(creatures: Sequence[Creature], everyone: Sequence[Creature], rows: np
     span = np.array([rules[f"gene.{g}.high"] - rules[f"gene.{g}.low"] for g in genes])
     a = np.array([[getattr(c, g) for g in genes] for c in creatures])[rows]
     b = np.array([[getattr(c, g) for g in genes] for c in everyone])[cols]
-    return 1.0 - np.mean(np.abs(a - b) / span, axis=1)
+    return alike(a / span, b / span, genes)
 
 
 def _ears(me: '_Eyes', world: Any, everyone: Sequence[Creature], stranger: np.ndarray, moved: np.ndarray,
@@ -383,7 +388,7 @@ def _vector(creature: Creature, food: Optional['Food'], other: Optional[Creature
     vector[20:24] = wall  # the nearest obstacle in its field of vision
     vector[24] = 1.0 if sheltered else 0.0  # under a tree's crown
     vector[25] = 1.0 if food is not None and food.meat else 0.0  # the nearest food it sees is meat
-    vector[26] = creature.diet  # what it lives on
+    vector[26] = creature.meat_gut  # what it lives on
     if other is not None:
         vector[KIN_INPUT] = similarity(creature, other, creature.rules)  # how alike the one it sees is
     return vector

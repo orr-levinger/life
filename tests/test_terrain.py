@@ -55,6 +55,24 @@ class TestMakingTerrain(unittest.TestCase):
             self.assertFalse(terrain.in_pond(np.array(t.p)))  # never in water
             self.assertFalse(terrain.blocked(np.array(t.p), 0.0, swims=True))  # never on a rock
 
+    def fruit_world(self, max_fruit):
+        """Room for 5 plants, 5 new ones a step; a tree dropping fruit every step; fruit's own room `max_fruit`."""
+        w = make_world(replace(NO_FOOD, max_food=5, food_per_step=5.0, fruit_rate=1.0))
+        w.terrain = Terrain([], [tree(0.0, 0.0, 3.0)], w.radius)
+        w.rules.update({"max_fruit": max_fruit, "season_depth": 0.0, "fruit_spread": 4.0})
+        for _ in range(40):
+            w.spawn_food()
+        return sum(not f.fruit for f in w.foods), sum(f.fruit for f in w.foods)
+
+    def test_trees_drop_fruit_when_plants_fill_their_room(self):  # the owner, 2026-11-27: a separate limit
+        plants, fruit = self.fruit_world(50)
+        self.assertEqual(plants, 5)  # the plants' room is full
+        self.assertGreater(fruit, 5)  # and the tree still drops fruit
+
+    def test_fruit_stops_at_its_own_limit(self):
+        plants, fruit = self.fruit_world(3)
+        self.assertEqual((plants, fruit), (5, 3))
+
     def test_pond_edges_grow_more_food_than_open_ground(self):
         w = make_world(replace(NO_FOOD, max_food=10 ** 7, food_per_step=6.0, fruit_rate=0.0))
         w.rules.update({"planet_radius": 12.0, "pond_food_share": 0.0, "pond_edge_food": 2.0, "pond_edge_width": 2.0,

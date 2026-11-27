@@ -111,6 +111,7 @@ RULES = (
     Rule("obstacle_size_low", "world", "An obstacle's size: at least", 1.0, 0.3, 10.0),
     Rule("obstacle_size_high", "world", "An obstacle's size: at most", 4.0, 0.3, 10.0),
     Rule("trees", "world", "Trees a new world gets", 92.0, 0.0, 400.0),
+    Rule("max_fruit", "world", "Fruit pieces at most (the trees' own room, apart from the plants')", 300.0, 0.0, 3000.0),
     Rule("lone_trees", "world", "Lone trees a new world gets anywhere on its land, besides its forests", 40.0, 0.0, 200.0),
     Rule("armour_strength", "body", "A hit takes × (1 - armour × this) from an armoured body", 0.7, 0.0, 1.0),
     Rule("armour_slow", "body", "Armour slows: speed × (1 - armour × this)", 0.3, 0.0, 1.0),
@@ -285,6 +286,8 @@ MEANS = {
                  "through them.",
     "obstacle_size_low": "The smallest an obstacle can be (about its radius). Each gets a random size and shape.",
     "obstacle_size_high": "The biggest an obstacle can be (about its radius).",
+    "max_fruit": "How many fruit can lie on the planet at once. Trees drop fruit up to this, whatever the plants do: "
+                 "\"Food pieces at most\" counts plants and meat only.",
     "lone_trees": "How many single trees a new world gets at random places anywhere on its land (never in water), "
                   "besides the trees of its forests.",
     "trees": "How many trees a new world gets. Each drops fruit now and then; under its crown a creature hides.",

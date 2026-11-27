@@ -32,6 +32,7 @@ class TestSeasons(unittest.TestCase):
         from tests.helpers import tree
         w = make_world(replace(START, food_per_step=0.0, max_food=10 ** 7, fruit_rate=0.4))
         w.terrain = Terrain([], [tree(25.0, 15.0, 1.5)], w.radius)
+        w.rules["max_fruit"] = 10 ** 7  # fruit has its own room (2026-11-27): room for all of it
         self.assertAlmostEqual(grown(w, 5000, 2000), 0.4 * 1.5, delta=0.05)
         self.assertAlmostEqual(grown(w, 15000, 2000), 0.4 * 0.5, delta=0.05)
 

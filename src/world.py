@@ -178,13 +178,14 @@ class World:
         whole = int(per_step)  # e.g. 2.4 per step: 2 every step and a third 40 % of the time
         extra = self.food_rng.random() < per_step - whole
         ponds = self.terrain.has_water()
+        fruit = sum(f.fruit for f in self.foods)  # fruit has its own room (max_fruit); the rest share max_food
         for _ in range(whole + extra):
             p = self._land_spot() if ponds else random_point(self.food_rng)
             energy = self.food_rng.uniform(*self.settings.food_energy)
             wet = ponds and self.food_rng.random() < self.rules["pond_food_share"]  # some grows in a pond
             if wet:
                 p = self.terrain.pond_spot(self.food_rng)
-            if len(self.foods) >= int(self.settings.max_food):
+            if len(self.foods) - fruit >= int(self.settings.max_food):
                 continue
             food = Food(p, remaining_duration=-1, energy=energy)
             if self._fits(food, wet):
@@ -197,10 +198,11 @@ class World:
             trunk = np.array(tree.p)
             e1, e2 = local_frame(trunk)
             p = exp_map(trunk, e1, e2, away * math.cos(angle), away * math.sin(angle), self.radius)
-            fruit = Food(p, remaining_duration=-1, energy=self.food_rng.uniform(*self.settings.food_energy), fruit=True)
-            if len(self.foods) < int(self.settings.max_food) and self._fits(fruit):
-                self.foods.append(fruit)
-                self.foods_created_this_step.add(id(fruit))
+            dropped = Food(p, remaining_duration=-1, energy=self.food_rng.uniform(*self.settings.food_energy), fruit=True)
+            if fruit < int(self.rules["max_fruit"]) and self._fits(dropped):
+                self.foods.append(dropped)
+                self.foods_created_this_step.add(id(dropped))
+                fruit += 1
     def _land_spot(self) -> np.ndarray:
         """A spot for new food on the land, food growing `pond_edge_food` times as thick near a pond's edge: a spot
         away from the edges is kept 1 time in `pond_edge_food` (the same food a step, more of it by the water). On a

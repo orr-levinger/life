@@ -31,7 +31,7 @@ class TestMakingTerrain(unittest.TestCase):
         clear = at(10.0, 10.0, 37.0)
         terrain = make_terrain(rules, random.Random(3), 37.0, keep_clear=[(clear, 1.0)])
         self.assertEqual((len(terrain.obstacles), len(terrain.trees)), (5, 6))
-        self.assertFalse(terrain.blocked(clear, 1.0))  # the spot kept clear
+        self.assertFalse(terrain.blocked(clear, 1.0, swims=True))  # the spot kept clear of rocks (water may lie there)
         self.assertTrue(all(not terrain.blocked(np.array(t.p), 0.0) for t in terrain.trees))
         sizes = {round(max(c[1] for c in o.caps), 2) for o in terrain.obstacles}
         self.assertGreater(len(sizes), 1)  # of random sizes

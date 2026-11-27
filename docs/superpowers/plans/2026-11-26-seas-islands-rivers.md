@@ -88,22 +88,33 @@ Each line gets its test in the task that owns it.
 
 ### Task 3: Terrain asks the water
 
-**Files:** Modify `src/terrain.py` (Terrain takes `water: Optional[Water] = None`; `make_terrain` builds rocks only,
-then the water), `src/senses.py` (`_obstacles_seen` adds water ahead), `src/world.py` (`spawn_food` uses
-`terrain.has_water()`); Test `tests/test_water.py`.
+Changed with the owner on 2026-11-27 ("Yes, use the map"): the first wording (9 points around a body on every move,
+rays sampled every 0.5) measured 56 µs a move and 17 ms a step of sight lines, about 45 % slower a step. Instead a
+distance-to-water map is made once with the grid: each cell's distance along the ground to the nearest water (0 in
+water), so every question is one lookup.
 
-**Produces:** `Terrain.has_water() -> bool`; `in_pond(p)` true in water (caps or grid); `blocked(p, radius, swims)`
-true for a walker whose body (centre and 8 points around it at its radius) touches water; `near_pond(p, width)` true
-on land with water within `width` (8 points around); `pond_spot(rng)` a random water point; `water_ahead(p, f, reach,
-half) -> (distance or None, ahead, left)` from 5 rays across the cone, a sample every 0.5.
+**Files:** Modify `src/water.py` (the distance map: `distance_to_water(points)`, `distance_at(p)` one point the fast
+way), `src/terrain.py` (Terrain takes `water: Optional[Water] = None`; `make_terrain` builds rocks only, then the water,
+then the trees off both), `src/senses.py` (`_obstacles_seen` adds water ahead), `src/world.py` (`spawn_food` uses
+`terrain.has_water()`; with a planet's water, land food grows on land); Test `tests/test_water_map.py`,
+`tests/test_water.py`.
 
-- [ ] Step 1: tests: `test_a_walker_never_enters_the_sea` (a walker made to walk into the sea stays on land; a swimmer
-  goes in); `test_in_water_and_water_seen_on_a_planet` (the two senses on a planet with water); `test_food_grows_in_the_sea`
-  (the pond share of new food lands in water); `test_old_ponds_still_water` (a Terrain of caps only answers as before).
-  Run `python -m unittest tests.test_water` → FAIL.
-- [ ] Step 2: the changes above. Run `python -m unittest tests.test_water tests.test_terrain tests.test_senses
-  tests.test_on_sphere` → OK.
-- [ ] Step 3: commit "Water is water: walkers kept out, swimmers in, senses and food".
+**Produces:** `Water.distance_to_water(points) -> array`, `Water.distance_at(p) -> float` (the same answer);
+`Terrain.has_water() -> bool`; `in_pond(p)` true in water (caps or map); `blocked(p, radius, swims)` true for a walker
+whose body reaches water (its distance to water under its radius); `near_pond(p, width)` true on land with water within
+`width`; `pond_spot(rng)` a random water point; `water_ahead(points, facing, reach, half) -> (distance, ahead, left)`
+(inf when none): 5 rays across each looker's cone, only for lookers with water within reach, each ray stepping
+max(the map's distance there, 0.5) until water or its reach.
+
+- [x] Step 1: tests: `test_the_distance_map` (distance to a straight shore within a cell of the true one; one point the
+  fast way equals many points, cube edges and corners included); `test_a_walker_never_enters_the_sea` (a walker made
+  to walk into the sea stays on land; a swimmer goes in); `test_in_water_and_water_seen_on_a_planet` (the two senses
+  and the distance on a planet with water; a rock nearer than the water is what is seen); `test_food_grows_in_the_sea`
+  (the pond share of new food lands in water, the rest on land); `test_old_ponds_still_water` (a Terrain of caps only
+  answers as before). Run `python -m unittest tests.test_water_map tests.test_water` → FAIL.
+- [x] Step 2: the changes above. Run `python -m unittest tests.test_water_map tests.test_water tests.test_terrain
+  tests.test_senses tests.test_on_sphere` → OK.
+- [x] Step 3: commit "Water is water: walkers kept out, swimmers in, senses and food".
 
 ### Task 4: New planets and saves
 

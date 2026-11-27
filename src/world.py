@@ -173,7 +173,7 @@ class World:
         per_step = self.settings.food_per_step * season
         whole = int(per_step)  # e.g. 2.4 per step: 2 every step and a third 40 % of the time
         extra = self.food_rng.random() < per_step - whole
-        ponds = self.terrain.pond_circles.any()
+        ponds = self.terrain.has_water()
         for _ in range(whole + extra):
             p = self._land_spot() if ponds else random_point(self.food_rng)
             energy = self.food_rng.uniform(*self.settings.food_energy)
@@ -199,10 +199,13 @@ class World:
                 self.foods_created_this_step.add(id(fruit))
     def _land_spot(self) -> np.ndarray:
         """A spot for new food on the land, food growing `pond_edge_food` times as thick near a pond's edge: a spot
-        away from the edges is kept 1 time in `pond_edge_food` (the same food a step, more of it by the water)."""
+        away from the edges is kept 1 time in `pond_edge_food` (the same food a step, more of it by the water). On a
+        planet with seas, a spot in the water is tried again (the pond share is what grows in the water)."""
         thicker, width = self.rules["pond_edge_food"], self.rules["pond_edge_width"]
         for _ in range(FOOD_SPOT_TRIES):
             p = random_point(self.food_rng)
+            if self.terrain.water is not None and self.terrain.in_pond(p):
+                continue
             if thicker <= 1.0 or self.terrain.near_pond(p, width) or self.food_rng.random() < 1.0 / thicker:
                 return p
         return p

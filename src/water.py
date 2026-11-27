@@ -4,14 +4,15 @@ Where water lies comes from a smooth height on the ball (a dozen gentle waves); 
 are round land raised in open water, each far enough from all other land that walkers can never reach it. A river is a
 chain of points from high land down the slope to the sea (or to a lake where it ends in a hollow), `river_width` wide,
 with crossings where it is land. The rule itself (`wet_exact`) is turned once into a grid of cells on the six faces of a
-cube around the ball, so asking "is this water?" is one lookup (`is_water`)."""
+cube around the ball, so asking "is this water?" is one lookup (`is_water`); and once more into each cell's distance to
+the nearest water (`distance_to_water`, 0 in it), so "does this body reach water?" is one lookup too."""
 from __future__ import annotations
 
 import math
 import random
 import struct
 import zlib
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -51,6 +52,8 @@ class Water:
         self._crossing_tree = cKDTree(self.crossings) if len(self.crossings) else None
         self._n = min(MOST_CELLS, max(8, math.ceil(math.pi * self.radius / 2.0 / CELL)))
         self._grid: Optional[np.ndarray] = None  # made the first time it is asked
+        self._far: Optional[np.ndarray] = None  # each cell's distance to the nearest water: made the first time asked
+        self._any: Optional[bool] = None
 
     # ---------- the rule
     def height(self, points: np.ndarray) -> np.ndarray:
@@ -97,6 +100,19 @@ class Water:
         j = np.clip(np.floor((np.arctan(b / major) * 4.0 / math.pi + 1.0) / 2.0 * n), 0, n - 1).astype(int)
         return face, i, j
 
+    def _cell(self, p: Sequence[float]) -> Tuple[int, int, int]:
+        """The cell of one point, as `_cells` finds it, without arrays (a few microseconds)."""
+        x, y, z = float(p[0]), float(p[1]), float(p[2])
+        ax, ay, az = abs(x), abs(y), abs(z)
+        axis = 0 if ax >= ay and ax >= az else (1 if ay >= az else 2)
+        major, value = ((ax, x), (ay, y), (az, z))[axis]
+        a = y if axis == 0 else x
+        b = y if axis == 2 else z
+        n = self._n
+        i = min(max(math.floor((math.atan(a / major) * 4.0 / math.pi + 1.0) / 2.0 * n), 0), n - 1)
+        j = min(max(math.floor((math.atan(b / major) * 4.0 / math.pi + 1.0) / 2.0 * n), 0), n - 1)
+        return axis * 2 + (value < 0), i, j
+
     def _centres(self, face: np.ndarray, i: np.ndarray, j: np.ndarray) -> np.ndarray:
         n = self._n
         a = np.tan(((i + 0.5) / n * 2.0 - 1.0) * math.pi / 4.0)
@@ -112,11 +128,15 @@ class Water:
         """The centre of the cell each point falls in (where the grid judged it)."""
         return self._centres(*self._cells(points))
 
+    def _every_centre(self) -> np.ndarray:
+        n = self._n
+        face, i, j = (x.ravel() for x in np.meshgrid(np.arange(6), np.arange(n), np.arange(n), indexing="ij"))
+        return self._centres(face, i, j)
+
     def _made(self) -> np.ndarray:
         if self._grid is None:
             n = self._n
-            face, i, j = (x.ravel() for x in np.meshgrid(np.arange(6), np.arange(n), np.arange(n), indexing="ij"))
-            centres = self._centres(face, i, j)
+            centres = self._every_centre()
             wet = np.concatenate([self.wet_exact(chunk) for chunk in np.array_split(centres, max(1, len(centres) // 50_000))])
             self._grid = wet.reshape(6, n, n)
         return self._grid
@@ -126,7 +146,36 @@ class Water:
         return self._made()[self._cells(points)]
 
     def is_water_at(self, p: np.ndarray) -> bool:
-        return bool(self.is_water(np.asarray(p, dtype=float)[None, :])[0])
+        return bool(self._made()[self._cell(p)])
+
+    def any_water(self) -> bool:
+        if self._any is None:
+            self._any = bool(self._made().any())
+        return self._any
+
+    def _distances(self) -> np.ndarray:
+        """[face, i, j]: each cell's distance along the ground to the nearest water: from its centre to the nearest wet
+        cell's centre, less half a cell (to that cell's near side); 0 for a wet cell, inf on a planet without water."""
+        if self._far is None:
+            n, wet = self._n, self._made().ravel()
+            far = np.zeros(len(wet))
+            if not wet.any():
+                far[:] = np.inf
+            elif not wet.all():
+                centres = self._every_centre()
+                gap, _ = cKDTree(centres[wet]).query(centres[~wet], workers=-1)
+                along = 2.0 * np.arcsin(np.minimum(gap / 2.0, 1.0)) * self.radius
+                far[~wet] = np.maximum(along - math.pi * self.radius / 4.0 / n, 1e-9)
+            self._far = far.reshape(6, n, n)
+        return self._far
+
+    def distance_to_water(self, points: np.ndarray) -> np.ndarray:
+        """How far each point is from the nearest water, along the ground (to a cell's accuracy; 0 in water)."""
+        return self._distances()[self._cells(points)]
+
+    def distance_at(self, p: np.ndarray) -> float:
+        """`distance_to_water` of one point, the fast way."""
+        return float(self._distances()[self._cell(p)])
 
     # ---------- keeping and showing it
     def state(self) -> Dict[str, Any]:

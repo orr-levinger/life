@@ -193,11 +193,23 @@ def _in_sight(me: '_Eyes', world: Any, where: np.ndarray, distance: np.ndarray, 
 
 def _obstacles_seen(me: '_Eyes', world: Any) -> np.ndarray:
     """Each looker's nearest obstacle in its field of vision as inputs (seen, distance to its edge ÷ vision reach, the
-    direction to its centre (ahead, left)), zeros when none is in view; and whether that obstacle is a pond."""
+    direction to its centre (ahead, left), or for the water the sight line that found it), zeros when none is in view;
+    and whether that obstacle is a pond or the water."""
     out, wet = np.zeros((len(me.p), 4)), np.zeros(len(me.p))
-    if not world.terrain.obstacles:
-        return out, wet
-    edge, centres = world.terrain.nearest_edges(me.p, None if EVERY_PAIR else me.reach)
+    terrain = world.terrain
+    if terrain.obstacles:
+        _caps_seen(me, terrain, out, wet)
+    if terrain.water is not None:
+        far, ahead, left = terrain.water_ahead(me.p, me.f, me.reach, me.half)
+        closer = (far <= me.reach) & ((out[:, 0] == 0.0) | (far < out[:, 1] * me.reach))
+        out[closer] = np.stack([np.ones(len(far)), far / me.reach, ahead, left], axis=1)[closer]
+        wet[closer] = 1.0
+    return out, wet
+
+
+def _caps_seen(me: '_Eyes', terrain: Any, out: np.ndarray, wet: np.ndarray) -> None:
+    """`_obstacles_seen` of the obstacles (rocks and ponds), written into `out` and `wet`."""
+    edge, centres = terrain.nearest_edges(me.p, None if EVERY_PAIR else me.reach)
     near = edge <= me.reach[:, None]
     ahead, left = np.full(edge.shape, -np.inf), np.zeros(edge.shape)
     i, j = np.nonzero(near)
@@ -208,8 +220,7 @@ def _obstacles_seen(me: '_Eyes', world: Any) -> np.ndarray:
     for i in np.nonzero(visible.any(axis=1))[0]:
         j = nearest[i]
         out[i] = (1.0, edge[i, j] / me.reach[i], ahead[i, j], left[i, j])
-        wet[i] = 1.0 if world.terrain.pond_circles[j] else 0.0
-    return out, wet
+        wet[i] = 1.0 if terrain.pond_circles[j] else 0.0
 
 
 def _sighting(creature: Creature, target: Any, reach: float, R: float) -> tuple:

@@ -67,6 +67,20 @@ class TestWaterMap(unittest.TestCase):
         self.assertEqual(self.w.is_water(corners).shape, (6,))  # edges and corners of the cube answer
         self.assertEqual(self.w.is_water_at(corners[0]), bool(self.w.is_water(corners[:1])[0]))
 
+    def test_the_distance_map(self):  # each cell's distance along the ground to the nearest water, 0 in it
+        half = Water(37.0, [[1.0, 0.0, 0.0, 1.0, 0.0]], 0.0)  # water where x < 0: the shore is the great circle x = 0
+        rng = np.random.default_rng(3)
+        for d in (0.5, 1.0, 2.5, 6.0, 10.0):
+            around = rng.uniform(0.0, 2.0 * np.pi, 50)
+            p = np.stack([np.full(50, np.sin(d / 37.0)), np.cos(d / 37.0) * np.cos(around),
+                          np.cos(d / 37.0) * np.sin(around)], axis=1)
+            np.testing.assert_allclose(half.distance_to_water(p), d, atol=0.35)  # within a cell of the truth
+            self.assertTrue(np.all(half.distance_to_water(p * [-1.0, 1.0, 1.0]) == 0.0))  # in the water: 0
+        corners = np.array([[1, 0, 0], [0, -1, 0], [0, 0, 1], [1, 1, 1], [-1, 1, 0], [1, -1, -1], [1, 1, 0]], dtype=float)
+        corners /= np.linalg.norm(corners, axis=1, keepdims=True)
+        for q in np.concatenate([points(500, seed=9), corners]):  # one point the fast way: the same answer
+            self.assertEqual(self.w.distance_at(q), float(self.w.distance_to_water(q[None, :])[0]))
+
     def test_water_comes_back_from_a_save(self):
         again = Water.from_state(self.w.state())
         p = points(10_000, seed=7)

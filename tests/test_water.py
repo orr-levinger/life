@@ -8,14 +8,30 @@ from src.senses import IN_WATER, WATER_SEEN, sense
 from src.terrain import Obstacle, Terrain
 import numpy as np
 
+import random
+
+from src.rules import starting_rules
 from src.sphere import arc
-from tests.helpers import NO_FOOD, add, at, cap, face, make_world
+from src.water import Water
+from src.world import World
+from tests.helpers import EAST, NO_FOOD, SMALL_WORLD, add, at, cap, face, make_world
+
+SEA_R = 37.0
+SEA = Water(SEA_R, [[*EAST, 1.0, 0.0]], 0.0)  # water west of the map's centre: the shore is the map's line x = 0
 
 
 def pond_world():
     """A pond around (20, 10) of radius 3, a rock around (20, 20) of radius 3."""
     w = make_world(NO_FOOD)
     w.terrain = Terrain([Obstacle("pond", (cap(20.0, 10.0, 3.0),)), Obstacle("rock", (cap(20.0, 20.0, 3.0),))], [], w.radius)
+    return w
+
+
+def sea_world(settings=NO_FOOD, rocks=()):
+    """A planet of radius 37 whose west half (map x < 0) is sea."""
+    w = World(SEA_R, settings, "random", random.Random(0), np.random.default_rng(0), random.Random(1000),
+              rules={**starting_rules(), **SMALL_WORLD, "planet_radius": SEA_R})
+    w.terrain = Terrain(list(rocks), [], SEA_R, water=SEA)
     return w
 
 
@@ -78,6 +94,66 @@ class TestWater(unittest.TestCase):
         c.p = at(15.0, 20.0)
         face(c, 1.0, 0.0)
         self.assertEqual(sense(c, w).vector[WATER_SEEN], 0.0)  # a rock ahead
+
+    def test_a_walker_never_enters_the_sea(self):
+        for water in (0.0, 1.0):
+            w = sea_world()
+            c = add(w, 1.5, 0.0, energy=1000.0)
+            c.water = water
+            for _ in range(40):  # it walks west, into the sea
+                face(c, -1.0, 0.0)
+                c.apply_action(("MOVE", (1.0, 0.0)), w)
+            if water:
+                self.assertTrue(w.terrain.in_pond(c.p))  # a swimmer goes in
+            else:
+                self.assertFalse(w.terrain.blocked(c.p, c.radius))  # a walker stays on land, its body too
+                self.assertLess(SEA.distance_at(c.p), c.radius + 0.6)  # at the shore
+                self.assertTrue(c.bumped)
+
+    def test_in_water_and_water_seen_on_a_planet(self):
+        w = sea_world()
+        c = add(w, 3.0, 0.0)
+        c.vision_width, c.vision_reach = 120.0, 6.0
+        face(c, -1.0, 0.0)
+        v = sense(c, w).vector
+        self.assertEqual((v[IN_WATER], v[WATER_SEEN], v[20]), (0.0, 1.0, 1.0))  # on land, the sea ahead
+        self.assertAlmostEqual(v[21], 3.0 / 6.0, delta=0.1)  # 3 away, of its reach 6
+        self.assertAlmostEqual(v[22], 1.0, delta=0.05)  # straight ahead
+        face(c, 1.0, 0.0)
+        v = sense(c, w).vector
+        self.assertEqual((v[WATER_SEEN], v[20]), (0.0, 0.0))  # looking away: nothing in view
+        c.p = at(-3.0, 0.0, SEA_R)
+        face(c, 1.0, 0.0)
+        v = sense(c, w).vector
+        self.assertEqual((v[IN_WATER], v[WATER_SEEN], v[21]), (1.0, 1.0, 0.0))  # in the sea
+        w = sea_world(rocks=[Obstacle("rock", (cap(1.5, 0.0, 0.5, SEA_R),))])
+        c = add(w, 3.0, 0.0)
+        c.vision_width, c.vision_reach = 120.0, 6.0
+        face(c, -1.0, 0.0)
+        v = sense(c, w).vector
+        self.assertEqual((v[WATER_SEEN], v[20]), (0.0, 1.0))  # a rock before the sea: the rock is what it sees
+        self.assertAlmostEqual(v[21], 1.0 / 6.0, delta=0.02)
+
+    def test_food_grows_in_the_sea(self):
+        w = sea_world(replace(NO_FOOD, food_per_step=5.0, max_food=10 ** 6, fruit_rate=0.0))
+        w.rules.update({"pond_food_share": 0.3, "pond_edge_food": 1.0, "season_depth": 0.0})
+        self.assertTrue(w.terrain.has_water())
+        for _ in range(300):
+            w.spawn_food()
+        wet = np.mean([w.terrain.in_pond(f.p) for f in w.foods])
+        self.assertGreater(len(w.foods), 1000)
+        self.assertAlmostEqual(float(wet), 0.3, delta=0.05)  # the pond share in the sea, the rest on land
+
+    def test_old_ponds_still_water(self):
+        t = Terrain([Obstacle("pond", (cap(0.0, 0.0, 3.0),)), Obstacle("rock", (cap(10.0, 0.0, 2.0),))], [], 1.0e6)
+        self.assertTrue(t.has_water())
+        self.assertFalse(Terrain([Obstacle("rock", (cap(10.0, 0.0, 2.0),))], [], 1.0e6).has_water())
+        self.assertEqual((t.in_pond(at(0.0, 0.0)), t.in_pond(at(5.0, 0.0))), (True, False))
+        self.assertEqual((t.blocked(at(3.5, 0.0), 1.0), t.blocked(at(3.5, 0.0), 1.0, swims=True)), (True, False))
+        self.assertTrue(t.blocked(at(10.0, 0.0), 0.5, swims=True))  # a rock stops a swimmer too
+        self.assertEqual([t.near_pond(at(x, 0.0), 2.0) for x in (0.0, 4.0, 6.5)], [False, True, False])
+        spot = t.pond_spot(random.Random(1))
+        self.assertLess(float(arc(spot, at(0.0, 0.0), 1.0e6)), 3.0)
 
     def test_newcomers_draw_their_water(self):
         w = make_world(seed=6)

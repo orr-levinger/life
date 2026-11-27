@@ -207,7 +207,7 @@ class TestTheTree(unittest.TestCase):
                   random.Random(6), rules={**starting_rules(), **SMALL_WORLD})
         w.terrain = make_terrain(w.rules, w.rng, w.radius)
         populate(w, 40)
-        for _ in range(3):  # food grows, they turn and move
+        for _ in range(5):  # food grows, they turn and move (half the planet is sea: on land, more of them eat)
             w.step()
         return w, senses
 

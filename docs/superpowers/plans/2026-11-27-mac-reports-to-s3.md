@@ -41,10 +41,10 @@ nudges; any error written before the world ends), `src/species.py` (`look` retur
 and errors); Create `docs/mac-reports.md` (the owner's setup, step by step, with the two policies); Test
 `tests/test_upload.py` (new).
 
-- [ ] Step 1: tests first: `test_the_upload_command`, `test_a_failed_upload_is_logged_not_raised`,
+- [x] Step 1: tests first: `test_the_upload_command`, `test_a_failed_upload_is_logged_not_raised`,
   `test_the_server_keeps_its_log`. Run → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_upload tests.test_viewer` → OK.
-- [ ] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "Reports reach the owner's S3 bucket"; push.
+- [x] Step 2: the changes. Run `python -m unittest tests.test_upload tests.test_viewer` → OK.
+- [x] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "Reports reach the owner's S3 bucket"; push.
 - [ ] Step 4: the owner follows `docs/mac-reports.md`; Claude reads the first reports from the bucket here and tells the
   owner what it sees.
 

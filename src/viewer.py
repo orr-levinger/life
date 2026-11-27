@@ -30,6 +30,7 @@ from .saves import FIRST_PLANET, FLAT_WORLD, SaveError, save_format, save_header
 from .rules import COST_NAMES, GENE_MEANS, GROUPS, RULES, check, check_genes, means, starting_rules
 from .scoreboard import OLDER_LAYOUTS, ROW_KEYS, read_rows
 from .settings import START, Settings
+from .upload import ServerLog, Uploader
 
 PAGE = Path(__file__).with_name("viewer.html")
 STATIC = Path(__file__).with_name("static")  # three.js and the page's own scripts, served as they are
@@ -460,14 +461,41 @@ def make_server(folder: Path, port: int, launch: Launch = _launch) -> ThreadingH
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> None:
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Serve the live viewer and control room of the runs.")
     parser.add_argument("--runs", type=Path, default=Path("runs"))
     parser.add_argument("--port", type=int, default=8765)
-    args = parser.parse_args(argv)
+    parser.add_argument("--report-to", default=None,
+                        help="an S3 place (s3://bucket/prefix) the worlds' reports are copied to every 2 minutes")
+    parser.add_argument("--report-profile", default="life-reports", help="the AWS profile whose keys copy them")
+    return parser.parse_args(argv)
+
+
+class _Both:
+    """A stream written to the terminal and to the server's log alike."""
+
+    def __init__(self, terminal, log: ServerLog) -> None:
+        self.terminal, self.log = terminal, log
+
+    def write(self, text: str) -> int:
+        self.log.write(text)
+        return self.terminal.write(text)
+
+    def flush(self) -> None:
+        self.terminal.flush()
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    args = parse_args(argv)
     args.runs.mkdir(parents=True, exist_ok=True)
+    log = ServerLog(args.runs / "server.log")  # what it prints, and every error (with its traceback)
+    sys.stdout, sys.stderr = _Both(sys.stdout, log), _Both(sys.stderr, log)
     server = make_server(args.runs, args.port)
     print(f"life viewer on http://localhost:{args.port} (runs: {args.runs})", flush=True)
+    if args.report_to:
+        Uploader(args.runs, args.report_to, args.report_profile, log=log).start()
+        print(f"reports copied to {args.report_to} every {Uploader.EVERY:.0f} s (profile {args.report_profile})",
+              flush=True)
     server.serve_forever()
 
 

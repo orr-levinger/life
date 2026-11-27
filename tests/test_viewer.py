@@ -241,7 +241,7 @@ class TestControlRoom(unittest.TestCase):
 
     def test_knobs_list_the_ends_of_every_slider(self):
         answer = self.server.get("/knobs")
-        self.assertEqual([k["name"] for k in answer["knobs"]], [k.name for k in KNOBS])
+        self.assertEqual([k["name"] for k in answer["knobs"]], [k.name for k in KNOBS if not k.cost])  # costs: below
         energy = next(k for k in answer["knobs"] if k["name"] == "food_energy")
         self.assertEqual((energy["label"], energy["easiest"], energy["hardest"], energy["start"]),
                          ("Energy per food", 100.0, 3.0, 30.0))
@@ -718,10 +718,10 @@ class TestControlRoom(unittest.TestCase):
         for words in ("const COST_SLIDERS", "rules: { [name]: "):
             self.assertIn(words, page)
         name = self.running_world()  # in Auto
-        status, _ = self.server.post("/control", {"run": name, "rules": {"move_cost": 1.0}})
+        status, _ = self.server.post("/control", {"run": name, "rules": {"move_cost": 0.3}})
         self.assertEqual(status, 200)
-        self.assertEqual(read_control(self.root / name).rules, {"move_cost": 1.0})
-        self.assertEqual(self.server.post("/control", {"run": name, "rules": {"move_cost": 9.0}})[0], 400)  # above its max
+        self.assertEqual(read_control(self.root / name).rules, {"move_cost": 0.3})
+        self.assertEqual(self.server.post("/control", {"run": name, "rules": {"move_cost": 0.5}})[0], 400)  # above nature
 
     def test_world_card_has_every_cost(self):  # the owner's cost sliders, never Auto's (2026-11-27)
         answer = self.server.get("/knobs")
@@ -731,7 +731,7 @@ class TestControlRoom(unittest.TestCase):
                                       "bump_cost", "vision_cost", "hearing_cost", "neuron_cost", "stealth_cost",
                                       "armour_cost"})
         self.assertEqual((costs["vision_cost"]["label"][:14], costs["step_cost"]["low"], costs["step_cost"]["high"]),
-                         ("Cost of seeing", 0.0, 0.30000000000000004))
+                         ("Cost of seeing", 0.0, 0.1))  # from 0 to nature
 
     def test_page_lets_the_owner_change_a_creatures_genes(self):
         with urllib.request.urlopen(self.server.base + "/") as response:

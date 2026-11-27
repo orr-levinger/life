@@ -136,9 +136,10 @@ class TestDial(unittest.TestCase):
         dial = Dial()
         seen = []
         for _ in range(len(KNOBS)):
-            before = dial.settings
+            before, costs = dial.settings, dict(dial.rules)
             dial.review(*EASY)
             seen.extend(changed_fields(before, dial.settings))
+            seen.extend(name for name in costs if costs[name] != dial.rules[name])  # a cost: the world's rule
         self.assertEqual(sorted(seen), sorted(k.name for k in KNOBS))  # each knob once per turn
 
     def test_easier_takes_back_the_newest_harder_nudges_first(self):
@@ -173,10 +174,10 @@ class TestDial(unittest.TestCase):
             easy.review(10, -1.0, -1.0, 0)
         for k in KNOBS:
             low, high = sorted((k.easiest, k.hardest))
-            self.assertAlmostEqual(value(hard.settings, k.name), k.hardest, msg=k.name)
-            self.assertAlmostEqual(value(easy.settings, k.name), k.easiest, msg=k.name)
+            self.assertAlmostEqual(hard._now(k), k.hardest, msg=k.name)  # a cost: at nature, never above
+            self.assertAlmostEqual(easy._now(k), k.easiest, msg=k.name)
             for dial in (hard, easy):
-                self.assertTrue(low - 1e-9 <= value(dial.settings, k.name) <= high + 1e-9, k.name)
+                self.assertTrue(low - 1e-9 <= dial._now(k) <= high + 1e-9, k.name)
         self.assertTrue(hard.settings.attacks)
         self.assertEqual(hard.review(80, 1.0, 0.0, 0), 0)  # nothing left to make harder
 

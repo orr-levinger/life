@@ -554,12 +554,12 @@ function makeCard(run) {
   return state;
 }
 
-// The costs: the owner's sliders in Auto and Manual alike, never Auto's. Each is a rule of the world (also on the
-// Rules page): a drag sends it as a rule change, and the world takes it within a second.
+// The costs: rules of the world (also on the Rules page), from 0 to nature. Auto turns them in Auto; the owner sets one
+// in either mode (a drag sends it as a rule change, taken within a second) and Auto goes on from there.
 const COST_SLIDERS = (card, state) => {
   const group = document.createElement("div");
   group.className = "knob-group";
-  group.innerHTML = "<h4>Costs <small>(yours: Auto never turns them)</small></h4>";
+  group.innerHTML = "<h4>Costs <small>(Auto turns them up to nature; set one and Auto goes on from there)</small></h4>";
   card.querySelector(".knobs").append(group);
   for (const cost of COSTS) {
     const row = document.createElement("div");

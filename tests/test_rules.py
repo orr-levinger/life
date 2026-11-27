@@ -68,7 +68,7 @@ class TestRules(unittest.TestCase):
         from src.rules import GROUPS, means
         by_name = {r.name: r for r in RULES}
         self.assertIn(("knobs", "Knob ends"), GROUPS)
-        for k in KNOBS:
+        for k in (k for k in KNOBS if not k.cost):  # a cost's range is its own rule's (0 to nature)
             top = 10.0 * max(abs(k.easiest), abs(k.hardest))
             for end, today in (("easy", k.easiest), ("hard", k.hardest)):
                 r = by_name[f"knob.{k.name}.{end}"]

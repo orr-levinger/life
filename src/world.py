@@ -51,7 +51,6 @@ class World:
             learner.rules = self.rules  # learning's numbers are the world's rules
         self.rules["planet_radius"] = float(radius)
         self.settings = settings  # how hard survival is right now; the dial changes it
-        self.grown = 1.0  # how far it has grown into its costs (a new planet starts at a tenth: src/evolve.py)
         self.level = 0  # how many of the dial's nudges are in force
         self.species = species
         self.rng = rng  # decisions, placement and size mutation
@@ -88,18 +87,8 @@ class World:
         return self.rules["planet_radius"]
 
     def cost(self, name: str) -> float:
-        """What `name` costs in this world now: its rule × how far the world has grown into its costs."""
-        return self.rules[name] * self.grown
-
-    def grow_up(self) -> None:
-        """How far the world has grown into its costs: a tenth at first, all of them once its deepest living generation
-        reaches `grow_up_generations`; it never goes back."""
-        if self.grown >= 1.0:
-            return
-        reach = self.rules["grow_up_generations"]
-        deepest = max((c.generation for c in self.creatures), default=0)
-        share = 1.0 if reach <= 0 else 0.1 + 0.9 * min(deepest, reach) / reach
-        self.grown = max(self.grown, share)
+        """What `name` costs in this world now: its rule (Auto and the owner turn it between 0 and nature)."""
+        return self.rules[name]
 
     def change_rules(self, changes: Rules) -> None:
         """The owner's rule changes, at once (a running planet keeps its own size)."""
@@ -249,7 +238,6 @@ class World:
 
     def step(self, observer: Optional[Observer] = None) -> None:
         self.step_count += 1
-        self.grow_up()
         self.foods_created_this_step.clear()
         self.dead_this_step = []
         self.spawn_food()

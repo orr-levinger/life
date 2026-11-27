@@ -163,7 +163,7 @@ class Scoreboard:
             "max_food": settings.max_food,
             "food_energy": sum(settings.food_energy) / 2,
             "food_per_step": settings.food_per_step,
-            "move_cost": world.cost("move_cost"),  # the costs paid now (the world's rules, grown into)
+            "move_cost": world.cost("move_cost"),  # the costs paid now (the world's rules)
             "step_cost": world.cost("step_cost"),
             "lifespan": sum(settings.lifespan) / 2,
             "hunters": int(settings.attacks),

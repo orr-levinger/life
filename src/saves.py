@@ -70,7 +70,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
     about = {
         "format": SAVE_FORMAT, "step": world.step_count, "species": world.species, "inherit": world.inherit,
         "rules": dict(world.rules), "settings": settings_state(world.settings), "level": world.level,
-        "terrain": world.terrain.state(), "grown": world.grown,
+        "terrain": world.terrain.state(),
         "water": None if world.terrain.water is None else world.terrain.water.state(),
         "dial": dial.state(),
         "counters": {"births": world.births, "newcomers": world.newcomers, "deaths": dict(world.deaths),
@@ -155,7 +155,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         learner = Learner(ROOM_SLOTS, learner_seed)
         learner.load_state({key[len(LEARNER):]: value for key, value in arrays.items() if key.startswith(LEARNER)})
     rules = {**starting_rules(), **about["rules"]}  # a rule born after the save starts at its start value
-    if "grown" not in about:  # saved before the costs were rules (2026-11-27): it keeps the costs it paid
+    if "step_cost" not in about["rules"]:  # saved before the costs were rules (2026-11-27): it keeps the costs it paid
         for name in COST_NAMES:
             rules[name] = about["settings"].get(name, about["rules"].get(name, TODAY_COSTS[name]))
     world = World(rules["planet_radius"], settings_from_state(about["settings"], rules), about["species"],
@@ -194,7 +194,6 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
     world.foods = [_food(f) for f in about["foods"]]
     water = about.get("water")  # none in a format-27 save: its ponds are its water
     world.terrain = Terrain.from_state(about["terrain"], None if water is None else Water.from_state(water))
-    world.grown = about.get("grown", 1.0)  # how far it had grown into its costs (a save from before: all the way)
     living = {c.id: c for c in world.creatures}
     world.calls = [(living.get(saved["id"]) or SimpleNamespace(p=np.array(saved["p"]), **{k: saved[k] for k in (
                         "id", "size", "diet", "water", "stealth")}),

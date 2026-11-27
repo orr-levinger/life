@@ -163,8 +163,9 @@ class _Knobs:
         the owner's settings changed the world's."""
         self.control = control
         if control.rules is not None and control.rules != self._applied_rules:
+            before = self._applied_rules or {}  # only what changed since: a cost Auto turned since stays as it is
             self._applied_rules = dict(control.rules)
-            world.change_rules(control.rules)
+            world.change_rules({k: v for k, v in control.rules.items() if before.get(k) != v})
         if control.edit is not None and control.edit["seq"] != self._applied_edit:
             self._applied_edit = control.edit["seq"]  # each change once (applying it again would change nothing)
             world.edit_genes(control.edit["id"], control.edit["genes"])
@@ -345,7 +346,6 @@ def _new_world(args: argparse.Namespace, rules: Dict[str, float]) -> Tuple[World
                   np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
                   inherit=args.inherit)
     world.change_rules(rules)
-    world.grown = 0.1  # a new world pays a tenth of every cost at first and grows into them (World.grow_up)
     world.terrain = make_terrain(world.rules, world.rng, world.radius)  # its rocks, water (seas, islands, rivers), trees
     for _ in range(round(world.rules["first_creatures"])):
         world.add_newcomer()

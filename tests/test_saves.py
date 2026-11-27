@@ -167,7 +167,6 @@ class TestSaves(unittest.TestCase):
             about = json.loads(str(arrays["about"]))
             for name in COST_NAMES:
                 about["rules"].pop(name)
-            about.pop("grown")
             for state in (about["settings"], about["dial"]["settings"]):  # a save of 2026-11-26: costs were knobs
                 state.update({"move_cost": 0.33, "step_cost": 0.04, "eat_miss": 0.7})
             about["rules"]["attack_cost"] = 2.5  # older still: the owner had changed it when it was a rule
@@ -176,18 +175,8 @@ class TestSaves(unittest.TestCase):
             loaded, dial, _ = load_world(path, learner_seed=0)
         self.assertEqual([loaded.rules[n] for n in ("move_cost", "step_cost", "eat_miss", "attack_cost")],
                          [0.33, 0.04, 0.7, 2.5])
-        self.assertEqual((loaded.rules["sprint_power"], loaded.rules["bump_cost"]), (2.0, 0.5))  # today's
-        self.assertEqual(loaded.grown, 1.0)  # it pays them in full, as it did
-
-    def test_a_save_keeps_how_far_it_has_grown(self):
-        world = make_world(seed=5)
-        world.grown = 0.37
-        populate(world, 3)
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "step.npz"
-            save_world(path, world, Dial(), {})
-            loaded, _, _ = load_world(path, learner_seed=0)
-        self.assertEqual(loaded.grown, 0.37)
+        self.assertEqual((loaded.rules["sprint_power"], loaded.rules["bump_cost"]), (2.0, 0.5))  # today's (Auto's next
+        # look brings a cost above nature down to nature: tests/test_costs.py)
 
     def test_an_old_save_gets_the_rules_added_since(self):  # a rule born after the save starts at its start value
         world = make_world(seed=4)

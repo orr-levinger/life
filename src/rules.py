@@ -25,9 +25,9 @@ KNOB_ENDS = (
     ("fruit_rate", 1.0, 0.002, "Fruit a tree drops per step"),
 )
 
-# What everything costs: fixed by nature, the owner's to turn, never Auto's (the owner, 2026-11-27). One anchor (a full
-# size-1 creature standing still lasts about 1,000 steps without food) and ratios from animals; each may go from 0 to
-# 3 times its value (what the smartest could bear), sprinting's power to 4.
+# What everything costs in nature (the owner, 2026-11-27): one anchor (a full size-1 creature standing still lasts about
+# 1,000 steps without food) and ratios from animals. Each cost is a rule from 0 to its natural value, never above; a new
+# world starts at a tenth; Auto turns it between (src/dial.py) and the owner may set it any time.
 COSTS = (
     ("step_cost", 0.1, "Cost of living, each step, × size"),
     ("move_cost", 0.4, "Cost of moving, per unit, × size"),
@@ -183,10 +183,7 @@ RULES = (
   + _gene("stealth", "Stealth", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("armour", "Armour", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
 
-RULES += tuple(Rule(name, "costs", words, value, 0.0, 4.0 if name == "sprint_power" else 3.0 * value)
-               for name, value, words in COSTS)
-RULES += (Rule("grow_up_generations", "costs", "A new world grows into its costs over this many generations", 10.0, 0.0,
-               100.0),)
+RULES += tuple(Rule(name, "costs", words, value / 10.0, 0.0, value) for name, value, words in COSTS)
 RULES += tuple(Rule(f"knob.{name}.{end}", "knobs", f"{words}: its {end} end", start, 0.0, 10.0 * max(abs(easy), abs(hard)))
                for name, easy, hard, words in KNOB_ENDS for end, start in (("easy", easy), ("hard", hard)))
 
@@ -220,8 +217,6 @@ MEANS = {
     "neuron_cost": "Energy each neuron of its brain costs every step. 0.0006: 32 neurons cost about a fifth of living.",
     "stealth_cost": "How much more living costs a stealthy creature: × (1 + stealth × this).",
     "armour_cost": "How much more living costs an armoured creature: × (1 + armour × this).",
-    "grow_up_generations": "A new world pays a tenth of every cost at first and grows into the full cost as its deepest "
-                           "living generation reaches this; it never goes back.",
     "baby_share": "When it has a baby, this share of its energy goes into the baby (0.4 = 40 %).",
     "tank_power": "How much more energy a bigger body holds: its tank is the tank × size to this power (1.3: twice the "
                   "size holds about 2.5 times the energy).",

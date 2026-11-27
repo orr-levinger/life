@@ -93,7 +93,7 @@ def _number(cell: str) -> Optional[float]:
 def knobs() -> Dict:
     """The sliders the page shows: every knob's ends and starting value, and the hunters switch."""
     sliders = []
-    for knob in KNOBS:
+    for knob in (k for k in KNOBS if not k.cost):  # the costs are rules: their sliders are listed below
         label, step = KNOB_LABELS[knob.name]
         sliders.append({"name": knob.name, "label": label, "easiest": knob.easiest, "hardest": knob.hardest,
                         "start": value(START, knob.name), "step": step})
@@ -359,7 +359,7 @@ class Controls:
         if not run["rows"]:
             return START
         last = run["rows"][-1]  # a knob a row from before it has no number for keeps its start
-        known = {k.name: last[k.name] for k in KNOBS if last.get(k.name) is not None}
+        known = {k.name: last[k.name] for k in KNOBS if not k.cost and last.get(k.name) is not None}
         return settings_from({**known, HUNTERS: bool(last["hunters"])}, START, ends=False)  # the world's own numbers
 
 

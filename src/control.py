@@ -45,7 +45,7 @@ class Control:
 
 def knob_values(settings: Settings) -> dict:
     """The settings as the page shows them: each knob's value and the hunters switch."""
-    return {**{k.name: value(settings, k.name) for k in KNOBS}, HUNTERS: settings.attacks}
+    return {**{k.name: value(settings, k.name) for k in KNOBS if not k.cost}, HUNTERS: settings.attacks}
 
 
 def settings_from(values: Mapping[str, object], base: Settings, rules: Optional[Mapping[str, float]] = None,
@@ -60,6 +60,8 @@ def settings_from(values: Mapping[str, object], base: Settings, rules: Optional[
             settings = replace(settings, attacks=given)
             continue
         knob = knob_named(name, rules)
+        if knob.cost:
+            raise ValueError(f"{name} is a cost: it changes as a rule of the world")
         if isinstance(given, bool) or not isinstance(given, (int, float)) or not math.isfinite(given):
             raise ValueError(f"{name} must be a number, not {given!r}")
         low, high = sorted((knob.easiest, knob.hardest))

@@ -555,6 +555,24 @@ class TestControlRoom(unittest.TestCase):
         with urllib.request.urlopen(self.server.base + "/static/gallery.html") as response:
             self.assertIn("beastModel", response.read().decode("utf-8"))  # each gene low, middle and high
 
+    def test_the_species_page_draws_each_species_body(self):
+        """The owner, 2026-11-27: "i should see the shape of that specias ! based on the average of genees!"."""
+        with urllib.request.urlopen(self.server.base + "/static/beasts.js") as response:
+            beasts = response.read().decode("utf-8")
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            planet = response.read().decode("utf-8")
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        made = beasts.split("export function speciesPicture", 1)
+        self.assertEqual(len(made), 2)
+        body = made[1].split("\n}\n", 1)[0]
+        for words in ("genesOf(", "bodyPicture(", "fear_of_death: t.fear", "love_of_babies: t.love",
+                      "learns_from_others: t.learns"):
+            self.assertIn(words, body)  # the planet's own body maker, fed the species' gene names as a creature's
+        self.assertRegex(planet, r'export \{[^}]*speciesPicture[^}]*\} from "/static/beasts.js"')
+        for function in ("function speciesCard(", "async function drawSpecies("):
+            self.assertIn("Planet.speciesPicture(", page.split(function, 1)[1].split("\n}\n", 1)[0], function)
+
     def test_static_files_are_served(self):
         with urllib.request.urlopen(self.server.base + "/static/three.module.min.js") as response:
             self.assertEqual(response.status, 200)

@@ -93,6 +93,8 @@
   #species-table tr { cursor: pointer; } #species-table tr:hover { background: var(--page); }
   #species-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 6px 0; font-size: 13px; }
   #species-card dt { color: var(--muted); }
+  #species-card canvas.species-body { display: block; margin: 4px 0; }  /* its typical member, as the planet draws it */
+  #species-table td.species-body { width: 40px; padding: 0 4px; } #species-table canvas.species-body { display: block; }
   .chart-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: var(--muted); font-size: 12px; }
   .chart-bar > span { display: inline-flex; align-items: center; gap: 6px; }
   .rules-table { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; overflow-x: auto; }
@@ -1673,10 +1675,14 @@ async function drawSpecies() {
   tree.innerHTML = svg;
   tree.querySelectorAll(".band").forEach((band) => band.addEventListener("click", () => speciesCard(Number(band.dataset.species))));
   const alive = all.filter((s) => s.ended === null && s.facts);
-  document.getElementById("species-table").innerHTML = "<tr><th>Species</th><th>Alive</th><th>Typical member</th><th>From</th></tr>" +
-    alive.map((s) => `<tr data-species="${s.id}"><td><span style="color:${speciesColour(s.id)}">■</span> ${speciesName(s.id)}</td>` +
+  document.getElementById("species-table").innerHTML = "<tr><th></th><th>Species</th><th>Alive</th><th>Typical member</th><th>From</th></tr>" +
+    alive.map((s) => `<tr data-species="${s.id}"><td class="species-body"></td><td><span style="color:${speciesColour(s.id)}">■</span> ${speciesName(s.id)}</td>` +
       `<td>${s.facts.alive}</td><td>${speciesWords(s.now)}</td><td>${s.parent === null ? "-" : speciesName(s.parent)}</td></tr>`).join("");
-  document.querySelectorAll("#species-table tr[data-species]").forEach((tr) => tr.addEventListener("click", () => speciesCard(Number(tr.dataset.species))));
+  document.querySelectorAll("#species-table tr[data-species]").forEach((tr) => {
+    tr.addEventListener("click", () => speciesCard(Number(tr.dataset.species)));
+    const s = byId.get(Number(tr.dataset.species));
+    if (window.Planet) tr.querySelector(".species-body").append(speciesBody(Planet.speciesPicture(s.now), 40));
+  });
   if (speciesPicked !== null && byId.has(speciesPicked)) speciesCard(speciesPicked);
 }
 
@@ -1712,6 +1718,16 @@ function speciesCard(id) {
   ];
   card.innerHTML = `<h2><span style="color:${speciesColour(id)}">■</span> ${speciesName(id)}</h2><dl>` +
     facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("") + "</dl>";
+  if (window.Planet && s.now) card.querySelector("h2").after(speciesBody(Planet.speciesPicture(s.now), 160));  // its typical member
+}
+
+// A copy of a body's picture at this many pixels (the 3D module draws each body once; each place gets its own canvas).
+function speciesBody(picture, px) {
+  const c = document.createElement("canvas");
+  c.width = c.height = px;
+  c.className = "species-body";
+  c.getContext("2d").drawImage(picture, 0, 0, px, px);
+  return c;
 }
 
 for (const button of document.querySelectorAll("#start-mode button"))

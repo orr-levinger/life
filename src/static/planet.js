@@ -7,7 +7,8 @@ import * as THREE from "three";
 import { OrbitControls } from "/static/OrbitControls.js";
 import { mergeGeometries } from "/static/BufferGeometryUtils.js";
 import { BEASTS, NEAR, DOT } from "/static/beasts.js";
-export { bodyPicture } from "/static/beasts.js";  // the legend's bodies (the page has only this module)
+export { bodyPicture, speciesPicture } from "/static/beasts.js";  // the legend's and the species' bodies (the page has
+// only this module)
 
 const UP = new THREE.Vector3(0, 1, 0);
 const NEAR_FAR = { near: 0.05, far: 4000 };

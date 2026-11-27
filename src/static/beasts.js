@@ -226,6 +226,13 @@ export function bodyPicture(genes, size = 120) {
   return c;
 }
 
+// A species' typical member (its `now` or `start` in species.json: each gene its members' mean), drawn as the planet
+// draws a creature with those genes; the species' names for the feelings are the creature's own.
+export function speciesPicture(t, size = 120) {
+  const g = genesOf({ ...t, fear_of_death: t.fear, love_of_babies: t.love, learns_from_others: t.learns });
+  return bodyPicture({ ...g, size: t.size ?? 1 }, size);
+}
+
 export const BEASTS = {
   key: (c) => keyOf(genesOf(c)),
   make(c) {  // a full body, for a creature near the camera

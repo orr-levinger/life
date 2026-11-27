@@ -67,6 +67,24 @@ bucket, then the run command); the spec `docs/superpowers/specs/2026-11-27-mac-r
 - [x] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "Reports use the owner's own AWS profile"
   (`git show --stat` → the four files and this plan); push to `evolve-from-scratch`.
 
+### Task 4: The world's whole history (amendment, 2026-11-27)
+
+The owner, 2026-11-27, asked to copy a world's scoreboard by hand to show why it dies out: "just make the code why do
+i need to copy anything?"
+
+**Files:** Modify `src/upload.py` (`Uploader.once`: each run's `scoreboard.csv` and `run.json`, when changed, with
+`aws s3 cp` to `<target>/<run>/`); `tests/test_upload.py`; `docs/mac-reports.md` (the table of what is sent); the
+spec (the same).
+
+- [x] Step 1: test first: `test_the_upload_command` also expects the `cp` of `scoreboard.csv` and of `run.json`
+  (5 commands, then none on the second look). Run `python -m unittest tests.test_upload` → FAIL (3 commands, not 5).
+- [x] Step 2: the change and the guide. Run `python -m unittest tests.test_upload tests.test_viewer` → OK.
+- [x] Step 3: `python scripts/run_tests.py` → OK under 300 s (box busy: a world of the owner runs here on one core; the suite was cut at 300 s with `test_evolve_runs` and `test_world_rules` still running; run alone, both OK, 88 tests); commit "Reports send the world's whole history"
+  (`git show --stat` → `src/upload.py`, `tests/test_upload.py`, `docs/mac-reports.md`, the spec and this plan); push
+  to `evolve-from-scratch`.
+- [ ] Step 4: the owner runs `./update`, then Ctrl+C and `./start` (the page only; the world goes on); Claude reads
+  `s3://life-reports-e78c2aad/mac/20261127-094329-1-learning/scoreboard.csv` here.
+
 ## Must be completed to mark this as done
 
 | # | Item | Command or check | What it must show |
@@ -78,5 +96,6 @@ bucket, then the run command); the spec `docs/superpowers/specs/2026-11-27-mac-r
 | 4 | Pushed | `git push origin HEAD:evolve-from-scratch` | pushed |
 | 5 | Reports from the Mac read here | `aws s3 sync` of the bucket, here | the Mac's state and events, told to the owner |
 | 6 | Default profile is the owner's | `python -m unittest tests.test_upload`; the grep of Task 3 Step 2 | `OK`; nothing found |
+| 7 | The whole history is sent | `python -m unittest tests.test_upload`; after the owner's restart, `aws s3 ls s3://life-reports-e78c2aad/mac/20261127-094329-1-learning/ --profile orr-personal` | `OK`; `scoreboard.csv` and `run.json` listed |
 
 Anything not done or not proven is reported as such, first.

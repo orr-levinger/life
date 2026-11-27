@@ -1,7 +1,7 @@
 # Reports from your Mac to Claude, through your S3 bucket
 
 Your Mac's page server copies each world's `report/` folder (its state every 500 steps, its events, its errors), its
-tree of species and the server's own log to a private bucket in your AWS account every 2 minutes. Claude reads the
+tree of species, its whole history (the scoreboard) and the server's own log to a private bucket in your AWS account every 2 minutes. Claude reads the
 bucket from its box. Both use your own AWS profile, `orr-personal`, already set up on the Mac and on Claude's box; Claude
 never sees a key. Files are overwritten; the bucket deletes anything older than 7 days.
 
@@ -40,4 +40,6 @@ with its traceback, the tree of species, and the server's log.
 | `<run>/report/events.jsonl` | starts, resumes, updates, stops; species splits and endings; Auto's nudges | last 1,000 |
 | `<run>/report/errors.jsonl` | every error in the world, with its traceback | last 100 |
 | `<run>/species.json` | the tree of species | the latest |
+| `<run>/scoreboard.csv` | the world's whole history, a row every 250 steps (what the charts draw) | the latest |
+| `<run>/run.json` | the world's record: its seed, when it started, its updates | the latest |
 | `server.log` | the page server's own log and errors | last 5,000 lines |

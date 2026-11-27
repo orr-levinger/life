@@ -26,6 +26,11 @@ last 5,000 lines).
   AWS command-line tool (`aws s3 sync`, the keys of the owner's own profile `orr-personal`, the
   default of `--report-profile`). A failure (no network, no tool) is written to
   `server.log` and tried again next time; it never stops the page or a world.
+- **The world's whole history too** (the owner, 2026-11-27, asked to copy a scoreboard by hand: "just make the code
+  why do i need to copy anything?"): each run's `scoreboard.csv` (a row every 250 steps: what the page's charts
+  draw) and `run.json` (its record) are copied with `aws s3 cp` when they changed, beside its `report/`. Measured
+  here: a row is about 435 bytes (`runs/20261124-163911-1-learning/scoreboard.csv`: 426,262 bytes, 1,259 lines), so
+  the owner's 413k-step world is about 0.7 MB, sent at most every 2 minutes.
 - **Here**: Claude reads the bucket with `aws s3 sync s3://<bucket>/mac <scratch> --profile orr-personal` (the tool is
   installed here) and reads the files.
 - **Nothing piles up**: files are overwritten; a bucket rule deletes anything older than 7 days.

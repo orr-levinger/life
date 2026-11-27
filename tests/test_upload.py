@@ -28,6 +28,8 @@ def a_run(runs: Path, name="20261127-094329-1-learning") -> Path:
     (folder / "report").mkdir(parents=True)
     (folder / "report" / "state.jsonl").write_text('{"step": 500}\n')
     (folder / "species.json").write_text("{}")
+    (folder / "scoreboard.csv").write_text("step\n250\n")  # the world's whole history, a row every 250 steps
+    (folder / "run.json").write_text("{}")
     return folder
 
 
@@ -48,7 +50,10 @@ class TestUpload(unittest.TestCase):
                        "--profile", "orr-personal", "--only-show-errors"], aws.commands)
         self.assertIn(["aws", "s3", "cp", str(runs / "server.log"), "s3://my-bucket/mac/server.log",
                        "--profile", "orr-personal", "--only-show-errors"], aws.commands)
-        self.assertEqual(len(aws.commands), 3)
+        for file in ("scoreboard.csv", "run.json"):  # the owner: "just make the code why do i need to copy anything?"
+            self.assertIn(["aws", "s3", "cp", str(runs / name / file), f"s3://my-bucket/mac/{name}/{file}",
+                           "--profile", "orr-personal", "--only-show-errors"], aws.commands)
+        self.assertEqual(len(aws.commands), 5)
         self.assertEqual(Uploader.EVERY, 120.0)  # every 2 minutes
 
     def test_a_failed_upload_is_logged_not_raised(self):

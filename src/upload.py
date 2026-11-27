@@ -2,7 +2,7 @@
 personal AWS account"), so Claude can read what happens there without screenshots.
 
 `Uploader`: every `EVERY` seconds, each run whose report changed is copied with the AWS command-line tool (`aws s3
-sync` of its `report/`, `aws s3 cp` of its `species.json`), and the page server's own log; the owner's profile holds
+sync` of its `report/`, `aws s3 cp` of its `species.json`, `scoreboard.csv` and `run.json`), and the page server's own log; the owner's profile holds
 the keys, never this code. A failure (no network, no tool, no profile) is written to the server's log and tried again
 next time: it never stops the page or a world.
 
@@ -16,6 +16,9 @@ import threading
 import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
+
+WHOLE_FILES = ("species.json", "scoreboard.csv", "run.json")  # a run's files sent whole: its tree of species, its
+# history (a row every 250 steps, what the page's charts draw) and its record
 
 
 class ServerLog:
@@ -76,13 +79,16 @@ class Uploader:
             pass
 
     def once(self) -> None:
-        """One look: every changed report, species book and the server's log, sent."""
+        """One look: every changed report, species book, whole history (scoreboard) and record, and the server's log,
+        sent."""
         for folder in sorted(p for p in self.runs.iterdir() if p.is_dir()):
-            report, book = folder / "report", folder / "species.json"
+            report = folder / "report"
             if self._changed(report):
                 self._send(report, "sync", str(report), f"{self.target}/{folder.name}/report")
-            if self._changed(book):
-                self._send(book, "cp", str(book), f"{self.target}/{folder.name}/species.json")
+            for file in WHOLE_FILES:
+                path = folder / file
+                if self._changed(path):
+                    self._send(path, "cp", str(path), f"{self.target}/{folder.name}/{file}")
         log = self.runs / "server.log"
         if self._changed(log):
             self._send(log, "cp", str(log), f"{self.target}/server.log")

@@ -38,11 +38,11 @@ changes in either mode, ends from the rule's range); Test `tests/test_costs.py` 
 rules from its saved settings, share 1), `src/exam.py` (today's costs); Test `tests/test_costs.py`,
 `tests/test_saves.py`, `tests/test_exam.py`.
 
-- [ ] Step 1: tests first: `test_a_new_world_grows_into_its_costs` (0.1, 0.55, 1; never lower),
+- [x] Step 1: tests first: `test_a_new_world_grows_into_its_costs` (0.1, 0.55, 1; never lower),
   `test_an_old_save_keeps_its_costs`, `test_the_exam_pays_todays_costs`. Run → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_costs tests.test_saves tests.test_exam tests.test_evolve`
+- [x] Step 2: the changes. Run `python -m unittest tests.test_costs tests.test_saves tests.test_exam tests.test_evolve`
   → OK.
-- [ ] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "A new world grows into its costs; old saves keep
+- [x] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "A new world grows into its costs; old saves keep
   theirs".
 
 ### Task 3: Checked in the world

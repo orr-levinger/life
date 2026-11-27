@@ -38,5 +38,25 @@ class TestCostsAreRules(unittest.TestCase):
         self.assertAlmostEqual(50.0 - c.energy, 0.2 * 1.0 * c.size)
 
 
+class TestGrowingUp(unittest.TestCase):
+    def test_a_new_world_grows_into_its_costs(self):  # a tenth at first, all of it by generation 10, never back
+        w = make_world()
+        w.grown = 0.1
+        c = add(w, 0.0, 0.0)
+        for generation, share in ((0, 0.1), (5, 0.55), (10, 1.0), (14, 1.0), (0, 1.0)):
+            c.generation = generation
+            w.grow_up()
+            self.assertAlmostEqual(w.grown, share, msg=generation)
+        self.assertAlmostEqual(w.cost("step_cost"), w.rules["step_cost"])
+
+    def test_a_new_planet_starts_at_a_tenth(self):
+        from src.evolve import _new_world, parse_args
+        from tests.helpers import small_world
+        with small_world():
+            world, _ = _new_world(parse_args(["--seed", "1", "--species", "instinct", "--steps", "10"]), {})
+        self.assertEqual(world.grown, 0.1)
+        self.assertAlmostEqual(world.cost("step_cost"), 0.1 * world.rules["step_cost"])
+
+
 if __name__ == "__main__":
     unittest.main()

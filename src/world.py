@@ -91,6 +91,16 @@ class World:
         """What `name` costs in this world now: its rule × how far the world has grown into its costs."""
         return self.rules[name] * self.grown
 
+    def grow_up(self) -> None:
+        """How far the world has grown into its costs: a tenth at first, all of them once its deepest living generation
+        reaches `grow_up_generations`; it never goes back."""
+        if self.grown >= 1.0:
+            return
+        reach = self.rules["grow_up_generations"]
+        deepest = max((c.generation for c in self.creatures), default=0)
+        share = 1.0 if reach <= 0 else 0.1 + 0.9 * min(deepest, reach) / reach
+        self.grown = max(self.grown, share)
+
     def change_rules(self, changes: Rules) -> None:
         """The owner's rule changes, at once (a running planet keeps its own size)."""
         self.rules.update({k: v for k, v in changes.items() if k != "planet_radius"})
@@ -239,6 +249,7 @@ class World:
 
     def step(self, observer: Optional[Observer] = None) -> None:
         self.step_count += 1
+        self.grow_up()
         self.foods_created_this_step.clear()
         self.dead_this_step = []
         self.spawn_food()

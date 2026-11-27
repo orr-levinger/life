@@ -155,7 +155,8 @@ class TestSaves(unittest.TestCase):
         kept = [(c.id, tuple(np.round(c.p, 12)), kind, volume) for c, kind, volume in loaded.calls]
         self.assertEqual(kept, [(caller.id, tuple(np.round(caller.p, 12)), 2, 0.5), (gone.id, tuple(np.round(gone.p, 12)), 1, 1.0)])
 
-    def test_an_old_save_keeps_its_costs(self):  # saved before every cost was a knob: its costs from its rules
+    def test_an_old_save_keeps_its_costs(self):  # saved when costs were knobs (its settings) or older (its rules)
+        from src.rules import COST_NAMES
         world = make_world(seed=3)
         populate(world, 5)
         with tempfile.TemporaryDirectory() as tmp:
@@ -164,15 +165,29 @@ class TestSaves(unittest.TestCase):
             with np.load(path) as data:
                 arrays = {name: data[name] for name in data.files}
             about = json.loads(str(arrays["about"]))
-            for state in (about["settings"], about["dial"]["settings"], *about["dial"]["taken"]):
-                for name in ("sprint_power", "eat_miss", "attack_cost", "attack_damage", "bump_cost", "vision_cost", "hearing_cost", "neuron_cost", "stealth_cost", "armour_cost"):
-                    state.pop(name, None)
-            about["rules"]["eat_miss"] = 0.7  # the owner had changed it, when it was a rule
+            for name in COST_NAMES:
+                about["rules"].pop(name)
+            about.pop("grown")
+            for state in (about["settings"], about["dial"]["settings"]):  # a save of 2026-11-26: costs were knobs
+                state.update({"move_cost": 0.33, "step_cost": 0.04, "eat_miss": 0.7})
+            about["rules"]["attack_cost"] = 2.5  # older still: the owner had changed it when it was a rule
             arrays["about"] = np.array(json.dumps(about))
             np.savez_compressed(path, **arrays)
             loaded, dial, _ = load_world(path, learner_seed=0)
-        self.assertEqual((loaded.rules["eat_miss"], dial.rules["eat_miss"]), (0.7, 0.7))
+        self.assertEqual([loaded.rules[n] for n in ("move_cost", "step_cost", "eat_miss", "attack_cost")],
+                         [0.33, 0.04, 0.7, 2.5])
         self.assertEqual((loaded.rules["sprint_power"], loaded.rules["bump_cost"]), (2.0, 0.5))  # today's
+        self.assertEqual(loaded.grown, 1.0)  # it pays them in full, as it did
+
+    def test_a_save_keeps_how_far_it_has_grown(self):
+        world = make_world(seed=5)
+        world.grown = 0.37
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual(loaded.grown, 0.37)
 
     def test_an_old_save_gets_the_rules_added_since(self):  # a rule born after the save starts at its start value
         world = make_world(seed=4)

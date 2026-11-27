@@ -46,10 +46,10 @@ measured; water by one ray per real slice); Test `tests/test_eyes.py`.
 `src/evolve.py` (`world_view`: the followed one's pixels, ears and sharpness), `src/viewer.html` (Above | Eyes | Pixels;
 the strip and the ear ring); Test `tests/test_viewer.py`, `tests/test_evolve.py`.
 
-- [ ] Step 1: tests first: `test_the_view_has_the_followed_ones_pixels`, `test_the_page_has_a_pixels_view`. Run → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_viewer tests.test_evolve tests.test_control` → OK.
-- [ ] Step 3: browser pane, half-size world: a screenshot of the Pixels view sent to the owner; the browser closed after.
-- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "The Pixels view: what it sees, as it sees it"; push.
+- [x] Step 1: tests first: `test_the_view_has_the_followed_ones_pixels`, `test_the_page_has_a_pixels_view`. Run → FAIL.
+- [x] Step 2: the changes. Run `python -m unittest tests.test_viewer tests.test_evolve tests.test_control` → OK.
+- [x] Step 3: browser pane, half-size world: a screenshot of the Pixels view sent to the owner; the browser closed after.
+- [x] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "The Pixels view: what it sees, as it sees it"; push.
 
 ## Must be completed to mark this as done
 

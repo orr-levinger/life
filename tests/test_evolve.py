@@ -494,6 +494,19 @@ class TestNextWorldRules(unittest.TestCase):
         p /= np.linalg.norm(p, axis=1, keepdims=True)
         self.assertAlmostEqual(float(world.terrain.water.is_water(p).mean()), world.rules["water_share"], delta=0.05)
 
+    def test_the_view_has_the_followed_ones_pixels(self):  # the Pixels view: what it sees, as it sees it
+        from src.evolve import world_view
+        from tests.helpers import add, make_world
+        w = make_world()
+        me, other = add(w, 0.0, 0.0), add(w, 2.0, 0.0)
+        me.eye_pixels = 4
+        eye = world_view(w, follow=me.id)["eye"]
+        self.assertEqual((eye["id"], eye["sharpness"], len(eye["pixels"]), len(eye["pixels"][0]), len(eye["ears"])),
+                         (me.id, 4, 16, 6, 8))
+        self.assertGreater(max(p[0] for p in eye["pixels"]), 0.0)  # it sees the other one
+        self.assertNotIn("eye", world_view(w))  # nobody followed: nothing more to send
+        self.assertNotIn("eye", world_view(w, follow=999))  # gone
+
     def test_a_new_world_has_the_starting_size(self):
         args = parse_args(["--seed", "1", "--species", "instinct", "--steps", "10"])
         world, _ = _new_world(args, {})  # the owner changed nothing: the starting rules' planet, radius 37

@@ -292,6 +292,11 @@ class Controls:
             if problem:
                 raise Refused(400, problem)
             edit = {"seq": time.time_ns(), "id": given["id"], "genes": given["genes"]}
+        follow = current.follow
+        if "follow" in body:  # whom the owner follows: the world sends its pixels and ears
+            follow = body["follow"]
+            if follow is not None and (isinstance(follow, bool) or not isinstance(follow, int)):
+                raise Refused(400, "follow must be a creature's id or null")
         update = body.get("update", False)
         if not isinstance(update, bool):
             raise Refused(400, "update must be true or false")
@@ -300,7 +305,8 @@ class Controls:
             if saved and 0 < save_format(save_path(folder, saved[-1])) < FIRST_PLANET:
                 raise Refused(409, f"{name}: {FLAT_WORLD} (it keeps running on the code it started with)")
             stop, paused = True, False
-        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused, hunters, rules, edit))
+        write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused, hunters, rules, edit,
+                                      follow))
         if update:
             threading.Thread(target=self._hand_over, args=(folder,), daemon=True).start()
         return {"mode": mode, "settings": None if settings is None else knob_values(settings), "stop": stop,

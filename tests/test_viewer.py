@@ -750,6 +750,18 @@ class TestControlRoom(unittest.TestCase):
                       "// a green open bite"):
             self.assertIn(words, planet)
 
+    def test_the_page_has_a_pixels_view(self):  # the owner: "one is exactly how he sees it with the pixels"
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ('data-view="pixels"', ">Pixels<", "function drawPixels(", "follow: camera.follow"):
+            self.assertIn(words, page)
+        name = self.running_world()
+        self.assertEqual(self.server.post("/control", {"run": name, "follow": 7})[0], 200)
+        self.assertEqual(read_control(self.root / name).follow, 7)  # the world sends that one's pixels
+        self.assertEqual(self.server.post("/control", {"run": name, "follow": None})[0], 200)
+        self.assertIsNone(read_control(self.root / name).follow)
+        self.assertEqual(self.server.post("/control", {"run": name, "follow": "x"})[0], 400)
+
     def test_world_card_has_every_cost(self):  # the owner's cost sliders, never Auto's (2026-11-27)
         answer = self.server.get("/knobs")
         self.assertNotIn("move_cost", {k["name"] for k in answer["knobs"]})  # not Auto's knobs

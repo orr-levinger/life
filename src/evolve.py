@@ -30,6 +30,7 @@ import numpy as np
 
 from .control import MODES, Control, new_run_folder, read_control, write_control, write_json
 from .creature import Creature
+from .senses import EARS_AT, EAR_DIRECTIONS, EYE_AT, EYE_CHANNELS, EYE_PIXELS, sense
 from .dial import Dial, rates
 from .exam import ExamResult, run_exam
 from .hall_of_fame import HallOfFame
@@ -96,9 +97,10 @@ def _exam_brains(world: World, sample: Sequence[Creature]) -> List[Any]:
     return [world.learner.current(c.slot) if c.policy == "learner" else c.brain for c in sample]
 
 
-def world_view(world: World) -> Dict[str, Any]:
-    """Where everything is, for the page's picture of a watched world."""
-    return {
+def world_view(world: World, follow: Optional[int] = None) -> Dict[str, Any]:
+    """Where everything is, for the page's picture of a watched world; and what the followed one sees (its pixels and
+    its ears, as its brain gets them), for the Pixels view."""
+    view = {
         "step": world.step_count, "radius": world.radius,
         "creatures": [{"id": c.id, "p": [round(float(v), 6) for v in c.p], "radius": round(c.radius, 3), "size": round(c.size, 3),
                        "energy": round(max(c.energy, 0.0) / c.max_energy, 3),
@@ -119,6 +121,13 @@ def world_view(world: World) -> Dict[str, Any]:
                   for f in world.foods],
         "terrain": world.terrain.state(),
     }
+    followed = next((c for c in world.creatures if c.id == follow), None) if follow is not None else None
+    if followed is not None:
+        senses = sense(followed, world).vector
+        view["eye"] = {"id": followed.id, "sharpness": int(followed.eye_pixels),
+                       "pixels": np.round(senses[EYE_AT:EARS_AT].reshape(EYE_PIXELS, EYE_CHANNELS), 3).tolist(),
+                       "ears": np.round(senses[EARS_AT:EARS_AT + EAR_DIRECTIONS * 2].reshape(EAR_DIRECTIONS, 2), 3).tolist()}
+    return view
 
 
 def world_now(world: World) -> Dict[str, Any]:
@@ -282,7 +291,7 @@ def run(args: argparse.Namespace) -> Path:
 
             world.step(board.observe)
             if knobs.control.watched(time.time()):  # the owner is watching: draw it, then wait (the world is unchanged)
-                write_json(out / "view.json", world_view(world))
+                write_json(out / "view.json", world_view(world, knobs.control.follow))
                 next_tick = max(next_tick, time.perf_counter()) + 1.0 / knobs.control.watch_speed
                 time.sleep(max(0.0, next_tick - time.perf_counter()))
 

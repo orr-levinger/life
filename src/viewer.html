@@ -126,6 +126,7 @@
   #watch .zoom output { min-width: 3.2em; text-align: center; font-variant-numeric: tabular-nums; }
   #watch-planet { width: 100%; height: 64vh; min-height: 380px; border-radius: 6px; overflow: hidden; touch-action: none; cursor: grab; background: #0b0d12; }
   #watch-legend { width: 100%; display: block; margin-top: 8px; }
+  #pixel-view { width: 100%; height: 64vh; display: block; border-radius: 6px; background: #0b0d12; }
   #watch-handle { width: 90px; height: 9px; margin: 5px auto 0; border-radius: 5px; background: var(--grid); cursor: ns-resize; touch-action: none; }
   #watch:fullscreen { background: var(--page); padding: 8px; overflow: auto; }
   #watch:fullscreen #watch-planet { height: calc(100vh - 80px) !important; }
@@ -170,7 +171,7 @@
     <label>steps a second <input id="watch-speed" type="range" min="1" max="30" step="1" value="10"><output id="watch-speed-shown">10</output></label>
     <button id="show-cones" class="act" type="button" aria-pressed="true">Vision cones: on</button>
     <span class="zoom"><button id="zoom-out" class="act" type="button" aria-label="Zoom out">−</button><output id="zoom-shown">1×</output><button id="zoom-in" class="act" type="button" aria-label="Zoom in">+</button></span>
-    <span id="follow-note" hidden>following <b id="follow-who"></b> <span class="seg" id="follow-view" data-tip="Above: watch it from above. Eyes: see from its own eyes, only what it senses; what it hears shows as a blur"><button type="button" data-view="above" class="on">Above</button><button type="button" data-view="eyes">Eyes</button></span> <button id="follow-genes" class="act" type="button" aria-expanded="false">Genes</button> <button id="follow-stop" class="act" type="button">Stop following</button></span>
+    <span id="follow-note" hidden>following <b id="follow-who"></b> <span class="seg" id="follow-view" data-tip="Above: watch it from above. Eyes: see from its own eyes, only what it senses; what it hears shows as a blur"><button type="button" data-view="above" class="on">Above</button><button type="button" data-view="eyes">Eyes</button><button type="button" data-view="pixels">Pixels</button></span> <button id="follow-genes" class="act" type="button" aria-expanded="false">Genes</button> <button id="follow-stop" class="act" type="button">Stop following</button></span>
     <button id="legend-toggle" class="act" type="button" aria-expanded="false">Legend</button>
     <button id="full-screen" class="act" type="button">Full screen</button>
     <button id="watch-out" class="act" type="button">Jump out</button>
@@ -180,6 +181,7 @@
     <button class="act" type="submit">Apply to this creature</button> <span class="error" id="genes-said"></span>
   </form>
   <div id="watch-planet" role="img" aria-label="The world: a planet you can spin (drag) and zoom (wheel or pinch); click a creature to follow it"></div>
+  <canvas id="pixel-view" hidden aria-label="What the followed creature sees and hears, as its brain gets them"></canvas>
   <div id="watch-handle" role="separator" title="Drag to make the planet taller or shorter"></div>
   <canvas id="watch-legend" hidden height="120" aria-label="What a creature's look means: point at a creature in the world to see its numbers"></canvas>
 </section>
@@ -926,7 +928,7 @@ async function jumpIn(run) {
   document.getElementById("watch").hidden = false;
   drawLegend();
   const renew = () => watching && send("/control", { run: watching.name, watch: true,
-    watch_speed: Number(document.getElementById("watch-speed").value) }).catch(() => {});
+    watch_speed: Number(document.getElementById("watch-speed").value), follow: camera.follow }).catch(() => {});
   watching.timers.push(setInterval(renew, RENEW_EVERY), setInterval(fetchView, VIEW_EVERY));
   requestAnimationFrame(paint);
 }
@@ -1016,6 +1018,7 @@ function zoomBy(factor) {  // the zoom buttons: the camera nearer or farther (th
 }
 function follow(id, name) {
   camera.follow = id;
+  if (watching) send("/control", { run: watching.name, follow: id }).catch(() => {});  // the world sends what it sees
   if (window.Planet) Planet.followCreature(id);
   if (id === null) setView("above");
   showGenes(false);
@@ -1023,9 +1026,13 @@ function follow(id, name) {
   if (id !== null) { document.getElementById("follow-who").textContent = name; if (camera.zoom < ZOOMS.follow) zoomBy(ZOOMS.follow / camera.zoom); }
 }
 
-function setView(which) {  // a followed creature from above, or from its own eyes (only what it senses is drawn)
+function setView(which) {  // a followed creature from above, from its own eyes, or as its brain sees: its pixels
   camera.view = which;
   if (window.Planet) Planet.view(which);
+  const planet = document.getElementById("watch-planet"), pixels = document.getElementById("pixel-view");
+  pixels.style.height = `${planet.clientHeight || 480}px`;
+  planet.hidden = which === "pixels";
+  pixels.hidden = which !== "pixels";
   document.querySelectorAll("#follow-view button").forEach((b) => b.classList.toggle("on", b.dataset.view === which));
 }
 
@@ -1080,6 +1087,54 @@ function paint() {
   if (camera.follow !== null && !picture.creatures.some((c) => c.id === camera.follow)) follow(null);  // it died
   Planet.updatePlanet(picture, watching.prev, t, { cones: camera.cones, hover: watching.hover, run: watching.name });
   Planet.render();
+  if (camera.view === "pixels") drawPixels(picture.eye && picture.eye.id === camera.follow ? picture.eye : null);
+}
+
+// The Pixels view: the followed one's 16 pixels as its brain gets them, in three bands (creatures, food, rocks and
+// water), bright when close; the blocks as wide as its sharpness makes them; and its 8 ears as a ring, bright where loud.
+function drawPixels(eye) {
+  const canvas = document.getElementById("pixel-view"), dpr = devicePixelRatio;
+  const W = canvas.clientWidth * dpr, H = canvas.clientHeight * dpr;
+  if (!W || !H) return;
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const g = canvas.getContext("2d");
+  g.fillStyle = "#0b0d12"; g.fillRect(0, 0, W, H);
+  g.fillStyle = "#c3c2b7"; g.font = `${13 * dpr}px system-ui, sans-serif`; g.textAlign = "center";
+  if (!eye) { g.fillText("waiting for what it sees…", W / 2, H / 2); return; }
+  const left = 110 * dpr, right = 30 * dpr, cell = (W - left - right) / eye.pixels.length;
+  const band = Math.min(64 * dpr, H * 0.13), gap = 10 * dpr, top = H * 0.46;
+  const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  const creature = (p) => {
+    if (p[0] <= 0) return null;
+    const kind = mix([205, 175, 115], [225, 70, 55], p[2]);  // tan a grazer, red a hunter
+    const [r, gr, b] = mix(kind, [90, 150, 235], Math.max(0, (p[3] - 0.7) / 0.3));  // blue-tinted: its kin
+    return `rgba(${r}, ${gr}, ${b}, ${0.25 + 0.75 * p[0]})`;
+  };
+  const bands = [["creatures", creature], ["food", (p) => (p[4] > 0 ? `rgba(70, 205, 95, ${0.25 + 0.75 * p[4]})` : null)],
+                 ["rocks, water", (p) => (p[5] > 0 ? `rgba(150, 165, 185, ${0.25 + 0.75 * p[5]})` : null)]];
+  bands.forEach(([words, colour], row) => {
+    const y = top + row * (band + gap);
+    g.fillStyle = "#c3c2b7"; g.textAlign = "right"; g.fillText(words, left - 12 * dpr, y + band / 2 + 4 * dpr);
+    eye.pixels.forEach((p, k) => {
+      const x = left + k * cell;
+      g.fillStyle = "#161b24"; g.fillRect(x + 1, y, cell - 2, band);
+      const c = colour(p);
+      if (c) { g.fillStyle = c; g.fillRect(x + 1, y, cell - 2, band); }
+    });
+  });
+  const under = top + 3 * (band + gap);
+  g.fillStyle = "#8a8983"; g.textAlign = "left"; g.fillText("its left", left, under + 4 * dpr);
+  g.textAlign = "right"; g.fillText("its right", W - right, under + 4 * dpr);
+  g.textAlign = "center"; g.fillText(`eye sharpness: ${eye.sharpness} of 16`, (left + W - right) / 2, under + 4 * dpr);
+  const cx = W / 2, cy = top / 2, ring = Math.min(top * 0.38, 90 * dpr);  // the ears: ahead up, its left to the left
+  eye.ears.forEach(([steps, calls], k) => {
+    const angle = -Math.PI / 2 - k * Math.PI / 4, from = angle - Math.PI / 9, to = angle + Math.PI / 9;
+    g.lineWidth = 12 * dpr; g.strokeStyle = `rgba(235, 235, 235, ${0.08 + 0.92 * steps})`;
+    g.beginPath(); g.arc(cx, cy, ring, from, to); g.stroke();
+    g.lineWidth = 6 * dpr; g.strokeStyle = `rgba(244, 211, 94, ${0.05 + 0.95 * calls})`;
+    g.beginPath(); g.arc(cx, cy, ring + 14 * dpr, from, to); g.stroke();
+  });
+  g.fillStyle = "#c3c2b7"; g.fillText("its ears: footsteps (white), calls (yellow); ahead is up", cx, cy + ring + 34 * dpr);
 }
 let planetMade = false;
 

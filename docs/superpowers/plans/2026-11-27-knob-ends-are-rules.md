@@ -35,10 +35,10 @@ world's rules to `settings_from`); Test `tests/test_dial.py`, `tests/test_contro
 **Files:** Modify `src/viewer.html` (a card's slider ends and end labels from its world's `knob.<name>.easy/hard` in
 `/now`'s rules, renewed as they change; the Rules page shows the "Knob ends" group); Test `tests/test_viewer.py`.
 
-- [ ] Step 1: test first: `test_a_slider_stretches_to_its_worlds_ends` (the page reads `knob.${...}.easy` and `.hard`
+- [x] Step 1: test first: `test_a_slider_stretches_to_its_worlds_ends` (the page reads `knob.${...}.easy` and `.hard`
   from the world's rules and sets the slider's min and max). Run `python -m unittest tests.test_viewer` → FAIL.
-- [ ] Step 2: the change. Run `python -m unittest tests.test_viewer` → OK.
-- [ ] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "The page's sliders stretch to the world's knob
+- [x] Step 2: the change. Run `python -m unittest tests.test_viewer` → OK.
+- [x] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "The page's sliders stretch to the world's knob
   ends"; push to `evolve-from-scratch`. (No browser check here: the owner checks on the Mac.)
 
 ## Must be completed to mark this as done

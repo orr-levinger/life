@@ -227,7 +227,7 @@ class TestControlRoom(unittest.TestCase):
             self.assertIn(words, page)
         answer = self.server.get(f"/rules?run={self.running_world()}")
         self.assertEqual([g["name"] for g in answer["groups"]],
-                         ["costs", "world", "body", "senses", "birth", "genes", "learning", "auto", "exam", "runner"])
+                         ["costs", "knobs", "world", "body", "senses", "birth", "genes", "learning", "auto", "exam", "runner"])
         self.assertEqual(answer["groups"][0]["title"], "Costs")
 
     def test_page_has_no_switches_and_no_read_only_rows(self):
@@ -687,6 +687,13 @@ class TestControlRoom(unittest.TestCase):
             self.assertIn(words, planet)  # its eyes: as wide as its vision, its own body not in the way
         for words in ("export function sensedBy(", "hears.set(", "c.moved"):  # only what it senses: seen, or a sound's blur
             self.assertIn(words, planet)
+
+    def test_a_slider_stretches_to_its_worlds_ends(self):  # a knob's ends are its world's rules (the owner, 2026-11-27)
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        for words in ("rules[`knob.${knob.name}.easy`]", "rules[`knob.${knob.name}.hard`]", "slider.min = low",
+                      "slider.max = high"):
+            self.assertIn(words, page)
 
     def test_world_card_has_every_cost(self):  # every cost a knob, in the Costs group (2026-11-26)
         with urllib.request.urlopen(self.server.base + "/") as response:

@@ -537,7 +537,7 @@ function makeCard(run) {
     row.dataset.knob = knob.name;
     row.innerHTML = `<label for="${run.name}-${knob.name}">${knob.label}</label><output></output>
       <input type="range" id="${run.name}-${knob.name}" min="${low}" max="${high}" step="${knob.step}">
-      <small><span>${knobFmt(low)} · ${harderIsLess ? "harder" : "easier"}</span><span>${harderIsLess ? "easier" : "harder"} · ${knobFmt(high)}</span></small>`;
+      <small><span class="low-end">${knobFmt(low)} · ${harderIsLess ? "harder" : "easier"}</span><span class="high-end">${harderIsLess ? "easier" : "harder"} · ${knobFmt(high)}</span></small>`;
     const slider = row.querySelector("input"), shown = row.querySelector("output");
     slider.addEventListener("pointerdown", () => { state.dragging = knob.name; });
     slider.addEventListener("input", () => { shown.textContent = knobFmt(+slider.value); });
@@ -547,6 +547,13 @@ function makeCard(run) {
   const hunters = card.querySelector("[data-hunters]");
   hunters.addEventListener("change", () => change("hunters", hunters.checked));
   return state;
+}
+
+// A knob's ends in its world: its rules `knob.<name>.easy` and `.hard` (the owner's to change), today's until known.
+function endsOf(state, knob) {
+  const rules = (state.now && state.now.rules) || {};
+  const easy = rules[`knob.${knob.name}.easy`] ?? knob.easiest, hard = rules[`knob.${knob.name}.hard`] ?? knob.hardest;
+  return [Math.min(easy, hard), Math.max(easy, hard), hard < easy];
 }
 
 function updateCard(state) {
@@ -572,6 +579,12 @@ function updateCard(state) {
   card.querySelectorAll(".knob[data-knob]").forEach((row) => {
     const knob = KNOBS.find((k) => k.name === row.dataset.knob), slider = row.querySelector("input");
     slider.disabled = !manual;
+    const [low, high, harderIsLess] = endsOf(state, knob);
+    if (+slider.min !== low || +slider.max !== high) {  // the world's ends moved: the slider stretches to them
+      slider.min = low; slider.max = high;
+      row.querySelector(".low-end").textContent = `${knobFmt(low)} · ${harderIsLess ? "harder" : "easier"}`;
+      row.querySelector(".high-end").textContent = `${harderIsLess ? "easier" : "harder"} · ${knobFmt(high)}`;
+    }
     if (state.dragging === knob.name) return;
     const value = shownValue(knob.name, last ? last[knob.name] : knob.start, (a, b) => Math.abs(a - b) <= knob.step);
     slider.value = value;
@@ -1406,7 +1419,7 @@ document.addEventListener("mouseover", (event) => {  // every number explains it
 });
 
 // ---- Rules: every cost, value and gene of the running world, each changeable at once ----
-const RULE_GROUPS = { costs: "energy a creature pays (a bite of food gives 1)", genes: "new limits apply to babies born from now on",
+const RULE_GROUPS = { costs: "energy a creature pays (a bite of food gives 1)", knobs: "how far each slider and Auto may go; the world takes a change within a second", genes: "new limits apply to babies born from now on",
                       exam: "changing the exam makes older scores incomparable" };
 const AUTO_COSTS = [
   ["step_cost", "Being alive, each step, × size", "Energy it pays every step just for being alive. A bigger creature pays more."],

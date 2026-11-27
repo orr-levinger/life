@@ -33,6 +33,17 @@ rules), `src/world.py` (`cost` is the rule; `grown` and `grow_up` go), `src/evol
 - [x] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "Auto turns the costs again, never above nature";
   push to `evolve-from-scratch`.
 
+### Task 2: Sprint power's natural value is 1
+
+The owner, 2026-11-27: "Yes, 1" (the half-size world: moving took 74 % of all spending at 2, 50 % at 1).
+
+**Files:** Modify `src/rules.py` (`COSTS`: sprint_power 1); Test `tests/test_costs.py`.
+
+- [x] Step 1: test first: `NATURE["sprint_power"]` 1.0 (range 0 to 1, start 0.1). Run `python -m unittest
+  tests.test_costs` → FAIL.
+- [x] Step 2: the change. Run `python scripts/run_tests.py` → OK under 300 s; commit "Sprint power's natural value is 1";
+  push to `evolve-from-scratch`.
+
 ## Must be completed to mark this as done
 
 | # | Item | Command or check | What it must show |

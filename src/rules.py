@@ -31,7 +31,7 @@ KNOB_ENDS = (
 COSTS = (
     ("step_cost", 0.1, "Cost of living, each step, × size"),
     ("move_cost", 0.4, "Cost of moving, per unit, × size"),
-    ("sprint_power", 2.0, "Cost of sprinting: the move × (speed ÷ cruising) to this power"),
+    ("sprint_power", 1.0, "Cost of sprinting: the move × (speed ÷ cruising) to this power"),  # 1: the owner, 2026-11-27
     ("eat_miss", 0.1, "Cost of eating at nothing"),
     ("bump_cost", 0.2, "Cost of bumping into a rock"),
     ("attack_cost", 1.0, "Cost of an attack, × size"),

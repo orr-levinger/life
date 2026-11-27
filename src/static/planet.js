@@ -10,6 +10,7 @@ import { BEASTS, NEAR, DOT } from "/static/beasts.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
 const NEAR_FAR = { near: 0.05, far: 4000 };
+const ABOVE_FOV = 45;  // degrees, top to bottom: the free camera's (from its eyes, as wide as its vision)
 
 let state = null;  // the one planet on the page
 
@@ -143,12 +144,12 @@ export function makePlanet(container, { onPick } = {}) {
   scene.background = new THREE.Color(0x0b0d12);
   scene.add(new THREE.HemisphereLight(0xdfefff, 0x3a2a1a, 0.9));
   const sun = new THREE.DirectionalLight(0xfff3dd, 1.6); sun.position.set(90, 70, 110);
-  const camera = new THREE.PerspectiveCamera(45, 1, NEAR_FAR.near, NEAR_FAR.far);
+  const camera = new THREE.PerspectiveCamera(ABOVE_FOV, 1, NEAR_FAR.near, NEAR_FAR.far);
   camera.add(sun); scene.add(camera);  // the sun over the viewer's shoulder: the side in view is lit
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.enablePan = false; controls.zoomSpeed = 1.1; controls.rotateSpeed = 0.6;
   state = { container, renderer, scene, camera, controls, onPick, R: null, terrainKey: null, ground: null, terrain: null,
-            food: {}, beasts: new THREE.Group(), herd: new THREE.Group(), batches: new Map(), marks: new THREE.Group(), follow: null, pov: false, picture: null,
+            food: {}, beasts: new THREE.Group(), herd: new THREE.Group(), batches: new Map(), marks: new THREE.Group(), follow: null, view: "above", picture: null,
             dragged: false };
   scene.add(state.beasts, state.herd, state.marks);
   const size = () => {
@@ -194,7 +195,7 @@ export function updatePlanet(picture, before, t, options) {
     return { c, p: slerp(v3(from.p), v3(c.p), t), f: v3(c.facing) };
   });
   const followed = state.follow === null ? null : placed.find((x) => x.c.id === state.follow);
-  const sensed = followed && state.pov ? sensedBy(followed.c, picture) : null;
+  const sensed = followed && state.view === "eyes" ? sensedBy(followed.c, picture) : null;  // its eyes: only what it senses
   state.lastPlaced = placed;
   drawFood(picture, R, sensed);
   drawBeasts(placed, R, sensed, followed, options || {});
@@ -263,6 +264,8 @@ function drawBeasts(placed, R, sensed, followed, options) {
     }
     standOn(body, x.p, R, 0, x.f);
     look.dress(body, x.c, { followed: x === followed, hovered: x.c.id === options.hover });
+    if (x === followed && state.view === "eyes") body.visible = false;  // the camera is inside its head
+    else body.visible = true;
   });
   done(rings, shown.length);
   for (const b of [...state.beasts.children]) if (!keep.has(b.userData.id)) state.beasts.remove(b);
@@ -333,18 +336,23 @@ function drawMarks(shown, R, sensed, followed, options) {
   }
 }
 
-// ---------- the camera: free to spin and zoom; following keeps one creature in the middle; POV stands behind it
+// ---------- the camera: free to spin and zoom; following keeps one creature in the middle, seen from above or from
+// its own eyes
 function steer(followed, R) {
   const { camera, controls } = state;
-  if (followed && state.pov) {
+  if (followed && state.view === "eyes") {
     controls.enabled = false;
     const n = followed.p.clone().normalize(), f = followed.f.clone().sub(n.clone().multiplyScalar(followed.f.dot(n))).normalize();
-    const size = Math.max(followed.c.radius * 4, 0.6);
-    const eye = n.clone().multiplyScalar(R + size * 1.6).add(f.clone().multiplyScalar(-size * 3));
-    camera.position.lerp(eye, 0.25); camera.up.copy(n);
-    camera.lookAt(n.clone().multiplyScalar(R + size * 0.6).add(f.clone().multiplyScalar(size * 6)));
+    const r = followed.c.radius;  // its body is drawn about 1.4 radii tall, its head at its front
+    const eye = n.clone().multiplyScalar(R + r * 1.3).add(f.clone().multiplyScalar(r));
+    camera.position.copy(eye); camera.up.copy(n);
+    camera.lookAt(eye.clone().add(f.clone().multiplyScalar(10)).sub(n.clone().multiplyScalar(1.5)));  // ahead, a little down
+    const wide = Math.min(120, Math.max(30, followed.c.vision_width)) * Math.PI / 180;  // as wide as its vision
+    const fov = 2 * Math.atan(Math.tan(wide / 2) / camera.aspect) * 180 / Math.PI;
+    if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     return;
   }
+  if (camera.fov !== ABOVE_FOV) { camera.fov = ABOVE_FOV; camera.updateProjectionMatrix(); }
   controls.enabled = true;
   camera.up.set(0, 1, 0);
   if (followed) {  // the ball turns under the camera: the creature stays in the middle, at the same height
@@ -376,7 +384,7 @@ export function creatureAt(event) {  // the creature under the pointer, or null
   }
   return null;
 }
-export function pointOfView(on) { if (state) state.pov = on; }
+export function view(which) { if (state) state.view = which; }  // a followed creature: "above" or "eyes"
 export function render() { if (state) state.renderer.render(state.scene, state.camera); }
 
 // frames drawn back to back, each one finished: how fast this machine draws the planet (no waiting on the page clock)

@@ -519,7 +519,7 @@ class TestControlRoom(unittest.TestCase):
         self.assertIn('from "/static/planet.js"', page)
         self.assertIn('from "three"', planet)
         self.assertIn('/static/OrbitControls.js', planet)
-        for name in ("makePlanet", "updatePlanet", "followCreature", "pointOfView", "bench"):
+        for name in ("makePlanet", "updatePlanet", "followCreature", "view", "bench"):
             self.assertIn(f"export function {name}", planet)
         self.assertIn("gl.readPixels(", planet)  # the bench waits for each frame to be drawn (gl.finish may not)
         self.assertIn("new THREE.SphereGeometry(R, 96, 64)", planet)  # the ground light enough to draw without a graphics card
@@ -675,12 +675,16 @@ class TestControlRoom(unittest.TestCase):
         for words in ("Update code", "Fleeing and chasing"):
             self.assertIn(words, page)
 
-    def test_page_has_a_point_of_view_button(self):
+    def test_follow_from_above_or_its_eyes(self):  # the owner, 2026-11-27: "2 mods from above and from his eyes"
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
         with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
             planet = response.read().decode("utf-8")
-        self.assertIn('id="follow-pov"', page)
+        for words in ('id="follow-view"', 'data-view="above"', 'data-view="eyes"', ">Above<", ">Eyes<"):
+            self.assertIn(words, page)
+        self.assertNotIn('id="follow-pov"', page)
+        for words in ("export function view(", "camera.fov", "vision_width", "body.visible = false"):
+            self.assertIn(words, planet)  # its eyes: as wide as its vision, its own body not in the way
         for words in ("export function sensedBy(", "hears.set(", "c.moved"):  # only what it senses: seen, or a sound's blur
             self.assertIn(words, planet)
 

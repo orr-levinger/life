@@ -167,7 +167,7 @@
     <label>steps a second <input id="watch-speed" type="range" min="1" max="30" step="1" value="10"><output id="watch-speed-shown">10</output></label>
     <button id="show-cones" class="act" type="button" aria-pressed="true">Vision cones: on</button>
     <span class="zoom"><button id="zoom-out" class="act" type="button" aria-label="Zoom out">−</button><output id="zoom-shown">1×</output><button id="zoom-in" class="act" type="button" aria-label="Zoom in">+</button></span>
-    <span id="follow-note" hidden>following <b id="follow-who"></b> <button id="follow-pov" class="act" type="button" aria-pressed="false" data-tip="See only what it sees; what it hears shows as a blur with its distance">POV</button> <button id="follow-genes" class="act" type="button" aria-expanded="false">Genes</button> <button id="follow-stop" class="act" type="button">Stop following</button></span>
+    <span id="follow-note" hidden>following <b id="follow-who"></b> <span class="seg" id="follow-view" data-tip="Above: watch it from above. Eyes: see from its own eyes, only what it senses; what it hears shows as a blur"><button type="button" data-view="above" class="on">Above</button><button type="button" data-view="eyes">Eyes</button></span> <button id="follow-genes" class="act" type="button" aria-expanded="false">Genes</button> <button id="follow-stop" class="act" type="button">Stop following</button></span>
     <button id="watch-out" class="act" type="button">Jump out</button>
   </div>
   <form id="genes-panel" hidden>
@@ -1081,7 +1081,7 @@ function drawSenses(g, x, y, c, unit, strong, color, cone = camera.cones) {
 
 // The camera: how far it is zoomed, which point of the world is in the middle, and the creature it follows (if any).
 const ZOOMS = { least: 1, most: 12, follow: 4, step: 1.25 };
-const camera = { zoom: 1, x: null, y: null, follow: null, pov: false, cones: true };
+const camera = { zoom: 1, x: null, y: null, follow: null, view: "above", cones: true };
 try { camera.cones = localStorage.getItem("life.cones") !== "off"; } catch (error) { /* no storage: shown */ }
 function zoomBy(factor) {  // the zoom buttons: the camera nearer or farther (the wheel and a pinch do the same)
   camera.zoom = Math.max(ZOOMS.least, Math.min(ZOOMS.most, camera.zoom * factor));
@@ -1091,18 +1091,16 @@ function zoomBy(factor) {  // the zoom buttons: the camera nearer or farther (th
 function follow(id, name) {
   camera.follow = id;
   if (window.Planet) Planet.followCreature(id);
-  if (id === null) pov(false);
+  if (id === null) setView("above");
   showGenes(false);
   document.getElementById("follow-note").hidden = id === null;
   if (id !== null) { document.getElementById("follow-who").textContent = name; if (camera.zoom < ZOOMS.follow) zoomBy(ZOOMS.follow / camera.zoom); }
 }
 
-function pov(on) {  // the followed creature's point of view: only what it senses is drawn
-  camera.pov = on;
-  if (window.Planet) Planet.pointOfView(on);
-  const button = document.getElementById("follow-pov");
-  button.setAttribute("aria-pressed", String(on));
-  button.textContent = on ? "POV: on" : "POV";
+function setView(which) {  // a followed creature from above, or from its own eyes (only what it senses is drawn)
+  camera.view = which;
+  if (window.Planet) Planet.view(which);
+  document.querySelectorAll("#follow-view button").forEach((b) => b.classList.toggle("on", b.dataset.view === which));
 }
 
 // What `me` senses in `picture`, as the world decides it (src/senses.py): seen when within its vision reach and inside
@@ -1171,7 +1169,10 @@ function showCones(on) {
 }
 showCones(camera.cones);
 document.getElementById("show-cones").addEventListener("click", () => showCones(!camera.cones));
-document.getElementById("follow-pov").addEventListener("click", () => pov(!camera.pov));
+document.getElementById("follow-view").addEventListener("click", (e) => {
+  const button = e.target.closest("button[data-view]");
+  if (button) setView(button.dataset.view);
+});
 document.getElementById("follow-genes").addEventListener("click", () => showGenes(document.getElementById("genes-panel").hidden));
 document.getElementById("genes-panel").addEventListener("submit", (event) => {  // the boxes, sent as the creature's genes
   event.preventDefault();

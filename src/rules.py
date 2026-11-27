@@ -39,6 +39,7 @@ COSTS = (
     ("vision_cost", SEEING / 2.0, "Cost of seeing, per square unit, each step"),
     ("hearing_cost", SEEING / 2.0, "Cost of hearing, per square unit, each step"),
     ("neuron_cost", 0.0006, "Cost of each neuron, each step"),
+    ("pixel_cost", 0.0006, "Cost of each pixel of its eye (its sharpness), each step"),
     ("stealth_cost", 0.3, "Cost of stealth: living × (1 + stealth × this)"),
     ("armour_cost", 0.3, "Cost of armour: living × (1 + armour × this)"),
 )
@@ -46,7 +47,8 @@ COST_NAMES = tuple(name for name, _, _ in COSTS)
 # What everything cost before 2026-11-27: the exam's world and saves from before keep these.
 TODAY_COSTS = {"step_cost": 0.05, "move_cost": 0.5, "sprint_power": 2.0, "eat_miss": 0.2, "bump_cost": 0.5,
                "attack_cost": 1.0, "attack_damage": 5.0, "vision_cost": SEEING, "hearing_cost": SEEING,
-               "neuron_cost": 0.0005, "stealth_cost": 0.3, "armour_cost": 0.3}
+               "neuron_cost": 0.0005, "stealth_cost": 0.3, "armour_cost": 0.3,
+               "pixel_cost": 0.0}  # eyes had no pixels to pay for
 
 
 @dataclass(frozen=True)
@@ -63,7 +65,7 @@ class Rule:
 # its newcomers draw every gene from its newcomer range, and babies copy their parents.
 HAND_MADE = {"fear": 10.0, "love": 10.0, "learns": 0.5, "learning_speed": 3e-4, "mutations": 1.0, "mutation_size": 0.05,
              "neurons": 32.0, "layers": 1.0, "diet": 0.0, "calls": 0.0,
-             "kin": 0.0, "water": 0.0, "stealth": 0.0, "armour": 0.0}  # one made by hand eats plants, never calls, cares for nobody, cannot swim
+             "kin": 0.0, "water": 0.0, "stealth": 0.0, "armour": 0.0, "eye_pixels": 16}  # one made by hand eats plants, never calls, cares for nobody, cannot swim
 
 
 def _gene(name: str, words: str, low: float, high: float, limits: tuple, new: tuple) -> tuple:
@@ -182,7 +184,8 @@ RULES = (
   + _gene("kin", "Care for kin", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("water", "Water (0 land, 1 swimmer)", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("stealth", "Stealth", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
-  + _gene("armour", "Armour", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
+  + _gene("armour", "Armour", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
+  + _gene("eye_pixels", "Eye sharpness (pixels)", 1.0, 16.0, (1.0, 16.0), new=(2.0, 8.0))
 
 RULES += tuple(Rule(name, "costs", words, value / 10.0, 0.0, value) for name, value, words in COSTS)
 RULES += tuple(Rule(f"knob.{name}.{end}", "knobs", f"{words}: its {end} end", start, 0.0, 10.0 * max(abs(easy), abs(hard)))
@@ -216,6 +219,7 @@ MEANS = {
     "vision_cost": "Energy its eyes cost every step, per square unit of its vision cone.",
     "hearing_cost": "Energy its ears cost every step, per square unit of its hearing circle.",
     "neuron_cost": "Energy each neuron of its brain costs every step. 0.0006: 32 neurons cost about a fifth of living.",
+    "pixel_cost": "Energy each pixel of its eye costs every step. 0.0006: a sharp eye of 16 costs about a tenth of living.",
     "stealth_cost": "How much more living costs a stealthy creature: × (1 + stealth × this).",
     "armour_cost": "How much more living costs an armoured creature: × (1 + armour × this).",
     "baby_share": "When it has a baby, this share of its energy goes into the baby (0.4 = 40 %).",
@@ -354,6 +358,8 @@ GENE_MEANS = {
                      "way (0.05 = 5 %).",
     "neurons": "How many neurons each brain layer has. Each neuron costs energy every step.",
     "layers": "How many layers its brain has.",
+    "eye_pixels": "How sharp its eye is: how many real pixels its field of vision is cut into (1-16). Sharper sees more "
+                  "apart, and costs more to keep (the pixel cost, each step).",
     "armour": "How well its body takes a hit: a hit takes × (1 - armour × the armour strength) from it; it moves "
               "slower (× 1 - armour × the armour slowness) and pays more to stay alive (× 1 + armour × the armour "
               "cost).",

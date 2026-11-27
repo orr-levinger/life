@@ -28,7 +28,8 @@ INHERIT = ("learned", "inborn")
 FOOD_SPOT_TRIES = 50  # tries for a food spot by the pond edges' thickness
 FREE_SPOT_TRIES = 1000  # tries to find a newcomer a spot that no obstacle covers
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
-         "layers", "neurons", "weights", "mutations", "mutation_size", "diet", "calls", "kin", "water", "stealth", "armour")  # a baby changes its parent's `mutations` of them
+         "layers", "neurons", "weights", "mutations", "mutation_size", "diet", "calls", "kin", "water", "stealth", "armour",
+         "eye_pixels")  # a baby changes its parent's `mutations` of them
 
 
 class World:
@@ -157,6 +158,7 @@ class World:
         newcomer.water = drawn("water")
         newcomer.stealth = drawn("stealth")
         newcomer.armour = drawn("armour")
+        newcomer.eye_pixels = whole("eye_pixels")
         newcomer.mutations, newcomer.mutation_size = whole("mutations"), drawn("mutation_size")
         self._brain_size(newcomer)
         self.creatures.append(newcomer)
@@ -395,6 +397,9 @@ class World:
         low, high = gene_limits(self.rules, "calls")
         step = self.rng.choice((-1, 1)) if "calls" in picked else 0  # a count: one call more or one fewer
         baby.calls = int(min(max(parent.calls + step, low), high))
+        low, high = gene_limits(self.rules, "eye_pixels")
+        step = self.rng.choice((-1, 1)) if "eye_pixels" in picked else 0  # a pixel sharper or blurrier
+        baby.eye_pixels = int(min(max(parent.eye_pixels + step, low), high))
         self._brain_size(baby)
         self.creatures.append(baby)
         self.births += 1

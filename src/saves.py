@@ -88,6 +88,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                        "fear_of_death": c.fear_of_death, "love_of_babies": c.love_of_babies,
                        "learns_from_others": c.learns_from_others, "mutations": c.mutations,
                        "mutation_size": c.mutation_size, "diet": c.diet, "calls": c.calls, "kin": c.kin, "water": c.water, "moved": c.moved, "stealth": c.stealth, "armour": c.armour,
+                       "eye_pixels": c.eye_pixels,
                        "hurt": None if c.hurt is None else list(c.hurt)}
                       for c, brain in zip(world.creatures, brain_of)],
         "foods": [{"p": list(map(float, f.p)), "energy": f.energy, "remaining_duration": f.remaining_duration, "fruit": f.fruit,
@@ -187,6 +188,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.learns_from_others = saved["learns_from_others"]
         creature.mutations, creature.mutation_size = saved["mutations"], saved["mutation_size"]
         creature.diet, creature.calls, creature.kin = saved["diet"], saved["calls"], saved["kin"]
+        creature.eye_pixels = saved.get("eye_pixels", creature.eye_pixels)  # saved before eyes had pixels: a sharp eye
         creature.water, creature.moved = saved["water"], saved["moved"]  # a mover is heard next step
         creature.stealth, creature.armour = saved["stealth"], saved["armour"]
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])

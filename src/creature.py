@@ -125,6 +125,7 @@ class Creature:
         self.kin = HAND_MADE["kin"]  # how much what happens to those like it counts as its own: a gene
         self.stealth = HAND_MADE["stealth"]  # how hard it is to notice: a gene
         self.armour = HAND_MADE["armour"]  # how well it takes a hit, slower and dearer to keep: a gene
+        self.eye_pixels = HAND_MADE["eye_pixels"]  # how sharp its eye is (real pixels, 1-16), dearer when sharper: a gene
         self.water = HAND_MADE["water"]  # 0 cannot enter a pond; above 0 it swims at this share of its speed: a gene
         self.called: Optional[Tuple[int, float]] = None  # this step's call: its kind and how far it carries (display)
         self.target: Optional[int] = None  # the id of the one it attacked this step (display only)
@@ -209,7 +210,7 @@ class Creature:
                   * (1.0 + self.stealth * cost("stealth_cost"))  # and stealth costs
                   * (1.0 + self.armour * cost("armour_cost"))  # and armour costs
                   + cost("vision_cost") * self.vision_area() + cost("hearing_cost") * self.hearing_area()
-                  + cost("neuron_cost") * self.neurons) * self._home_factor(world)  # and each neuron; by where it is
+                  + cost("neuron_cost") * self.neurons + cost("pixel_cost") * self.eye_pixels) * self._home_factor(world)  # and each neuron; by where it is
         self.energy = min(self.energy - living, self.max_energy)
         self._spend(living, world)
 

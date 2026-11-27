@@ -49,6 +49,14 @@ class TestRules(unittest.TestCase):
             self.assertGreater(len(means(name)), 15, name)
         self.assertNotIn("pond", by_name["obstacles"].words)  # obstacles are rocks now
 
+    def test_the_swimming_cost_rules(self):  # swimmers pay less in water, more on land (the owner, 2026-11-27)
+        from src.rules import means
+        by_name = {r.name: r for r in RULES}
+        for name, want in (("swim_saving", (0.5, 0.0, 1.0)), ("land_cost", (0.5, 0.0, 2.0))):
+            r = by_name[name]
+            self.assertEqual((r.start, r.low, r.high, r.group), (*want, "body"), name)
+            self.assertGreater(len(means(name)), 15, name)
+
     def test_every_rule_and_gene_says_what_it_means(self):
         from src.rules import GENE_MEANS, means
         for r in RULES:

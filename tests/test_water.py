@@ -155,6 +155,23 @@ class TestWater(unittest.TestCase):
         spot = t.pond_spot(random.Random(1))
         self.assertLess(float(arc(spot, at(0.0, 0.0), 1.0e6)), 3.0)
 
+    def test_a_swimmer_pays_less_in_water_and_more_on_land(self):  # moving and living, by its water gene
+        def paid(water, x, y):
+            w = pond_world()
+            w.settings = replace(w.settings, move_cost=1.0, step_cost=0.1, sprint_power=0.0, vision_cost=0.0,
+                                 hearing_cost=0.0, neuron_cost=0.0, stealth_cost=0.0, armour_cost=0.0)
+            c = add(w, x, y, energy=50.0)
+            c.water = water
+            c.apply_action(("MOVE", (0.1, 0.0)), w)  # a short move and a step alive, staying where it is (pond or land)
+            self.assertAlmostEqual(float(arc(c.p, at(x + 0.1, y), w.radius)), 0.0, places=6)
+            return 50.0 - c.energy
+
+        land = paid(0.0, 5.0, 5.0)  # a land creature on land: as before
+        self.assertGreater(land, 0.1)
+        for water, x, y, share in ((1.0, 20.0, 10.0, 0.5), (1.0, 5.0, 5.0, 1.5),
+                                   (0.5, 20.0, 10.0, 0.75), (0.5, 5.0, 5.0, 1.25)):
+            self.assertAlmostEqual(paid(water, x, y), land * share, places=9, msg=(water, x, y))
+
     def test_newcomers_draw_their_water(self):
         w = make_world(seed=6)
         waters = [w.add_newcomer().water for _ in range(30)]

@@ -79,6 +79,8 @@ RULES = (
     Rule("armour_slow", "body", "Armour slows: speed × (1 - armour × this)", 0.3, 0.0, 1.0),
     Rule("stealth_strength", "body", "A stealthy body is seen and heard from × (1 - stealth × this)", 0.7, 0.0, 1.0),
     Rule("land_penalty", "body", "A swimmer walks slower on land: × (1 - water × this)", 0.7, 0.0, 1.0),
+    Rule("swim_saving", "body", "In water a swimmer pays less to move and live: × (1 - water × this)", 0.5, 0.0, 1.0),
+    Rule("land_cost", "body", "On land a swimmer pays more to move and live: × (1 + water × this)", 0.5, 0.0, 2.0),
     Rule("pond_food_share", "world", "Share of new food that grows in ponds", 0.2, 0.0, 1.0),
     Rule("year_steps", "world", "A year lasts this many steps (food rises and falls over it)", 20000.0, 1000.0, 200000.0),
     Rule("season_depth", "world", "Seasons: food and fruit × (1 ± this) at the year's best and worst", 0.5, 0.0, 1.0),
@@ -196,6 +198,10 @@ MEANS = {
                   "quarters into it.",
     "season_depth": "How strong the seasons are: food and fruit grow × (1 + this × sin(2π × step ÷ year)). 0.5: "
                     "half again as much in the best season, half as much in the worst; 0: no seasons.",
+    "swim_saving": "How much less a swimmer pays in water: its moving and living cost × (1 - its water × this). 0.5: "
+                   "a pure swimmer pays half in water.",
+    "land_cost": "How much more a swimmer pays on land: its moving and living cost × (1 + its water × this). 0.5: a "
+                 "pure swimmer pays 1.5 times on land.",
     "land_penalty": "How much slower a swimmer walks on land: its land speed × (1 - its water × this). 0.7: a "
                     "full swimmer walks at 30 % of its speed.",
     "pond_food_share": "The share of new food that grows inside ponds, where only swimmers reach it.",
@@ -295,7 +301,8 @@ GENE_MEANS = {
     "stealth": "How hard it is to notice: others see and hear it only from (1 - stealth × the stealth strength) as "
                "far; it pays more to stay alive (× 1 + stealth × the stealth cost).",
     "water": "How much it is at home in water: 0 cannot enter a pond; above 0 it can, and swims at this share of "
-             "its speed, but walks slower on land (× 1 - water × the land penalty).",
+             "its speed, but walks slower on land (× 1 - water × the land penalty); it pays less to move and live in "
+             "water (× 1 - water × the swim saving) and more on land (× 1 + water × the land cost).",
     "kin": "How much what happens to creatures like it counts as its own: when one it sees or hears gains or "
            "loses energy, it feels this share of it, times how alike their genes are (0 = not at all, 1 = twins).",
     "calls": "How many different calls it can make (0 to 10). A new world's creatures make none; a baby may get one "

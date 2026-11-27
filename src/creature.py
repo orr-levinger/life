@@ -175,9 +175,15 @@ class Creature:
                   * (1.0 + self.stealth * world.settings.stealth_cost)  # and stealth costs
                   * (1.0 + self.armour * world.settings.armour_cost)  # and armour costs
                   + world.settings.vision_cost * self.vision_area() + world.settings.hearing_cost * self.hearing_area()
-                  + world.settings.neuron_cost * self.neurons)  # and each neuron of its brain
+                  + world.settings.neuron_cost * self.neurons) * self._home_factor(world)  # and each neuron; by where it is
         self.energy = min(self.energy - living, self.max_energy)
         self._spend(living, world)
+
+    def _home_factor(self, world: World) -> float:
+        """What its water gene makes of its moving and living costs where it is: less in water, more on land."""
+        if world.terrain.in_pond(self.p):
+            return 1.0 - self.water * self.rules["swim_saving"]
+        return 1.0 + self.water * self.rules["land_cost"]
 
     def _pace(self, world: World) -> float:
         """Its share of its speed where it is: its water in a pond, 1 - water × the land penalty on land."""
@@ -219,6 +225,7 @@ class Creature:
         dx, dy = vector
         distance = math.hypot(dx, dy)
         pace = self._pace(world)  # in water × its water, on land slower the more it is a swimmer
+        home = self._home_factor(world)  # a move is priced where it starts
         top, cruise = self.top_speed * pace, self.velocity * pace
         if distance > top:
             dx, dy = dx * top / distance, dy * top / distance
@@ -235,7 +242,7 @@ class Creature:
         self.p = to
         self.moved = distance > 0  # a step that went somewhere makes a sound
         sprint = max(1.0, distance / max(cruise, 1e-9)) ** world.settings.sprint_power  # faster than cruising costs more
-        cost = distance * world.settings.move_cost * self.size * sprint  # a bigger body pays more to move
+        cost = distance * world.settings.move_cost * self.size * sprint * home  # a bigger body pays more to move
         self.energy -= cost
         self._spend(cost, world)
         self.last_action = "MOVE"

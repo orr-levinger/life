@@ -158,8 +158,8 @@ class TestWater(unittest.TestCase):
     def test_a_swimmer_pays_less_in_water_and_more_on_land(self):  # moving and living, by its water gene
         def paid(water, x, y):
             w = pond_world()
-            w.settings = replace(w.settings, move_cost=1.0, step_cost=0.1, sprint_power=0.0, vision_cost=0.0,
-                                 hearing_cost=0.0, neuron_cost=0.0, stealth_cost=0.0, armour_cost=0.0)
+            w.rules.update(move_cost=1.0, step_cost=0.1, sprint_power=0.0, vision_cost=0.0,
+                           hearing_cost=0.0, neuron_cost=0.0, stealth_cost=0.0, armour_cost=0.0)
             c = add(w, x, y, energy=50.0)
             c.water = water
             c.apply_action(("MOVE", (0.1, 0.0)), w)  # a short move and a step alive, staying where it is (pond or land)

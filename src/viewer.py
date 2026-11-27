@@ -27,7 +27,7 @@ from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run
 from .dial import KNOBS, value
 from .evolve import SPECIES
 from .saves import FIRST_PLANET, FLAT_WORLD, SaveError, save_format, save_header, save_path, saves_of
-from .rules import GENE_MEANS, GROUPS, RULES, check, check_genes, means, starting_rules
+from .rules import COST_NAMES, GENE_MEANS, GROUPS, RULES, check, check_genes, means, starting_rules
 from .scoreboard import OLDER_LAYOUTS, ROW_KEYS, read_rows
 from .settings import START, Settings
 
@@ -46,19 +46,7 @@ KNOB_LABELS = {  # what the page calls each knob, and how far one notch of its s
     "food_energy": ("Energy per food", 0.5),
     "food_per_step": ("New food per step", 0.05),
     "fruit_rate": ("Fruit a tree drops per step", 0.002),
-    "move_cost": ("Cost of moving (per unit)", 0.01),
-    "step_cost": ("Cost of living (per step)", 0.005),
     "lifespan": ("Lifespan (steps)", 50.0),
-    "sprint_power": ("Cost of sprinting (power of speed ÷ cruising)", 0.01),
-    "eat_miss": ("Cost of eating at nothing", 0.005),
-    "attack_cost": ("Cost of an attack (× size)", 0.01),
-    "attack_damage": ("Damage of a hit (× the hitter's size)", 0.05),
-    "bump_cost": ("Cost of bumping into a rock", 0.005),
-    "vision_cost": ("Cost of seeing (per square unit, per step)", 0.00001),
-    "hearing_cost": ("Cost of hearing (per square unit, per step)", 0.00001),
-    "neuron_cost": ("Cost of each neuron (per step)", 0.00001),
-    "stealth_cost": ("Cost of stealth (living × 1 + stealth × this)", 0.005),
-    "armour_cost": ("Cost of armour (living × 1 + armour × this)", 0.005),
 }
 Launch = Callable[[List[str], Path], object]  # starts a world: its command and its folder; returns its process
 
@@ -109,7 +97,9 @@ def knobs() -> Dict:
         label, step = KNOB_LABELS[knob.name]
         sliders.append({"name": knob.name, "label": label, "easiest": knob.easiest, "hardest": knob.hardest,
                         "start": value(START, knob.name), "step": step})
-    return {"knobs": sliders, HUNTERS: START.attacks}
+    costs = [{"name": r.name, "label": r.words, "low": r.low, "high": r.high, "start": r.start, "step": r.high / 300.0}
+             for r in RULES if r.group == "costs" and r.name in COST_NAMES]  # the owner's sliders, never Auto's
+    return {"knobs": sliders, "costs": costs, HUNTERS: START.attacks}
 
 
 def _on_its_own() -> Dict:

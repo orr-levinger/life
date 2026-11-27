@@ -38,8 +38,8 @@ class TestControl(unittest.TestCase):
             self.assertIsNone(read_control(Path(tmp)).rules)
 
     def test_settings_from_sets_only_the_named_knobs(self):
-        settings = settings_from({"move_cost": 1.0, "hunters": True}, START)
-        self.assertEqual(settings, replace(START, move_cost=1.0, attacks=True))
+        settings = settings_from({"lifespan": 3000.0, "hunters": True}, START)
+        self.assertEqual(settings, replace(START, lifespan=(2400.0, 3600.0), attacks=True))
 
     def test_unknown_knob_is_refused(self):
         with self.assertRaisesRegex(ValueError, "no knob called 'gravity'"):

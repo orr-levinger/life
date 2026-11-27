@@ -114,11 +114,11 @@ def settings_state(settings: Settings) -> Dict:
 
 
 def settings_from_state(state: Dict, rules: Optional[Mapping[str, float]] = None) -> Settings:
-    """Settings from a save. A save from before every cost was a knob lacks them: each comes from the world's own rules
-    then (the owner may have changed it when it was a rule), else today's value."""
-    given = {name: tuple(value) if isinstance(value, list) else value for name, value in state.items()}
-    missing = {f.name: rules[f.name] for f in fields(Settings) if f.name not in given and rules and f.name in rules}
-    return Settings(**given, **missing)
+    """Settings from a save. A save from when costs were knobs holds them too: they are its rules now (src/saves.py
+    moves them), so they are left out here."""
+    known = {f.name for f in fields(Settings)}
+    return Settings(**{name: tuple(value) if isinstance(value, list) else value for name, value in state.items()
+                       if name in known})
 
 
 def slope(points: Sequence[Tuple[float, float]]) -> Optional[float]:

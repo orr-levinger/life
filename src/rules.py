@@ -20,22 +20,33 @@ Rules = Dict[str, float]
 KNOB_ENDS = (
     ("max_food", 800.0, 20.0, "Food pieces at most"),
     ("food_energy", 100.0, 3.0, "Energy per food"),
-    ("move_cost", 0.0, 3.0, "Cost of moving"),
-    ("step_cost", 0.0, 0.5, "Cost of living"),
     ("lifespan", 10000.0, 625.0, "Lifespan"),
     ("food_per_step", 20.0, 0.2, "New food per step"),
     ("fruit_rate", 1.0, 0.002, "Fruit a tree drops per step"),
-    ("sprint_power", 0.0, 4.0, "Cost of sprinting"),
-    ("eat_miss", 0.0, 2.0, "Cost of eating at nothing"),
-    ("attack_cost", 0.0, 5.0, "Cost of an attack"),
-    ("attack_damage", 0.0, 25.0, "Damage of a hit"),
-    ("bump_cost", 0.0, 3.0, "Cost of bumping into a rock"),
-    ("vision_cost", 0.0, 10.0 * SEEING, "Cost of seeing"),
-    ("hearing_cost", 0.0, 10.0 * SEEING, "Cost of hearing"),
-    ("neuron_cost", 0.0, 0.005, "Cost of each neuron"),
-    ("stealth_cost", 0.0, 3.0, "Cost of stealth"),
-    ("armour_cost", 0.0, 3.0, "Cost of armour"),
 )
+
+# What everything costs: fixed by nature, the owner's to turn, never Auto's (the owner, 2026-11-27). One anchor (a full
+# size-1 creature standing still lasts about 1,000 steps without food) and ratios from animals; each may go from 0 to
+# 3 times its value (what the smartest could bear), sprinting's power to 4.
+COSTS = (
+    ("step_cost", 0.1, "Cost of living, each step, × size"),
+    ("move_cost", 0.4, "Cost of moving, per unit, × size"),
+    ("sprint_power", 2.0, "Cost of sprinting: the move × (speed ÷ cruising) to this power"),
+    ("eat_miss", 0.1, "Cost of eating at nothing"),
+    ("bump_cost", 0.2, "Cost of bumping into a rock"),
+    ("attack_cost", 1.0, "Cost of an attack, × size"),
+    ("attack_damage", 10.0, "Damage of a hit, × the hitter's size"),
+    ("vision_cost", SEEING / 2.0, "Cost of seeing, per square unit, each step"),
+    ("hearing_cost", SEEING / 2.0, "Cost of hearing, per square unit, each step"),
+    ("neuron_cost", 0.0006, "Cost of each neuron, each step"),
+    ("stealth_cost", 0.3, "Cost of stealth: living × (1 + stealth × this)"),
+    ("armour_cost", 0.3, "Cost of armour: living × (1 + armour × this)"),
+)
+COST_NAMES = tuple(name for name, _, _ in COSTS)
+# What everything cost before 2026-11-27: the exam's world and saves from before keep these.
+TODAY_COSTS = {"step_cost": 0.05, "move_cost": 0.5, "sprint_power": 2.0, "eat_miss": 0.2, "bump_cost": 0.5,
+               "attack_cost": 1.0, "attack_damage": 5.0, "vision_cost": SEEING, "hearing_cost": SEEING,
+               "neuron_cost": 0.0005, "stealth_cost": 0.3, "armour_cost": 0.3}
 
 
 @dataclass(frozen=True)
@@ -172,6 +183,10 @@ RULES = (
   + _gene("stealth", "Stealth", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0)) \
   + _gene("armour", "Armour", 0.0, 1.0, (0.0, 1.0), new=(0.0, 1.0))
 
+RULES += tuple(Rule(name, "costs", words, value, 0.0, 4.0 if name == "sprint_power" else 3.0 * value)
+               for name, value, words in COSTS)
+RULES += (Rule("grow_up_generations", "costs", "A new world grows into its costs over this many generations", 10.0, 0.0,
+               100.0),)
 RULES += tuple(Rule(f"knob.{name}.{end}", "knobs", f"{words}: its {end} end", start, 0.0, 10.0 * max(abs(easy), abs(hard)))
                for name, easy, hard, words in KNOB_ENDS for end, start in (("easy", easy), ("hard", hard)))
 
@@ -192,6 +207,21 @@ ROOM_SLOTS = int(_BY_NAME["room"].high)  # a learner keeps a slot for each creat
 
 # What each rule means, in plain words (the "What it means" column of the Rules page).
 MEANS = {
+    "step_cost": "Energy a creature pays every step just for being alive (× its size to the living power). 0.1: a "
+                 "full size-1 creature standing still lasts about 1,000 steps without food.",
+    "move_cost": "Energy it pays for each unit it moves, × its size. 0.4: a cruising step costs about a step of living.",
+    "sprint_power": "Moving faster than cruising costs the move × (speed ÷ cruising) to this power.",
+    "eat_miss": "Energy it pays when it bites at nothing.",
+    "bump_cost": "Energy it pays when it runs into a rock.",
+    "attack_cost": "Energy an attack costs the attacker, hit or miss, × its size.",
+    "attack_damage": "Energy a hit takes from the one hit, × the hitter's size (more for a meat eater, less for armour).",
+    "vision_cost": "Energy its eyes cost every step, per square unit of its vision cone.",
+    "hearing_cost": "Energy its ears cost every step, per square unit of its hearing circle.",
+    "neuron_cost": "Energy each neuron of its brain costs every step. 0.0006: 32 neurons cost about a fifth of living.",
+    "stealth_cost": "How much more living costs a stealthy creature: × (1 + stealth × this).",
+    "armour_cost": "How much more living costs an armoured creature: × (1 + armour × this).",
+    "grow_up_generations": "A new world pays a tenth of every cost at first and grows into the full cost as its deepest "
+                           "living generation reaches this; it never goes back.",
     "baby_share": "When it has a baby, this share of its energy goes into the baby (0.4 = 40 %).",
     "tank_power": "How much more energy a bigger body holds: its tank is the tank × size to this power (1.3: twice the "
                   "size holds about 2.5 times the energy).",

@@ -231,7 +231,7 @@ const PANELS = [
 ];
 const W = 520, H = 250, M = { l: 44, r: 108, t: 10, b: 30 };
 const PENDING_FOR = 20000;  // ms a value moved by hand is shown before the world's own row must confirm it
-let data = [], lastChange = 0, signature = "", picked = null, KNOBS = [], startMode = "auto";
+let data = [], lastChange = 0, signature = "", picked = null, KNOBS = [], COSTS = [], startMode = "auto";
 let view = { "#history": "history", "#rules": "rules" }[location.hash] || "live";
 const cards = new Map();  // a running world's controls, kept between polls so a drag is never interrupted
 
@@ -463,8 +463,6 @@ function message(title, detail) {
 // The world card's sliders in groups: each of Auto's knobs named in exactly one (every cost is a knob, 2026-11-26).
 const KNOB_GROUPS = [
   ["Food", ["max_food", "food_energy", "food_per_step", "fruit_rate"]],
-  ["Costs", ["move_cost", "step_cost", "sprint_power", "eat_miss", "attack_cost", "attack_damage", "bump_cost",
-             "vision_cost", "hearing_cost", "neuron_cost", "stealth_cost", "armour_cost"]],
   ["Life", ["lifespan"]],
 ];
 
@@ -552,7 +550,49 @@ function makeCard(run) {
   }
   const hunters = card.querySelector("[data-hunters]");
   hunters.addEventListener("change", () => change("hunters", hunters.checked));
+  COST_SLIDERS(card, state);
   return state;
+}
+
+// The costs: the owner's sliders in Auto and Manual alike, never Auto's. Each is a rule of the world (also on the
+// Rules page): a drag sends it as a rule change, and the world takes it within a second.
+const COST_SLIDERS = (card, state) => {
+  const group = document.createElement("div");
+  group.className = "knob-group";
+  group.innerHTML = "<h4>Costs <small>(yours: Auto never turns them)</small></h4>";
+  card.querySelector(".knobs").append(group);
+  for (const cost of COSTS) {
+    const row = document.createElement("div");
+    row.className = "knob";
+    row.dataset.cost = cost.name;
+    row.innerHTML = `<label for="${state.run.name}-${cost.name}">${cost.label}</label><output></output>
+      <input type="range" id="${state.run.name}-${cost.name}" min="${cost.low}" max="${cost.high}" step="${cost.step}">
+      <small><span>${knobFmt(cost.low)} · free</span><span>dearest · ${knobFmt(cost.high)}</span></small>`;
+    const slider = row.querySelector("input"), shown = row.querySelector("output");
+    slider.addEventListener("pointerdown", () => { state.dragging = cost.name; });
+    slider.addEventListener("input", () => { shown.textContent = knobFmt(+slider.value); });
+    slider.addEventListener("change", async () => {
+      state.dragging = null;
+      const name = cost.name, value = +slider.value;
+      state.pending[name] = { value, until: Date.now() + 5000 };
+      await send("/control", { run: state.run.name, rules: { [name]: value } }).catch(() => {});
+    });
+    group.append(row);
+  }
+};
+
+function updateCosts(state) {  // each cost slider shows its world's rule (or the value just dragged, until it lands)
+  const rules = (state.now && state.now.rules) || {};
+  state.card.querySelectorAll(".knob[data-cost]").forEach((row) => {
+    const name = row.dataset.cost, slider = row.querySelector("input");
+    if (state.dragging === name) return;
+    const pending = state.pending[name], fromWorld = rules[name];
+    if (pending && (Date.now() > pending.until || fromWorld === pending.value)) delete state.pending[name];
+    const value = state.pending[name] ? state.pending[name].value : fromWorld;
+    if (value === undefined) return;
+    slider.value = value;
+    row.querySelector("output").textContent = knobFmt(value);
+  });
 }
 
 // A knob's ends in its world: its rules `knob.<name>.easy` and `.hard` (the owner's to change), today's until known.
@@ -598,6 +638,7 @@ function updateCard(state) {
   });
   const hunters = card.querySelector("[data-hunters]");
   hunters.checked = shownValue("hunters", last ? !!last.hunters : false, (a, b) => a === b);
+  updateCosts(state);
 }
 
 function drawWorlds(running) {
@@ -1456,10 +1497,6 @@ document.addEventListener("mouseover", (event) => {  // every number explains it
 // ---- Rules: every cost, value and gene of the running world, each changeable at once ----
 const RULE_GROUPS = { costs: "energy a creature pays (a bite of food gives 1)", knobs: "how far each slider and Auto may go; the world takes a change within a second", genes: "new limits apply to babies born from now on",
                       exam: "changing the exam makes older scores incomparable" };
-const AUTO_COSTS = [
-  ["step_cost", "Being alive, each step, × size", "Energy it pays every step just for being alive. A bigger creature pays more."],
-  ["move_cost", "Moving, per unit of distance, × size", "Energy it pays for each unit it moves. A bigger creature pays more."],
-];
 const NEXT_WORLD = "(the next new world)";  // what the Rules page shows while nothing runs
 const numberText = (v) => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : String(Number(v.toPrecision(4)));
 
@@ -1525,12 +1562,7 @@ async function drawRules() {
   ruleNow = { sizes: genes && genes.size ? [genes.size[0], genes.size[2]] : null, genes,
               values: Object.fromEntries(answer.rules.map((r) => [r.name, r.value])) };
   const last = (run && lastRow(run)) || {};
-  const autoCosts = !run ? [] : AUTO_COSTS.map(([name, words, means]) => {  // Auto's knobs belong to a running world
-    const knob = KNOBS.find((k) => k.name === name);
-    return { name, words, means, knob: true, value: last[name] ?? knob.start, start: knob.start,
-             low: Math.min(knob.easiest, knob.hardest), high: Math.max(knob.easiest, knob.hardest) };
-  });
-  const rules = [...autoCosts, ...answer.rules];
+  const rules = answer.rules;  // the costs among them (group Costs): the owner's, never Auto's
   if (page.dataset.run === which) {  // already drawn: only the values and the examples move, never the box being typed in
     for (const rule of rules) {
       const input = page.querySelector(`input[data-rule="${rule.name}"]`);
@@ -1657,7 +1689,7 @@ async function poll() {
 }
 
 (async () => {
-  try { KNOBS = (await (await fetch("/knobs")).json()).knobs; } catch (error) { KNOBS = []; }
+  try { ({ knobs: KNOBS, costs: COSTS } = await (await fetch("/knobs")).json()); } catch (error) { KNOBS = []; COSTS = []; }
   render();
   await poll();
   setInterval(poll, 2000);

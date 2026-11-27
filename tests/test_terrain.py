@@ -97,7 +97,7 @@ class TestObstacles(unittest.TestCase):
         free = add(w, 5.0, 5.0, size=1.0)
         free_before = free.energy
         free.apply_action(("MOVE", (0.0, 0.0)), w)
-        self.assertAlmostEqual(before - c.energy, (free_before - free.energy) + w.settings.bump_cost)
+        self.assertAlmostEqual(before - c.energy, (free_before - free.energy) + w.rules["bump_cost"])
 
     def test_an_obstacle_hides_what_is_behind_it(self):
         w = walled(make_world())

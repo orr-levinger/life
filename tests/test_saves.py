@@ -171,8 +171,8 @@ class TestSaves(unittest.TestCase):
             arrays["about"] = np.array(json.dumps(about))
             np.savez_compressed(path, **arrays)
             loaded, dial, _ = load_world(path, learner_seed=0)
-        self.assertEqual((loaded.settings.eat_miss, dial.settings.eat_miss), (0.7, 0.7))
-        self.assertEqual((loaded.settings.sprint_power, loaded.settings.bump_cost), (2.0, 0.5))  # today's
+        self.assertEqual((loaded.rules["eat_miss"], dial.rules["eat_miss"]), (0.7, 0.7))
+        self.assertEqual((loaded.rules["sprint_power"], loaded.rules["bump_cost"]), (2.0, 0.5))  # today's
 
     def test_an_old_save_gets_the_rules_added_since(self):  # a rule born after the save starts at its start value
         world = make_world(seed=4)

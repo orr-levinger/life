@@ -125,13 +125,13 @@ class Creature:
         """Its speed's share for its armour: 1 - armour × the armour slowness."""
         return 1.0 - self.armour * self.rules["armour_slow"]
 
-    def attack_damage(self, settings: Any) -> float:
-        """What its hit takes, by the world's knob: × its size, more for a meat eater."""
-        return self.size * settings.attack_damage * (1.0 + self.diet * self.rules["diet_bite"])
+    def attack_damage(self, world: Any) -> float:
+        """What its hit takes, by the world's cost: × its size, more for a meat eater."""
+        return self.size * world.cost("attack_damage") * (1.0 + self.diet * self.rules["diet_bite"])
 
-    def attack_cost(self, settings: Any) -> float:
-        """What an attack costs it, by the world's knob: × its size."""
-        return self.size * settings.attack_cost
+    def attack_cost(self, world: Any) -> float:
+        """What an attack costs it, by the world's cost: × its size."""
+        return self.size * world.cost("attack_cost")
 
     def can_reach(self, food: Food) -> bool:
         """The one eat-range rule: close enough to take a bite."""
@@ -171,11 +171,12 @@ class Creature:
             self._call(*param, world)
         else:
             raise ValueError(f"unknown action {kind!r}")
-        living = (world.settings.step_cost * self.size ** self.rules["living_power"]  # a bigger body pays more, less than its size
-                  * (1.0 + self.stealth * world.settings.stealth_cost)  # and stealth costs
-                  * (1.0 + self.armour * world.settings.armour_cost)  # and armour costs
-                  + world.settings.vision_cost * self.vision_area() + world.settings.hearing_cost * self.hearing_area()
-                  + world.settings.neuron_cost * self.neurons) * self._home_factor(world)  # and each neuron; by where it is
+        cost = world.cost
+        living = (cost("step_cost") * self.size ** self.rules["living_power"]  # a bigger body pays more, less than its size
+                  * (1.0 + self.stealth * cost("stealth_cost"))  # and stealth costs
+                  * (1.0 + self.armour * cost("armour_cost"))  # and armour costs
+                  + cost("vision_cost") * self.vision_area() + cost("hearing_cost") * self.hearing_area()
+                  + cost("neuron_cost") * self.neurons) * self._home_factor(world)  # and each neuron; by where it is
         self.energy = min(self.energy - living, self.max_energy)
         self._spend(living, world)
 
@@ -205,8 +206,8 @@ class Creature:
     def _eat(self, food: Optional[Food], world: World) -> None:
         """The creature chose to eat: one bite of `food` if it is still there and within reach, otherwise a miss."""
         if food is None or food not in world.foods or food.energy <= 0 or not self.can_reach(food):
-            self.energy -= world.settings.eat_miss
-            self._spend(world.settings.eat_miss, world)
+            self.energy -= world.cost("eat_miss")
+            self._spend(world.cost("eat_miss"), world)
             self.last_action = "EAT_MISS"
             return
         amount = min(self.rules["bite"], food.energy)
@@ -235,14 +236,14 @@ class Creature:
             self.facing = facing  # it faces the way it moved, even when an obstacle stops it
         if distance > 0 and world.terrain.blocked(to, self.radius, swims=self.water > 0):  # it runs into an obstacle: it stays, and it hurts
             self.bumped = True
-            self.energy -= world.settings.bump_cost
-            self._spend(world.settings.bump_cost, world)
+            self.energy -= world.cost("bump_cost")
+            self._spend(world.cost("bump_cost"), world)
             self.last_action = "MOVE"
             return
         self.p = to
         self.moved = distance > 0  # a step that went somewhere makes a sound
-        sprint = max(1.0, distance / max(cruise, 1e-9)) ** world.settings.sprint_power  # faster than cruising costs more
-        cost = distance * world.settings.move_cost * self.size * sprint * home  # a bigger body pays more to move
+        sprint = max(1.0, distance / max(cruise, 1e-9)) ** world.cost("sprint_power")  # faster than cruising costs more
+        cost = distance * world.cost("move_cost") * self.size * sprint * home  # a bigger body pays more to move
         self.energy -= cost
         self._spend(cost, world)
         self.last_action = "MOVE"
@@ -251,14 +252,14 @@ class Creature:
         if not world.settings.attacks:
             self.last_action = "ATTACK_OFF"
             return
-        self.energy -= self.attack_cost(world.settings)
-        self._spend(self.attack_cost(world.settings), world)
+        self.energy -= self.attack_cost(world)
+        self._spend(self.attack_cost(world), world)
         reach = (self.radius + target.radius) * self.rules["reach"]
         if (target not in world.creatures or target.energy <= 0
                 or float(arc(self.p, target.p, world.radius)) > reach):
             self.last_action = "ATTACK_MISS"
             return
-        taken = min(target.energy, self.attack_damage(world.settings) * (1.0 - target.armour * self.rules["armour_strength"]))
+        taken = min(target.energy, self.attack_damage(world) * (1.0 - target.armour * self.rules["armour_strength"]))
         target.energy -= taken
         ahead, left = bearing(target.p, target.facing, self.p)  # in the one hit's own view: where the hitter stands
         target.hurt = (taken / target.max_energy, float(ahead), float(left))

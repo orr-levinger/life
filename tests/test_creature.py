@@ -11,7 +11,7 @@ class TestCostsAreKnobs(unittest.TestCase):
         paid = {}
         for power in (0.0, 1.0, 2.0):
             w = make_world()
-            w.settings = replace(w.settings, move_cost=1.0, sprint_power=power, **FREE)
+            w.rules.update(move_cost=1.0, sprint_power=power, **FREE)
             c = add(w, 0.0, 0.0, size=1.0, energy=50.0)
             c.apply_action(("MOVE", (1.0, 0.0)), w)  # flat out
             top, cruise = c.top_speed, c.velocity
@@ -22,11 +22,11 @@ class TestCostsAreKnobs(unittest.TestCase):
 
     def test_living_costs_are_the_worlds_knobs(self):
         w = make_world()
-        w.settings = replace(w.settings, **{**FREE, "step_cost": 0.3, "neuron_cost": 0.0})
+        w.rules.update(**{**FREE, "step_cost": 0.3, "neuron_cost": 0.0})
         c = add(w, 0.0, 0.0, size=1.0, energy=50.0)
         c.apply_action(("MOVE", (0.0, 0.0)), w)  # standing still: only living costs
-        self.assertAlmostEqual(50.0 - c.energy, 0.3 * (1.0 + c.stealth * w.settings.stealth_cost)
-                               * (1.0 + c.armour * w.settings.armour_cost))
+        self.assertAlmostEqual(50.0 - c.energy, 0.3 * (1.0 + c.stealth * w.rules["stealth_cost"])
+                               * (1.0 + c.armour * w.rules["armour_cost"]))
 
 
 if __name__ == "__main__":

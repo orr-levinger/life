@@ -51,6 +51,7 @@ class World:
             learner.rules = self.rules  # learning's numbers are the world's rules
         self.rules["planet_radius"] = float(radius)
         self.settings = settings  # how hard survival is right now; the dial changes it
+        self.grown = 1.0  # how far it has grown into its costs (a new planet starts at a tenth: src/evolve.py)
         self.level = 0  # how many of the dial's nudges are in force
         self.species = species
         self.rng = rng  # decisions, placement and size mutation
@@ -85,6 +86,10 @@ class World:
     def radius(self) -> float:
         """Its planet's radius: distances along the ground are angles × this."""
         return self.rules["planet_radius"]
+
+    def cost(self, name: str) -> float:
+        """What `name` costs in this world now: its rule × how far the world has grown into its costs."""
+        return self.rules[name] * self.grown
 
     def change_rules(self, changes: Rules) -> None:
         """The owner's rule changes, at once (a running planet keeps its own size)."""

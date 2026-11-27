@@ -163,8 +163,8 @@ class Scoreboard:
             "max_food": settings.max_food,
             "food_energy": sum(settings.food_energy) / 2,
             "food_per_step": settings.food_per_step,
-            "move_cost": settings.move_cost,
-            "step_cost": settings.step_cost,
+            "move_cost": world.cost("move_cost"),  # the costs paid now (the world's rules, grown into)
+            "step_cost": world.cost("step_cost"),
             "lifespan": sum(settings.lifespan) / 2,
             "hunters": int(settings.attacks),
             "manual": int(manual),
@@ -179,16 +179,9 @@ class Scoreboard:
             "neurons": _mean([c.neurons for c in world.creatures if c.layers]),  # learners: the ones whose brains grow
             "layers": _mean([c.layers for c in world.creatures if c.layers]),
             "fruit_rate": settings.fruit_rate,
-            "sprint_power": settings.sprint_power,
-            "eat_miss": settings.eat_miss,
-            "attack_cost": settings.attack_cost,
-            "attack_damage": settings.attack_damage,
-            "bump_cost": settings.bump_cost,
-            "vision_cost": settings.vision_cost,
-            "hearing_cost": settings.hearing_cost,
-            "neuron_cost": settings.neuron_cost,
-            "stealth_cost": settings.stealth_cost,
-            "armour_cost": settings.armour_cost,
+            **{name: world.cost(name) for name in ("sprint_power", "eat_miss", "attack_cost", "attack_damage",
+                                                    "bump_cost", "vision_cost", "hearing_cost", "neuron_cost",
+                                                    "stealth_cost", "armour_cost")},
         }
         self._clear_samples()
         self._seen = now

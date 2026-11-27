@@ -20,17 +20,17 @@
 
 **Files:** Modify `src/rules.py` (the twelve cost rules in Costs, `grow_up_generations`; the cost knob ends go),
 `src/dial.py` (`KNOBS` the five), `src/settings.py` (the cost fields go), `src/creature.py` and `src/world.py` (a
-world's cost: its rule × its grown-up share), `src/viewer.py` and `src/viewer.html` (no cost sliders),
+world's cost: its rule × its grown-up share), `src/viewer.py` (the cost labels leave `KNOB_LABELS`),
 `src/scoreboard.py` (the cost columns keep the costs paid now), `src/viewer.html` (the card's Costs sliders post rule
 changes in either mode, ends from the rule's range); Test `tests/test_costs.py` (new), `tests/test_dial.py`,
 `tests/test_rules.py`, `tests/test_viewer.py`, and the tests that set a cost through settings (they set the rule).
 
-- [ ] Step 1: tests first: `test_the_costs_are_rules_with_these_values`, `test_auto_turns_only_food_and_lifespan`,
+- [x] Step 1: tests first: `test_the_costs_are_rules_with_these_values`, `test_auto_turns_only_food_and_lifespan`,
   `test_the_card_turns_the_costs_as_rules` (its Costs sliders post `rules`, in Auto too),
   `test_a_cost_change_reaches_the_running_world`. Run → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_costs tests.test_dial tests.test_rules tests.test_viewer
+- [x] Step 2: the changes. Run `python -m unittest tests.test_costs tests.test_dial tests.test_rules tests.test_viewer
   tests.test_creature tests.test_water` → OK.
-- [ ] Step 3: commit "Costs are fixed rules; Auto turns only food and lifespan".
+- [x] Step 3: commit "Costs are fixed rules; Auto turns only food and lifespan".
 
 ### Task 2: Growing up, old saves, the exam
 

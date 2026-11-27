@@ -259,10 +259,11 @@ class TestControlRoom(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("at most", answer["error"])
 
-    def test_an_old_next_world_rule_that_is_now_a_knob_is_dropped(self):  # eat_miss is a knob now (2026-11-26)
-        (self.root / "next_world.json").write_text(json.dumps({"rules": {"eat_miss": 0.5, "tank": 120.0}}))
+    def test_an_old_next_world_rule_that_is_gone_is_dropped(self):  # a cost's knob end went (2026-11-27)
+        (self.root / "next_world.json").write_text(json.dumps({"rules": {"knob.eat_miss.easy": 0.5, "eat_miss": 0.15,
+                                                                         "tank": 120.0}}))
         status, answer = self.server.post("/next-rules", {"rules": {"tank": 130.0}})
-        self.assertEqual((status, answer["rules"]), (200, {"tank": 130.0}))
+        self.assertEqual((status, answer["rules"]), (200, {"eat_miss": 0.15, "tank": 130.0}))  # a cost is a rule again
 
     def test_a_new_world_starts_on_the_next_worlds_rules(self):
         self.server.post("/next-rules", {"rules": {"first_creatures": 12}})
@@ -711,14 +712,26 @@ class TestControlRoom(unittest.TestCase):
         with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
             self.assertIn("export function markCanvas(", response.read().decode("utf-8"))  # the legend shows the same marks
 
-    def test_world_card_has_every_cost(self):  # every cost a knob, in the Costs group (2026-11-26)
+    def test_the_card_turns_the_costs_as_rules(self):  # the owner's, in Auto and Manual alike (2026-11-27)
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
-        self.assertIn('["Costs", ["move_cost", "step_cost", "sprint_power", "eat_miss", "attack_cost", "attack_damage", '
-                      '"bump_cost",', page)
-        labels = {k["name"]: k["label"] for k in self.server.get("/knobs")["knobs"]}
-        self.assertEqual((labels["vision_cost"][:14], labels["hearing_cost"][:15], labels["sprint_power"][:17]),
-                         ("Cost of seeing", "Cost of hearing", "Cost of sprinting"))
+        for words in ("const COST_SLIDERS", "rules: { [name]: "):
+            self.assertIn(words, page)
+        name = self.running_world()  # in Auto
+        status, _ = self.server.post("/control", {"run": name, "rules": {"move_cost": 1.0}})
+        self.assertEqual(status, 200)
+        self.assertEqual(read_control(self.root / name).rules, {"move_cost": 1.0})
+        self.assertEqual(self.server.post("/control", {"run": name, "rules": {"move_cost": 9.0}})[0], 400)  # above its max
+
+    def test_world_card_has_every_cost(self):  # the owner's cost sliders, never Auto's (2026-11-27)
+        answer = self.server.get("/knobs")
+        self.assertNotIn("move_cost", {k["name"] for k in answer["knobs"]})  # not Auto's knobs
+        costs = {c["name"]: c for c in answer["costs"]}
+        self.assertEqual(set(costs), {"move_cost", "step_cost", "sprint_power", "eat_miss", "attack_cost", "attack_damage",
+                                      "bump_cost", "vision_cost", "hearing_cost", "neuron_cost", "stealth_cost",
+                                      "armour_cost"})
+        self.assertEqual((costs["vision_cost"]["label"][:14], costs["step_cost"]["low"], costs["step_cost"]["high"]),
+                         ("Cost of seeing", 0.0, 0.30000000000000004))
 
     def test_page_lets_the_owner_change_a_creatures_genes(self):
         with urllib.request.urlopen(self.server.base + "/") as response:

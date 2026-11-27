@@ -80,8 +80,8 @@ class TestRules(unittest.TestCase):
         self.assertIsNone(check(rules, "knob.fruit_rate.easy", 5.0))
         self.assertIn("easy end", check(rules, "knob.fruit_rate.easy", 0.001))  # less fruit than the hard end
         self.assertIn("easy end", check(rules, "knob.fruit_rate.hard", 2.0))
-        self.assertIn("easy end", check(rules, "knob.move_cost.hard", 0.0))  # a cost's hard end above its easy end
-        self.assertIsNone(check(rules, "knob.move_cost.easy", 0.2))
+        self.assertIn("easy end", check(rules, "knob.lifespan.hard", 20000.0))  # a shorter life is the harder end
+        self.assertIsNone(check(rules, "knob.lifespan.easy", 9000.0))
 
     def test_every_rule_and_gene_says_what_it_means(self):
         from src.rules import GENE_MEANS, means
@@ -140,7 +140,7 @@ class TestRules(unittest.TestCase):
     def test_the_world_reads_its_rules(self):
         w = make_world()
         c = add(w, 10, 10)
-        w.settings = replace(w.settings, eat_miss=1.0)  # a cost: the world's knob
+        w.rules.update(eat_miss=1.0)  # a cost: the world's knob
         before = c.energy
         c.apply_action(("EAT", None), w)  # nothing within reach
         self.assertAlmostEqual(before - c.energy, 1.0 + LIVING)

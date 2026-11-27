@@ -8,14 +8,14 @@ import numpy as np
 
 from src.senses import perceived, sense
 from src.settings import START
-from tests.helpers import at, face, NO_FOOD, add, make_world
+from tests.helpers import TODAY_COSTS, at, face, NO_FOOD, add, make_world
 
 SIZES = (0.5, 1.0, 2.0)
 
 
 def quiet(world):
     """No price for senses, neurons or a missed bite: only the body's own living cost is left."""
-    world.settings = replace(world.settings, vision_cost=0.0, hearing_cost=0.0, neuron_cost=0.0, eat_miss=0.0)
+    world.rules.update(vision_cost=0.0, hearing_cost=0.0, neuron_cost=0.0, eat_miss=0.0)
     return world
 
 
@@ -32,7 +32,7 @@ class TestSizeCurves(unittest.TestCase):
         for size in SIZES:
             c = add(w, 10, 10, size=size, energy=20.0)  # within even the smallest tank
             c.apply_action(("EAT", None), w)
-            self.assertAlmostEqual(20.0 - c.energy, NO_FOOD.step_cost * size ** w.rules["living_power"])
+            self.assertAlmostEqual(20.0 - c.energy, TODAY_COSTS["step_cost"] * size ** w.rules["living_power"])
         self.assertEqual(w.rules["living_power"], 0.75)
 
     def test_a_bigger_body_cruises_slower(self):

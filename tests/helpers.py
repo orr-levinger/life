@@ -8,7 +8,7 @@ import numpy as np
 
 from src.brain import Brain
 from src.creature import Creature
-from src.rules import rule, starting_rules
+from src.rules import TODAY_COSTS, rule, starting_rules
 from src.sphere import exp_map, local_frame
 from src.settings import START, TODAY_SENSES, Settings
 from src.world import World
@@ -46,26 +46,25 @@ def face(creature: Creature, fx: float, fy: float) -> None:
     creature.facing = d / np.linalg.norm(d)
 
 
-TODAY_COSTS = dict(move_cost=0.5, step_cost=0.05, **{f.name: f.default for f in fields(Settings)
-                                                     if f.default is not MISSING})  # every cost at today's value
-NO_FOOD = replace(START, max_food=0, food_per_step=0, **TODAY_COSTS)  # hand-made worlds: nothing to eat, today's costs
+NO_FOOD = replace(START, max_food=0, food_per_step=0)  # hand-made worlds: nothing to eat (and today's costs: make_world)
 NO_FOOD_ATTACKS = replace(NO_FOOD, attacks=True)
 WIDTH, REACH, HEARING = TODAY_SENSES
-SENSES = (NO_FOOD.vision_cost * WIDTH / 360.0 * math.pi * REACH ** 2  # the senses at the start knobs
-          + NO_FOOD.hearing_cost * math.pi * HEARING ** 2)  # a step of today's senses
-LIVING = NO_FOOD.step_cost + SENSES  # a step alive, size 1, today's senses
+SENSES = (TODAY_COSTS["vision_cost"] * WIDTH / 360.0 * math.pi * REACH ** 2  # today's senses at today's costs
+          + TODAY_COSTS["hearing_cost"] * math.pi * HEARING ** 2)
+LIVING = TODAY_COSTS["step_cost"] + SENSES  # a step alive, size 1, today's senses
 
 
 def living(size: float) -> float:
     """A step alive for a body of `size` with today's senses: a bigger body pays more, less than its size."""
-    return NO_FOOD.step_cost * size ** rule("living_power").start + SENSES
+    return TODAY_COSTS["step_cost"] * size ** rule("living_power").start + SENSES
 
 
 def make_world(settings: Settings = NO_FOOD, seed: int = 0, evolving: bool = True, learner=None,
                species: str = "brain", inherit: str = "learned") -> World:
     return World(TEST_RADIUS, settings, species, random.Random(seed), np.random.default_rng(seed),
                  random.Random(seed + 1000), evolving, learner, inherit,
-                 rules={**starting_rules(), **SMALL_WORLD, "planet_radius": TEST_RADIUS})  # hand-placed tests: a flat map
+                 rules={**starting_rules(), **SMALL_WORLD, **TODAY_COSTS,  # hand-placed tests: today's costs,
+                        "planet_radius": TEST_RADIUS})  # a flat map
 
 
 def fixed_brain(outputs: Sequence[float]) -> Brain:

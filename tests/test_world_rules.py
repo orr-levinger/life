@@ -13,8 +13,8 @@ from src.learner import LEARNING_RATE, Learner, NetWeights
 from src.rules import ROOM_SLOTS as MAX_CREATURES, gene_limits, rule, starting_rules
 from src.settings import START
 from src.sphere import arc
-from tests.helpers import face, at, LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
-BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, NO_FOOD.eat_miss  # eating at nothing: the start knob
+from tests.helpers import TODAY_COSTS, face, at, LIVING, NO_FOOD, NO_FOOD_ATTACKS, add, fixed_brain, living, make_world, populate
+BABY_SHARE, EAT_MISS_COST = rule("baby_share").start, TODAY_COSTS["eat_miss"]  # eating at nothing: the start knob
 from tests.test_learner import live, same
 
 STAY = [0, 0, -1, -1]
@@ -45,7 +45,7 @@ class TestCosts(unittest.TestCase):
         c.apply_action(("MOVE", (3.0, 4.0)), w)
         self.assertAlmostEqual(float(arc(start, c.p, w.radius)), 0.8)  # at most its top speed, 0.8 a step for size 1
         np.testing.assert_allclose(c.p * w.radius, at(10.48, 10.64) * w.radius, atol=1e-6)  # 3 ahead : 4 left
-        sprint = 0.8 * NO_FOOD.move_cost * (0.8 / 0.25) ** 2  # faster than cruising costs the square of the speed
+        sprint = 0.8 * TODAY_COSTS["move_cost"] * (0.8 / 0.25) ** 2  # faster than cruising costs the square of the speed
         self.assertAlmostEqual(c.energy, 50.0 - sprint - LIVING)
 
     def test_sprinting_is_faster_than_cruising_at_every_size(self):
@@ -86,15 +86,15 @@ class TestCosts(unittest.TestCase):
         w = make_world()
         c = add(w, 10, 10, size=1.0)
         c.apply_action(("MOVE", (0.2, 0.0)), w)
-        self.assertAlmostEqual(c.energy, 50.0 - 0.2 * NO_FOOD.move_cost - LIVING)
+        self.assertAlmostEqual(c.energy, 50.0 - 0.2 * TODAY_COSTS["move_cost"] - LIVING)
 
     def test_sprinting_costs_the_square_of_the_speed(self):
         w = make_world()
         c = add(w, 10, 10, size=2.0, energy=150.0)
         c.apply_action(("MOVE", (c.top_speed, 0.0)), w)
-        cost = c.top_speed * NO_FOOD.move_cost * (c.top_speed / c.velocity) ** 2
+        cost = c.top_speed * TODAY_COSTS["move_cost"] * (c.top_speed / c.velocity) ** 2
         self.assertAlmostEqual(c.energy, 150.0 - 2.0 * cost - living(2.0))  # a size-2 body pays twice
-        self.assertGreater(cost / (c.top_speed * NO_FOOD.move_cost), 20)  # far more than cruising
+        self.assertGreater(cost / (c.top_speed * TODAY_COSTS["move_cost"]), 20)  # far more than cruising
 
     def test_a_big_sprinter_catches_a_small_cruiser(self):
         w = make_world()
@@ -113,53 +113,53 @@ class TestCosts(unittest.TestCase):
 
 class TestSenseGenes(unittest.TestCase):
     def test_senses_cost_by_area(self):
-        SENSE_COST = NO_FOOD.vision_cost
+        SENSE_COST = TODAY_COSTS["vision_cost"]
         w = make_world()
         today = add(w, 10, 10)
         today.vision_width, today.vision_reach, today.hearing = 360.0, 3.0, 0.0
         before = today.energy
         today.apply_action(("MOVE", (0.0, 0.0)), w)
-        self.assertAlmostEqual(before - today.energy, NO_FOOD.step_cost + 0.05, places=4)  # today's senses: 0.05
+        self.assertAlmostEqual(before - today.energy, TODAY_COSTS["step_cost"] + 0.05, places=4)  # today's senses: 0.05
         sharp = add(w, 20, 10)
         sharp.vision_width, sharp.vision_reach, sharp.hearing = 90.0, 6.0, 2.0
         before = sharp.energy
         sharp.apply_action(("MOVE", (0.0, 0.0)), w)
         area = 90.0 / 360.0 * math.pi * 36.0 + math.pi * 4.0
-        self.assertAlmostEqual(before - sharp.energy, NO_FOOD.step_cost + SENSE_COST * area)
+        self.assertAlmostEqual(before - sharp.energy, TODAY_COSTS["step_cost"] + SENSE_COST * area)
 
     def test_a_bigger_body_pays_more_to_live_and_move(self):
         w = make_world()
         small, big = add(w, 10, 10, size=1.0), add(w, 20, 10, size=2.0, energy=150.0)
         for c in (small, big):
             c.vision_width, c.vision_reach, c.hearing = 30.0, 1.0, 0.0
-        senses = lambda c: w.settings.vision_cost * c.sense_area()
+        senses = lambda c: w.rules["vision_cost"] * c.sense_area()
         spent = []
         for c in (small, big):
             before = c.energy
             c.apply_action(("MOVE", (0.1, 0.0)), w)
             spent.append(before - c.energy - senses(c))
-        self.assertAlmostEqual(spent[0], NO_FOOD.step_cost * 1.0 + 0.1 * NO_FOOD.move_cost * 1.0)
-        self.assertAlmostEqual(spent[1], NO_FOOD.step_cost * 2.0 ** w.rules["living_power"]  # more, less than twice
-                               + 0.1 * NO_FOOD.move_cost * 2.0)  # moving: twice
+        self.assertAlmostEqual(spent[0], TODAY_COSTS["step_cost"] * 1.0 + 0.1 * TODAY_COSTS["move_cost"] * 1.0)
+        self.assertAlmostEqual(spent[1], TODAY_COSTS["step_cost"] * 2.0 ** w.rules["living_power"]  # more, less than twice
+                               + 0.1 * TODAY_COSTS["move_cost"] * 2.0)  # moving: twice
 
     def test_vision_and_hearing_are_priced_apart(self):
         w = make_world()
         c = add(w, 10, 10)
         c.vision_width, c.vision_reach, c.hearing = 90.0, 4.0, 2.0
-        w.settings = replace(w.settings, vision_cost=0.0, hearing_cost=0.01)
+        w.rules.update(vision_cost=0.0, hearing_cost=0.01)
         before = c.energy
         c.apply_action(("MOVE", (0.0, 0.0)), w)
-        self.assertAlmostEqual(before - c.energy, NO_FOOD.step_cost + 0.01 * math.pi * 2.0 ** 2)  # hearing alone
+        self.assertAlmostEqual(before - c.energy, TODAY_COSTS["step_cost"] + 0.01 * math.pi * 2.0 ** 2)  # hearing alone
 
     def test_the_sprint_power_is_a_rule(self):
         w = make_world()
         c = add(w, 10, 10, size=1.0)
         c.vision_width, c.vision_reach, c.hearing = 30.0, 1.0, 0.0
-        w.settings = replace(w.settings, sprint_power=1.0)
+        w.rules.update(sprint_power=1.0)
         before = c.energy
         c.apply_action(("MOVE", (0.4, 0.0)), w)
-        sprint = 0.4 * NO_FOOD.move_cost * (0.4 / 0.25) ** 1.0
-        self.assertAlmostEqual(before - c.energy, NO_FOOD.step_cost + sprint + w.settings.vision_cost * c.sense_area())
+        sprint = 0.4 * TODAY_COSTS["move_cost"] * (0.4 / 0.25) ** 1.0
+        self.assertAlmostEqual(before - c.energy, TODAY_COSTS["step_cost"] + sprint + w.rules["vision_cost"] * c.sense_area())
 
     def test_a_baby_changes_one_gene(self):
         genes = ("size", "vision_width", "vision_reach", "hearing", "fear_of_death", "love_of_babies", "learns_from_others",
@@ -243,8 +243,8 @@ class TestSenseGenes(unittest.TestCase):
             before = c.energy
             c.apply_action(("MOVE", (0.0, 0.0)), w)
             spent.append(before - c.energy)
-        self.assertAlmostEqual(spent[1] - spent[0], 32 * w.settings.neuron_cost)
-        self.assertEqual(w.settings.neuron_cost, 0.0005)
+        self.assertAlmostEqual(spent[1] - spent[0], 32 * w.rules["neuron_cost"])
+        self.assertEqual(w.rules["neuron_cost"], 0.0005)
 
     def test_babies_inherit_senses_in_the_limits(self):
         limits = lambda gene: (rule(f"gene.{gene}.low").start, rule(f"gene.{gene}.high").start)
@@ -287,7 +287,7 @@ class TestEating(unittest.TestCase):
         self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 2 * LIVING)
         mover = add(w, 20, 5, size=1.0)
         mover.apply_action(("MOVE", (3.0, 4.0)), w)
-        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * LIVING + 0.8 * NO_FOOD.move_cost * (0.8 / 0.25) ** NO_FOOD.sprint_power)  # a full sprint
+        self.assertAlmostEqual(w.energy_spent, EAT_MISS_COST + 3 * LIVING + 0.8 * TODAY_COSTS["move_cost"] * (0.8 / 0.25) ** TODAY_COSTS["sprint_power"])  # a full sprint
 
     def test_each_creature_counts_its_own_energy(self):
         w = make_world()

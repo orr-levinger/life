@@ -102,29 +102,6 @@ class TestStep(unittest.TestCase):
 
 
 class TestDial(unittest.TestCase):
-    def test_every_cost_is_a_knob(self):  # the owner, 2026-11-26: anything that costs, Auto can turn, from 0
-        import math
-        seeing = 0.05 / (math.pi * 3.0 ** 2)
-        today = {"move_cost": (0.5, 3.0), "step_cost": (0.05, 0.5), "sprint_power": (2.0, 4.0), "eat_miss": (0.2, 2.0),
-                 "attack_cost": (1.0, 5.0), "attack_damage": (5.0, 25.0), "bump_cost": (0.5, 3.0),
-                 "vision_cost": (seeing, 10 * seeing), "hearing_cost": (seeing, 10 * seeing),
-                 "neuron_cost": (0.0005, 0.005), "stealth_cost": (0.3, 3.0), "armour_cost": (0.3, 3.0)}
-        knobs = {k.name: k for k in KNOBS}
-        for name, (now, hardest) in today.items():
-            self.assertEqual(knobs[name].easiest, 0.0, name)
-            self.assertAlmostEqual(knobs[name].hardest, hardest, msg=name)
-            self.assertAlmostEqual(getattr(START, name), now / 10.0, msg=name)  # a new world: a tenth of today's
-            default = Settings.__dataclass_fields__[name].default
-            if name not in ("move_cost", "step_cost"):  # every save holds those two; the others default to today's
-                self.assertAlmostEqual(default, now, msg=name)
-
-    def test_auto_lifts_a_cost_from_zero(self):
-        dial = Dial(with_value(START, "eat_miss", 0.0))
-        self.assertTrue(math.isfinite(dial.level))
-        dial._next_harder = [k.name for k in KNOBS].index("eat_miss")
-        dial.review(*EASY)  # one harder nudge
-        self.assertAlmostEqual(dial.settings.eat_miss, 0.01 * 2.0)  # 1 % of its range
-
     def test_a_nudge_is_at_least_a_hundredth_of_the_range(self):
         knob = knob_named("max_food")
         small, large = with_value(START, "max_food", 30.0), with_value(START, "max_food", 700.0)
@@ -219,9 +196,9 @@ class TestDial(unittest.TestCase):
         self.assertAlmostEqual(fruit.nudged(0.002, 0.05, False, 0.01), 0.002 + 0.01 * (5.0 - 0.002))
 
     def test_difficulty_does_not_move_with_the_ends(self):  # counted on today's ends: the line never jumps
-        settings = replace(START, fruit_rate=0.5, move_cost=0.3)
+        settings = replace(START, fruit_rate=0.5, lifespan=(2000.0, 3000.0))
         a, b = Dial(settings), Dial(settings)
-        b.rules = {**RULES, "knob.fruit_rate.easy": 5.0, "knob.move_cost.hard": 30.0}
+        b.rules = {**RULES, "knob.fruit_rate.easy": 5.0, "knob.lifespan.hard": 300.0}
         self.assertEqual(a.level, b.level)
 
     def test_a_knob_outside_narrower_ends_comes_inside(self):
@@ -241,7 +218,7 @@ class TestDial(unittest.TestCase):
 
     def test_difficulty_counts_the_nudges(self):
         dial = Dial()
-        for n in range(1, 13):
+        for n in range(1, 6):  # one nudge on each of Auto's five knobs, none at its end yet
             dial.review(*EASY)
             self.assertAlmostEqual(difficulty(dial.settings, 0.05), n)
         self.assertAlmostEqual(difficulty(replace(START, attacks=True), 0.05), 1.0)

@@ -8,19 +8,20 @@ import numpy as np
 
 from src.food import Food
 from src.sphere import arc
-from tests.helpers import NO_FOOD, NO_FOOD_ATTACKS, add, at, make_world
+from tests.helpers import TODAY_COSTS, NO_FOOD, NO_FOOD_ATTACKS, add, at, make_world
 
 
 def quiet(world):
     """Nothing costs anything but moving: only what a move takes is left."""
-    world.settings = replace(world.settings, step_cost=0.0)
-    world.settings = replace(world.settings, vision_cost=0.0, hearing_cost=0.0, neuron_cost=0.0)
+    world.rules.update(step_cost=0.0)
+    world.rules.update(vision_cost=0.0, hearing_cost=0.0, neuron_cost=0.0)
     return world
 
 
 class TestOnSphere(unittest.TestCase):
     def test_a_creature_walks_straight_around_the_planet(self):
-        w = quiet(make_world(replace(NO_FOOD, move_cost=0.0)))
+        w = quiet(make_world(NO_FOOD))
+        w.rules["move_cost"] = 0.0
         w.rules["planet_radius"] = 37.0
         c = add(w, 0.0, 0.0, energy=50.0)
         start, way = c.p.copy(), 2 * math.pi * 37.0
@@ -36,7 +37,7 @@ class TestOnSphere(unittest.TestCase):
         start = c.p.copy()
         c.apply_action(("MOVE", (0.2, 0.0)), w)
         self.assertAlmostEqual(float(arc(start, c.p, w.radius)), 0.2)
-        self.assertAlmostEqual(50.0 - c.energy, 0.2 * NO_FOOD.move_cost * c.size)
+        self.assertAlmostEqual(50.0 - c.energy, 0.2 * TODAY_COSTS["move_cost"] * c.size)
         self.assertTrue(c.moved)
 
     def test_reach_is_measured_along_the_ground(self):

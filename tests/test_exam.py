@@ -12,7 +12,7 @@ from src.rules import starting_rules
 
 RULES = starting_rules()
 TEST_WORLD = exam_settings(RULES)
-from tests.helpers import LIVING, NO_FOOD, fixed_brain
+from tests.helpers import TODAY_COSTS, LIVING, NO_FOOD, fixed_brain
 
 EAT = [0, 0, 1, -1]
 
@@ -23,14 +23,17 @@ def brains(n: int, seed: int = 0):
 
 
 class TestExam(unittest.TestCase):
-    def test_the_exam_pays_todays_costs(self):  # the living world's cost knobs never reach the exam
+    def test_the_exam_pays_todays_costs(self):  # the living world's costs never reach the exam
         import math
-        exam = exam_settings(starting_rules())
+        from src.exam import _exam_world
+        changed = {**starting_rules(), "eat_miss": 0.25, "attack_damage": 20.0}  # the owner turned the living world's
+        world = _exam_world("random", [None], [1.0], 0, changed)
         today = {"sprint_power": 2.0, "eat_miss": 0.2, "attack_cost": 1.0, "attack_damage": 5.0, "bump_cost": 0.5,
                  "vision_cost": 0.05 / (math.pi * 9.0), "hearing_cost": 0.05 / (math.pi * 9.0), "neuron_cost": 0.0005,
-                 "stealth_cost": 0.3, "armour_cost": 0.3}
+                 "stealth_cost": 0.3, "armour_cost": 0.3, "move_cost": changed["exam_move_cost"],
+                 "step_cost": changed["exam_step_cost"]}
         for name, now in today.items():
-            self.assertAlmostEqual(getattr(exam, name), now, msg=name)
+            self.assertAlmostEqual(world.cost(name), now, msg=name)
 
     def test_the_exam_planet_stays_as_it_was(self):
         from src.exam import _exam_world
@@ -70,7 +73,7 @@ class TestExam(unittest.TestCase):
         for _ in range(10):
             with_brains.step()
         self.assertEqual(with_brains.energy_earned, 0.0)
-        self.assertAlmostEqual(with_brains.energy_spent, 2 * 10 * (0.2 + TEST_WORLD.step_cost + LIVING - NO_FOOD.step_cost))
+        self.assertAlmostEqual(with_brains.energy_spent, 2 * 10 * (0.2 + RULES["exam_step_cost"] + LIVING - TODAY_COSTS["step_cost"]))
 
     def test_wanderers_are_measured_beside_the_brains(self):
         result = run_exam(brains(6), [1.0] * 6, seed=3, rules={**RULES, "exam_steps": 200})

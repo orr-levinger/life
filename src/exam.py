@@ -16,7 +16,7 @@ import numpy as np
 from .brain import Brain
 from .creature import Creature, full_tank
 from .sphere import random_point
-from .rules import Rules, starting_rules
+from .rules import TODAY_COSTS, Rules, starting_rules
 from .settings import Settings
 from .world import World
 
@@ -29,8 +29,12 @@ EXAM_BODIES = {"tank_power": 1.0, "living_power": 1.0, "speed_power": 1.0, "life
 def exam_settings(rules: Rules) -> Settings:
     """The exam's own world, from the rules: always the same unless the owner changes it on the Rules page."""
     return Settings(fruit_rate=0.0, max_food=rules["exam_max_food"], food_energy=(rules["exam_food_energy_low"], rules["exam_food_energy_high"]),
-                    food_per_step=rules["exam_food_per_step"], move_cost=rules["exam_move_cost"],
-                    step_cost=rules["exam_step_cost"], lifespan=(4000.0, 6000.0), attacks=False)
+                    food_per_step=rules["exam_food_per_step"], lifespan=(4000.0, 6000.0), attacks=False)
+
+
+def exam_costs(rules: Rules) -> Rules:
+    """The exam world's costs: as they were before 2026-11-27, moving and living its own rules'."""
+    return {**TODAY_COSTS, "move_cost": rules["exam_move_cost"], "step_cost": rules["exam_step_cost"]}
 
 
 @dataclass(frozen=True)
@@ -50,7 +54,7 @@ def _exam_world(policy: str, brains: Sequence[Any], sizes: Sequence[float], seed
         for weights in brains:  # a fresh learner hands out slots 0, 1, 2 … in order
             learner.allocate(weights, lr=0.0)
     exam_rules = {**starting_rules(), "planet_radius": rules["exam_radius"],
-                  **EXAM_BODIES}  # its own small planet, and bodies as they were: the test stays the same
+                  **EXAM_BODIES, **exam_costs(rules)}  # its own small planet, bodies and costs as they were: the test stays
     world = World(exam_rules["planet_radius"], exam_settings(rules), policy,
                   random.Random(seed + 2), np.random.default_rng(seed), random.Random(seed + 1), evolving=False,
                   learner=learner, rules=exam_rules)

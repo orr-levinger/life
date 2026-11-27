@@ -756,7 +756,7 @@ class TestControlRoom(unittest.TestCase):
         costs = {c["name"]: c for c in answer["costs"]}
         self.assertEqual(set(costs), {"move_cost", "step_cost", "sprint_power", "eat_miss", "attack_cost", "attack_damage",
                                       "bump_cost", "vision_cost", "hearing_cost", "neuron_cost", "stealth_cost",
-                                      "armour_cost"})
+                                      "armour_cost", "pixel_cost"})
         self.assertEqual((costs["vision_cost"]["label"][:14], costs["step_cost"]["low"], costs["step_cost"]["high"]),
                          ("Cost of seeing", 0.0, 0.1))  # from 0 to nature
 

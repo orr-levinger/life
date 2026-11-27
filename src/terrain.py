@@ -181,11 +181,35 @@ class Terrain:
             return far, ahead, left
         spread = np.minimum(np.arccos(np.clip(half[look], -1.0, 1.0)), ALL_AROUND)
         angles = spread[:, None] * np.linspace(-1.0, 1.0, RAYS)[None, :]
-        p, f = points[look], facing[look]
+        hit = self._rays(points[look], facing[look], reach[look], start[look], angles)
+        rows = np.arange(len(look))
+        best = np.argmin(hit, axis=1)
+        nearest = hit[rows, best]
+        got = np.isfinite(nearest)
+        chosen = angles[rows, best][got]
+        far[look[got]], ahead[look[got]], left[look[got]] = nearest[got], np.cos(chosen), np.sin(chosen)
+        return far, ahead, left
+
+    def water_rays(self, points: np.ndarray, facing: np.ndarray, reach: np.ndarray, angles: np.ndarray) -> np.ndarray:
+        """[looker, line]: how far the water is along each sight line (its angle, left of facing; nan: no line), inf
+        when none within its reach, 0 when it stands in it."""
+        out = np.full(angles.shape, np.inf)
+        if self.water is None or not len(points):
+            return out
+        start = self.water.distance_to_water(points)
+        out[start == 0.0] = 0.0
+        look = np.nonzero((start > 0.0) & (start <= reach))[0]
+        if len(look):
+            out[look] = self._rays(points[look], facing[look], reach[look], start[look], angles[look])
+        return out
+
+    def _rays(self, p: np.ndarray, f: np.ndarray, reach: np.ndarray, start: np.ndarray, angles: np.ndarray) -> np.ndarray:
+        """[looker, line]: water along sight lines at `angles` (nan: none), each going on by the distance to the nearest
+        water there (at least `RAY_STEP`), from `start` (no water nearer) to its reach."""
         way = f[:, None, :] * np.cos(angles)[..., None] + cross(p, f)[:, None, :] * np.sin(angles)[..., None]
         p = np.broadcast_to(p[:, None, :], way.shape)
-        t = np.repeat(start[look][:, None], RAYS, axis=1)
-        limit = np.repeat(reach[look][:, None], RAYS, axis=1)
+        t = np.repeat(start[:, None], angles.shape[1], axis=1)
+        limit = np.where(np.isnan(angles), -1.0, np.repeat(reach[:, None], angles.shape[1], axis=1))
         hit = np.full(t.shape, np.inf)
         line, ray = np.nonzero(t <= limit)
         while len(line):
@@ -197,13 +221,7 @@ class Terrain:
             t[line, ray] += np.maximum(d, RAY_STEP)
             on = ~wet & (t[line, ray] <= limit[line, ray])
             line, ray = line[on], ray[on]
-        rows = np.arange(len(look))
-        best = np.argmin(hit, axis=1)
-        nearest = hit[rows, best]
-        got = np.isfinite(nearest)
-        chosen = angles[rows, best][got]
-        far[look[got]], ahead[look[got]], left[look[got]] = nearest[got], np.cos(chosen), np.sin(chosen)
-        return far, ahead, left
+        return hit
 
     def under_tree(self, points: np.ndarray) -> np.ndarray:
         """Whether each point is under a tree's crown."""

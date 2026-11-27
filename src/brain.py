@@ -5,8 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
-N_SENSES = 84  # the numbers the senses hand a brain each step (src/senses.py): 47, then the seen one's 18 genes, then
-# the hitter's distance and 18 genes (2026-11-27)
+N_SENSES = 196  # the numbers the senses hand a brain each step (src/senses.py): 47, then the seen one's 18 genes, the
+# hitter's distance and 18 genes, then the eye's 16 pixels × 6 and the ears' 8 directions × 2 (2026-11-27)
 
 
 def jitter(values: np.ndarray, rng: np.random.Generator, rate: float, scale: float) -> np.ndarray:

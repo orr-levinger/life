@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 import numpy as np
 
 from .brain import N_SENSES
-from .creature import SEEN_GENES, Creature, genes_seen, genes_table, similarity  # noqa: F401 (genes_seen: the tests')
+from .creature import SEEN_GENES, Creature, genes_seen, genes_table, kin_genes, similarity  # noqa: F401 (genes_seen: the tests')
 from .sphere import arc, bearing, neighbours
 
 if TYPE_CHECKING:
@@ -25,6 +25,12 @@ WATER_SEEN = 46  # the nearest obstacle in its field of vision is a pond
 CALL_INPUTS = 27  # where the heard call starts: its kind (10), how loud (1), from where (2), the voice (4)
 GENES_AT = 47  # the nearest one it sees: its 18 genes (SEEN_GENES), 0-1 each
 HITTER_AT = GENES_AT + len(SEEN_GENES)  # the one that hit it, for one step: its distance ÷ vision reach, then its genes
+EYE_PIXELS, EYE_CHANNELS = 16, 6  # the eye: a row of pixels from its left edge of vision to its right, each: a creature's
+# closeness, its size against its own, how much of a hunter, how alike; food's closeness; a rock's or water's closeness
+EYE_AT = HITTER_AT + 1 + len(SEEN_GENES)
+EAR_DIRECTIONS = 8  # the ears: ahead, ahead-left, left, behind-left, behind, behind-right, right, ahead-right; each:
+# how loud the movers are that way, how loud the calls are
+EARS_AT = EYE_AT + EYE_PIXELS * EYE_CHANNELS
 EVERY_PAIR = False  # True: every pair measured, the slow way (the tests' yardstick for the k-d tree)
 
 
@@ -72,6 +78,9 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
     sheltered = world.terrain.under_tree(me.p)
     walls, water_ahead = _obstacles_seen(me, world)
     calls = _calls_heard(me, world)
+    eyes = _eye_pixels(me, world, creatures, everyone, seen, other_d,
+                       (food_seen, food_d, food_p) if foods else None)
+    ears = _ears(me, world, everyone, stranger, moved, other_d, other_p, heard_from)
     shown = np.nonzero(seen.any(axis=1))[0]  # the genes of every one that is someone's nearest seen, worked out once
     seen_ones = sorted(set(nearest_seen[shown].tolist()))
     genes = dict(zip(seen_ones, genes_table([everyone[j] for j in seen_ones], world)))
@@ -90,6 +99,8 @@ def sense_all(world: Any, creatures: Optional[Sequence[Creature]] = None) -> Lis
         vector[WATER_SEEN] = water_ahead[i]
         if other is not None:
             vector[GENES_AT:GENES_AT + len(SEEN_GENES)] = genes[nearest_seen[i]]
+        vector[EYE_AT:EARS_AT] = eyes[i].ravel()
+        vector[EARS_AT:EARS_AT + EAR_DIRECTIONS * 2] = ears[i].ravel()
         if creature.hurt is not None and len(creature.hurt) > 3:  # who hit it, and how far (a save of before: unknown)
             vector[HITTER_AT] = creature.hurt[3] / max(creature.vision_reach, 1e-9)
             vector[HITTER_AT + 1:HITTER_AT + 1 + len(SEEN_GENES)] = creature.hurt[4:]
@@ -124,6 +135,116 @@ def _calls_heard(me: '_Eyes', world: Any) -> np.ndarray:
         out[i, N_CALLS] = loud[i, j]
         out[i, N_CALLS + 1:N_CALLS + 3] = bearing(me.p[i], me.f[i], where[j])
         out[i, N_CALLS + 3:] = voice(caller, world.rules)
+    return out
+
+
+def _angles(me: '_Eyes', rows: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """How far left of its facing each point is, in its own view (radians, -pi to pi), for lookers `rows`."""
+    ahead, left = bearing(me.p[rows], me.f[rows], points)
+    return np.arctan2(left, ahead)
+
+
+def _nearest_per_slice(rows: np.ndarray, slices: np.ndarray, distance: np.ndarray) -> np.ndarray:
+    """The positions of the nearest item of each (looker, slice) among these pairs."""
+    if not len(rows):
+        return np.zeros(0, dtype=int)
+    order = np.lexsort((distance, slices, rows))
+    first = np.ones(len(order), dtype=bool)
+    first[1:] = (rows[order][1:] != rows[order][:-1]) | (slices[order][1:] != slices[order][:-1])
+    return order[first]
+
+
+def _eye_pixels(me: '_Eyes', world: Any, creatures: Sequence[Creature], everyone: Sequence[Creature],
+                seen: np.ndarray, other_d: np.ndarray, food: Optional[tuple]) -> np.ndarray:
+    """[looker, pixel, channel]: what each looker's eye shows (see EYE_PIXELS). Its field of vision is cut into its
+    `eye_pixels` slices; each slice shows the nearest of each kind of thing in it and fills its share of the 16 pixels."""
+    n = len(creatures)
+    sharp = np.clip(np.array([c.eye_pixels for c in creatures], dtype=int), 1, EYE_PIXELS)
+    half = np.where(me.all_around, math.pi, np.arccos(np.clip(me.half, -1.0, 1.0)))
+    slices = np.zeros((n, EYE_PIXELS, EYE_CHANNELS))
+
+    def slice_of(rows: np.ndarray, angle: np.ndarray) -> np.ndarray:
+        share = np.clip((half[rows] - angle) / (2.0 * half[rows]), 0.0, 1.0 - 1e-9)  # 0 at its left edge, 1 at its right
+        return np.floor(share * sharp[rows]).astype(int)
+
+    def closeness(distance: np.ndarray, rows: np.ndarray) -> np.ndarray:
+        return np.clip(1.0 - distance / np.maximum(me.reach[rows], 1e-9), 0.0, 1.0)
+
+    rows, cols = np.nonzero(seen)  # creatures: the nearest of each slice, with its size, diet and likeness
+    if len(rows):
+        where = np.stack([everyone[j].p for j in cols])
+        cut = slice_of(rows, _angles(me, rows, where))
+        pick = _nearest_per_slice(rows, cut, other_d[rows, cols])
+        r, s, j = rows[pick], cut[pick], cols[pick]
+        sizes = np.array([c.size for c in everyone])
+        mine = np.array([c.size for c in creatures])
+        slices[r, s, 0] = closeness(other_d[r, j], r)
+        slices[r, s, 1] = (np.clip(np.log2(sizes[j] / mine[r]), -1.0, 1.0) + 1.0) / 2.0
+        slices[r, s, 2] = np.array([c.diet for c in everyone])[j]
+        slices[r, s, 3] = _alike(creatures, everyone, r, j, world.rules)
+    if food is not None:  # food: the nearest of each slice
+        food_seen, food_d, food_p = food
+        rows, cols = np.nonzero(food_seen)
+        if len(rows):
+            cut = slice_of(rows, _angles(me, rows, food_p[cols]))
+            pick = _nearest_per_slice(rows, cut, food_d[rows, cols])
+            slices[rows[pick], cut[pick], 4] = closeness(food_d[rows[pick], cols[pick]], rows[pick])
+    near = np.full((n, EYE_PIXELS), np.inf)  # rocks and water: the nearest edge in each slice
+    if world.terrain.obstacles:
+        edge, centres = world.terrain.nearest_edges(me.p, me.reach)
+        rows, cols = np.nonzero(edge <= me.reach[:, None])
+        if len(rows):
+            cut = slice_of(rows, _angles(me, rows, centres[cols]))
+            inside = edge[rows, cols] == 0.0
+            angle_ok = me.all_around[rows] | inside | (np.abs(_angles(me, rows, centres[cols])) <= half[rows])
+            rows, cols, cut = rows[angle_ok], cols[angle_ok], cut[angle_ok]
+            np.minimum.at(near, (rows, cut), edge[rows, cols])
+    if world.terrain.water is not None:  # one sight line through the middle of each real slice
+        k = np.arange(EYE_PIXELS)[None, :]
+        middles = half[:, None] - (k + 0.5) / sharp[:, None] * 2.0 * half[:, None]
+        angles = np.where(k < sharp[:, None], middles, np.nan)
+        near = np.minimum(near, world.terrain.water_rays(me.p, me.f, me.reach, angles))
+    slices[:, :, 5] = np.where(np.isfinite(near), np.clip(1.0 - near / np.maximum(me.reach, 1e-9)[:, None], 0.0, 1.0), 0.0)
+    pixel = (np.arange(EYE_PIXELS)[None, :] * sharp[:, None]) // EYE_PIXELS  # each pixel's slice
+    return np.take_along_axis(slices, pixel[:, :, None], axis=1)
+
+
+def _alike(creatures: Sequence[Creature], everyone: Sequence[Creature], rows: np.ndarray, cols: np.ndarray,
+           rules: Any) -> np.ndarray:
+    """How alike each looker (rows) and creature (cols) are (as `similarity`), for these pairs at once."""
+    genes = kin_genes(rules)
+    if not genes:
+        return np.ones(len(rows))
+    span = np.array([rules[f"gene.{g}.high"] - rules[f"gene.{g}.low"] for g in genes])
+    a = np.array([[getattr(c, g) for g in genes] for c in creatures])[rows]
+    b = np.array([[getattr(c, g) for g in genes] for c in everyone])[cols]
+    return 1.0 - np.mean(np.abs(a - b) / span, axis=1)
+
+
+def _ears(me: '_Eyes', world: Any, everyone: Sequence[Creature], stranger: np.ndarray, moved: np.ndarray,
+          other_d: np.ndarray, other_p: np.ndarray, heard_from: np.ndarray) -> np.ndarray:
+    """[listener, direction, 2]: how loud the movers and the calls are from each of its 8 directions (the loudest:
+    1 at it, 0 where it stops being heard)."""
+    out = np.zeros((len(me.p), EAR_DIRECTIONS, 2))
+
+    def direction(rows: np.ndarray, points: np.ndarray) -> np.ndarray:
+        return np.round(_angles(me, rows, points) / (2.0 * math.pi / EAR_DIRECTIONS)).astype(int) % EAR_DIRECTIONS
+
+    carry = me.hearing[:, None] * heard_from[None, :]
+    rows, cols = np.nonzero(stranger & moved[None, :] & (other_d <= carry) & (carry > 0))
+    if len(rows):
+        loud = 1.0 - other_d[rows, cols] / carry[rows, cols]
+        np.maximum.at(out[:, :, 0], (rows, direction(rows, other_p[cols])), loud)
+    calls = getattr(world, "calls", [])
+    if calls:
+        where = np.stack([np.asarray(c.p, dtype=float) for c, _, _ in calls])
+        carries = np.array([volume for _, _, volume in calls]) * world.rules["call_reach"]
+        distance = me.distance(where, np.full(len(me.p), carries.max()))
+        own = me.ids[:, None] == np.array([c.id for c, _, _ in calls])[None, :]
+        rows, cols = np.nonzero((distance <= carries[None, :]) & ~own & (carries[None, :] > 0))
+        if len(rows):
+            loud = 1.0 - distance[rows, cols] / carries[cols]
+            np.maximum.at(out[:, :, 1], (rows, direction(rows, where[cols])), loud)
     return out
 
 

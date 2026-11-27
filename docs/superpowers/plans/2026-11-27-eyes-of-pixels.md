@@ -29,15 +29,15 @@ Test `tests/test_eyes.py` (new).
 **Files:** Modify `src/brain.py` (`N_SENSES` 196), `src/senses.py` (`_eye_pixels`, `_ears` from the pairs already
 measured; water by one ray per real slice); Test `tests/test_eyes.py`.
 
-- [ ] Step 1: before: the senses and the brains' choices timed on one half-size world state (the script of
+- [x] Step 1: before: the senses and the brains' choices timed on one half-size world state (the script of
   2026-11-27).
-- [ ] Step 2: tests first: `test_kin_food_and_a_hunter_land_in_their_pixels`, `test_a_blurry_eye_sees_blocks`,
+- [x] Step 2: tests first: `test_kin_food_and_a_hunter_land_in_their_pixels`, `test_a_blurry_eye_sees_blocks`,
   `test_a_rock_hides_from_the_pixels`, `test_a_mover_is_heard_from_its_direction`, `test_brains_of_before_act_the_same`.
   Run → FAIL.
-- [ ] Step 3: the changes. Run `python -m unittest tests.test_eyes tests.test_senses tests.test_learner tests.test_brain`
+- [x] Step 3: the changes. Run `python -m unittest tests.test_eyes tests.test_senses tests.test_learner tests.test_brain`
   → OK.
-- [ ] Step 4: after: the same timing; report both.
-- [ ] Step 5: `python scripts/run_tests.py` → OK under 300 s; commit "Eyes of pixels, ears of directions"; push to
+- [x] Step 4: after: the same timing; report both.
+- [x] Step 5: `python scripts/run_tests.py` → OK under 300 s; commit "Eyes of pixels, ears of directions"; push to
   `evolve-from-scratch`.
 
 ### Task 3: The Pixels view

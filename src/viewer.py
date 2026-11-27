@@ -26,7 +26,7 @@ from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run
                       settings_from, watch_speed_from, write_control, write_json)
 from .dial import KNOBS, value
 from .evolve import SPECIES
-from .saves import FLAT_WORLD, SAVE_FORMAT, SaveError, save_format, save_header, save_path, saves_of
+from .saves import FIRST_PLANET, FLAT_WORLD, SaveError, save_format, save_header, save_path, saves_of
 from .rules import GENE_MEANS, GROUPS, RULES, check, check_genes, means, starting_rules
 from .scoreboard import OLDER_LAYOUTS, ROW_KEYS, read_rows
 from .settings import START, Settings
@@ -305,7 +305,7 @@ class Controls:
             raise Refused(400, "update must be true or false")
         if update:  # the world saves and ends; then it goes on from that save with today's code, in the same run
             saved = saves_of(folder)
-            if saved and 0 < save_format(save_path(folder, saved[-1])) < SAVE_FORMAT:
+            if saved and 0 < save_format(save_path(folder, saved[-1])) < FIRST_PLANET:
                 raise Refused(409, f"{name}: {FLAT_WORLD} (it keeps running on the code it started with)")
             stop, paused = True, False
         write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused, hunters, rules, edit))

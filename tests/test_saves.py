@@ -210,6 +210,40 @@ class TestSaves(unittest.TestCase):
             twin.step()
         self.assertEqual(picture(twin), picture(world))
 
+    def test_a_save_keeps_the_water(self):
+        world = make_world(replace(START, max_food=200), seed=25)
+        world.rules["planet_radius"] = 12.0
+        world.terrain = make_terrain(world.rules, random.Random(3), 12.0)
+        self.assertTrue(world.terrain.water.any_water())
+        populate(world, 10)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            twin, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual(twin.terrain.water.state(), world.terrain.water.state())
+        p = np.random.default_rng(1).normal(size=(5000, 3))
+        p /= np.linalg.norm(p, axis=1, keepdims=True)
+        np.testing.assert_array_equal(twin.terrain.water.is_water(p), world.terrain.water.is_water(p))
+
+    def test_a_planet_save_of_before_resumes(self):  # format 27: ponds as caps, no water of the planet
+        from src.terrain import Obstacle, Terrain
+        world = make_world(seed=26)
+        world.terrain = Terrain([Obstacle("pond", ((tuple(at(0.0, 0.0)), 3.0),))], [], world.radius)
+        populate(world, 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            with zipfile.ZipFile(path) as z:
+                arrays = {name[:-4]: np.load(z.open(name)) for name in z.namelist()}
+            about = json.loads(str(arrays["about"]))
+            about["format"] = 27
+            about.pop("water", None)
+            arrays["about"] = np.array(json.dumps(about))
+            np.savez(path, **arrays)
+            twin, _, _ = load_world(path, learner_seed=0)
+        self.assertIsNone(twin.terrain.water)
+        self.assertTrue(twin.terrain.in_pond(at(0.0, 0.0)))  # its pond is still its water
+
     def test_a_flat_save_is_refused_in_plain_words(self):
         world = make_world(seed=24)
         populate(world, 3)

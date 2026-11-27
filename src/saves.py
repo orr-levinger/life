@@ -27,10 +27,12 @@ from .dial import Dial, settings_from_state, settings_state
 from .food import Food
 from .rules import ROOM_SLOTS, starting_rules
 from .terrain import Terrain
+from .water import Water
 from .world import World
 
-SAVE_FORMAT = 27  # 27: the planet (points on a sphere, facings in the ground, caps); every older format held a
-# flat world (see the git history for formats 1-26)
+SAVE_FORMAT = 28  # 28: the planet's water (seas, islands, rivers); 27: the planet (points on a sphere, facings in the
+# ground, caps; its ponds are its water), still read; every older format held a flat world (git history: formats 1-26)
+FIRST_PLANET = 27  # a save before this format is a flat world
 FLAT_WORLD = "a flat world from before the sphere: it cannot be resumed"
 SAVES = "saves"  # the folder of a run's saves
 BRAIN_PARTS = ("w1", "b1", "w2", "b2")
@@ -69,6 +71,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
         "format": SAVE_FORMAT, "step": world.step_count, "species": world.species, "inherit": world.inherit,
         "rules": dict(world.rules), "settings": settings_state(world.settings), "level": world.level,
         "terrain": world.terrain.state(),
+        "water": None if world.terrain.water is None else world.terrain.water.state(),
         "dial": dial.state(),
         "counters": {"births": world.births, "newcomers": world.newcomers, "deaths": dict(world.deaths),
                      "total_bites": world.total_bites, "energy_earned": world.energy_earned,
@@ -112,9 +115,9 @@ def _read(path: Path) -> Dict[str, np.ndarray]:
         about = json.loads(str(arrays["about"]))
     except (OSError, ValueError, KeyError, zipfile.BadZipFile) as problem:
         raise SaveError(f"{path} cannot be read: {problem}") from problem
-    if isinstance(about.get("format"), int) and about["format"] < SAVE_FORMAT:
+    if isinstance(about.get("format"), int) and about["format"] < FIRST_PLANET:
         raise SaveError(f"{path}: {FLAT_WORLD}")
-    if about.get("format") != SAVE_FORMAT:
+    if about.get("format") not in (FIRST_PLANET, SAVE_FORMAT):
         raise SaveError(f"{path} is save format {about.get('format')}; this code reads format {SAVE_FORMAT}")
     arrays["about"] = about
     return arrays
@@ -186,7 +189,8 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.hurt = None if saved["hurt"] is None else tuple(saved["hurt"])
         world.add_creature(creature)
     world.foods = [_food(f) for f in about["foods"]]
-    world.terrain = Terrain.from_state(about["terrain"])
+    water = about.get("water")  # none in a format-27 save: its ponds are its water
+    world.terrain = Terrain.from_state(about["terrain"], None if water is None else Water.from_state(water))
     living = {c.id: c for c in world.creatures}
     world.calls = [(living.get(saved["id"]) or SimpleNamespace(p=np.array(saved["p"]), **{k: saved[k] for k in (
                         "id", "size", "diet", "water", "stealth")}),

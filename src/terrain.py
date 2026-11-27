@@ -230,9 +230,10 @@ class Terrain:
                 "trees": [{"p": list(t.p), "canopy": t.canopy} for t in self.trees]}
 
     @staticmethod
-    def from_state(state: Dict) -> Terrain:
+    def from_state(state: Dict, water: Optional[Water] = None) -> Terrain:
+        """The terrain of a save (its water is kept beside it: `Water.state`)."""
         return Terrain([Obstacle(o["kind"], tuple((tuple(c[:3]), c[3]) for c in o["caps"])) for o in state["obstacles"]],
-                       [Tree(tuple(t["p"]), t["canopy"]) for t in state["trees"]], state["radius"])
+                       [Tree(tuple(t["p"]), t["canopy"]) for t in state["trees"]], state["radius"], water=water)
 
 
 def _angle(p: np.ndarray, q: np.ndarray) -> np.ndarray:

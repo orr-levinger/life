@@ -605,6 +605,16 @@ class TestControlRoom(unittest.TestCase):
         self.assertIn(FLAT_WORLD, answer["error"])
         self.assertFalse(read_control(folder).stop)  # it keeps going
 
+    def test_a_planet_world_of_before_is_updated(self):  # its last save is format 27: a planet, not a flat world
+        import numpy as np
+        name = self.running_world()
+        folder = self.root / name
+        (folder / "saves").mkdir(exist_ok=True)
+        with open(folder / "saves" / "step-0000100.npz", "wb") as f:
+            np.savez(f, about=np.array(json.dumps({"format": 27, "step": 100, "extra": {"seed": 1, "kind": "learning"}})))
+        status, _ = self.server.post("/control", {"run": name, "update": True})
+        self.assertEqual(status, 200)
+
     def test_a_flat_save_is_not_resumed(self):
         from src.saves import FLAT_WORLD
         name = self.saved_world()

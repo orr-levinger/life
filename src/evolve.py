@@ -343,7 +343,7 @@ def _new_world(args: argparse.Namespace, rules: Dict[str, float]) -> Tuple[World
                   np.random.default_rng(args.seed), random.Random(args.seed + 1), learner=learner,
                   inherit=args.inherit)
     world.change_rules(rules)
-    world.terrain = make_terrain(world.rules, world.rng, world.radius)  # its rocks, ponds and trees
+    world.terrain = make_terrain(world.rules, world.rng, world.radius)  # its rocks, water (seas, islands, rivers), trees
     for _ in range(round(world.rules["first_creatures"])):
         world.add_newcomer()
     return world, dial

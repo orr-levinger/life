@@ -119,13 +119,17 @@ max(the map's distance there, 0.5) until water or its reach.
 ### Task 4: New planets and saves
 
 **Files:** Modify `src/evolve.py` (new world: `make_terrain` with water), `src/saves.py` (format 28 keeps the water;
-27 still resumes); Test `tests/test_saves.py`, `tests/test_evolve.py` (small world only).
+27 still resumes; `FIRST_PLANET = 27`: only a save before it is a flat world), `src/viewer.py` (Update code refuses only
+a flat world, `< FIRST_PLANET`: added with the owner on 2026-11-27, "Yes, add the fix", so the owner's running world of
+format 27 can still be updated); Test `tests/test_saves.py`, `tests/test_evolve.py` (small world only),
+`tests/test_viewer.py`.
 
-- [ ] Step 1: tests: `test_a_save_keeps_the_water` (save, resume: the same water); `test_a_planet_save_of_before_resumes`
+- [x] Step 1: tests: `test_a_save_keeps_the_water` (save, resume: the same water); `test_a_planet_save_of_before_resumes`
   (a format-27 save with ponds resumes, its ponds water); `test_a_new_planet_has_seas` (the small test world:
-  water share within 0.05 of its rule). Run → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_saves tests.test_evolve` → OK.
-- [ ] Step 3: commit "New planets have seas, islands and rivers; saves keep them".
+  water share within 0.05 of its rule); `test_a_planet_world_of_before_is_updated` (Update code on a world whose last
+  save is format 27 is not refused). Run → FAIL.
+- [x] Step 2: the changes. Run `python -m unittest tests.test_saves tests.test_evolve tests.test_viewer` → OK.
+- [x] Step 3: commit "New planets have seas, islands and rivers; saves keep them".
 
 ### Task 5: The page shows the water
 

@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import numpy as np
+
 from src import control as control_module
 from tests.helpers import SMALL_WORLD, small_world
 from src.control import Control, read_control, write_control
@@ -478,6 +480,14 @@ class TestNextWorldRules(unittest.TestCase):
         args = parse_args(["--seed", "1", "--species", "instinct", "--steps", "10"])
         world, _ = _new_world(args, {"first_creatures": 5.0, "planet_radius": 20.0})
         self.assertEqual((len(world.creatures), world.radius), (5, 20.0))
+
+    def test_a_new_planet_has_seas(self):
+        with small_world():
+            args = parse_args(["--seed", "1", "--species", "instinct", "--steps", "10"])
+            world, _ = _new_world(args, {})
+        p = np.random.default_rng(2).normal(size=(20_000, 3))
+        p /= np.linalg.norm(p, axis=1, keepdims=True)
+        self.assertAlmostEqual(float(world.terrain.water.is_water(p).mean()), world.rules["water_share"], delta=0.05)
 
     def test_a_new_world_has_the_starting_size(self):
         args = parse_args(["--seed", "1", "--species", "instinct", "--steps", "10"])

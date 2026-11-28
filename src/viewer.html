@@ -1728,8 +1728,9 @@ async function drawMake() {
   const alive = book.species.filter((s) => s.ended === null && s.now).sort((a, b) => (b.facts?.alive || 0) - (a.facts?.alive || 0));
   const gone = book.species.filter((s) => s.ended !== null && s.now);
   const from = document.getElementById("make-from");
-  from.innerHTML = [...alive.map((s) => `<option value="${s.id}">${speciesName(s.id)} (${s.facts?.alive || 0} alive)</option>`),
-    ...gone.map((s) => `<option value="${s.id}">${speciesName(s.id)} (extinct)</option>`)].join("")
+  const names = speciesNames(book);  // the running world's own tree (the Species page may show another)
+  from.innerHTML = [...alive.map((s) => `<option value="${s.id}">${names.get(s.id)} (${s.facts?.alive || 0} alive)</option>`),
+    ...gone.map((s) => `<option value="${s.id}">${names.get(s.id)} (extinct)</option>`)].join("")
     || "<option value=\"\">no species yet: the middle of each gene</option>";
   made = { run: run.name, limit, genes: {}, layers: 1, neurons: [] };
   from.onchange = () => {
@@ -1845,7 +1846,53 @@ document.addEventListener("keydown", (event) => { if (event.key === "Escape" && 
 // ---- The tree of species (src/species.py): the running world's, else the run picked in History, else the newest ----
 let speciesBook = null, speciesPicked = null;
 const speciesColour = (id) => `hsl(${(id * 137.508) % 360}, 55%, 55%)`;
-const speciesName = (id) => (id === 1 ? "first life" : `species ${id}`);
+// Latin names (the owner, 2026-11-28: "Latin"; "Names should be generated only when a new species is created"): a
+// species is named once, from its genes at its birth (`start`) against its parent's at its parent's birth. The first
+// word its body plan (eats(), lives(), its size); the other two the four genes it moved most in, two joined in each word.
+// Each gene is measured as a share of a fixed range (the world's starting ranges), so a name never changes.
+const NAME_GENES = [  // gene, its range, the root and word when it went up, the root and word when it went down
+  ["size", 0.5, 2, "gigant", "giganteus", "pumil", "pumilus"],
+  ["stealth", 0, 1, "occult", "occultus", "conspic", "conspicuus"],
+  ["armour", 0, 1, "loric", "loricatus", "nud", "nudus"],
+  ["vision_width", 30, 120, "circum", "circumspectus", "angust", "angustus"],
+  ["vision_reach", 1, 30, "ocul", "oculatus", "myop", "myops"],
+  ["hearing", 0, 4, "aur", "auritus", "surd", "surdus"],
+  ["calls", 0, 10, "voc", "vocalis", "tacit", "tacitus"],
+  ["kin", 0, 1, "collar", "collaris", "solit", "solitarius"],
+  ["fear", 0.1, 100, "spin", "spinosus", "aud", "audax"],
+  ["love", 0.1, 100, "pi", "pius", "incuri", "incuriosus"],
+  ["learns", 0.01, 1, "docil", "docilis", "indocil", "indocilis"],
+  ["learning_speed", 1e-5, 1e-2, "veloc", "velox", "lent", "lentus"],
+  ["mutations", 1, 13, "mutabil", "mutabilis", "const", "constans"],
+  ["mutation_size", 0.01, 0.2, "vari", "varius", "fidel", "fidelis"],
+  ["neurons", 1, 64, "cerebr", "cerebrosus", "simplic", "simplex"],
+  ["layers", 1, 3, "profund", "profundus", "plan", "planus"],
+];
+function speciesNames(book) {  // each species' Latin name, in the order they were born (a later one never renames an earlier)
+  const share = (gene, low, high, v) => (gene === "learning_speed"
+    ? (Math.log10(v) - Math.log10(low)) / (Math.log10(high) - Math.log10(low)) : (v - low) / (high - low));
+  const known = (g, gene) => g && g[gene] !== undefined && g[gene] !== null;
+  const roman = (n) => ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"][n] || String(n);
+  const join = (a, b) => (a && b ? a.root + (/^[aeiou]/.test(b.word) ? "" : "o") + b.word : a ? a.word : "");
+  const byId = new Map(book.species.map((s) => [s.id, s])), names = new Map(), given = new Map();
+  for (const s of [...book.species].sort((a, b) => a.id - b.id)) {
+    const g = s.start, from = s.parent === null ? null : (byId.get(s.parent) || {}).start;
+    if (!g) { names.set(s.id, "not yet named"); continue; }
+    const moved = NAME_GENES.filter(([gene]) => known(g, gene)).map(([gene, low, high, upRoot, upWord, downRoot, downWord]) => {
+      const by = share(gene, low, high, g[gene]) - (known(from, gene) ? share(gene, low, high, from[gene]) : 0.5);
+      return by >= 0 ? { by, root: upRoot, word: upWord } : { by: -by, root: downRoot, word: downWord };
+    }).sort((a, b) => b.by - a.by);  // the most moved first; ties keep the table's order
+    const start = { grazer: "Phyto", hunter: "Sarco" }[eats(g)] || "Panto", size = g.size ?? 1, where = lives(g);
+    const end = where === "water animal" ? (size < 1.2 ? "ichthys" : "cetus") : where === "both" ? "batrachus"
+      : size < 0.9 ? "mys" : size <= 1.4 ? "therium" : "saurus";
+    const name = [start + end, join(moved[0], moved[1]), join(moved[2], moved[3])].filter(Boolean).join(" ");
+    given.set(name, (given.get(name) || 0) + 1);
+    names.set(s.id, given.get(name) === 1 ? name : `${name} ${roman(given.get(name))}`);
+  }
+  return names;
+}
+let bookNames = new Map();  // the names of the tree on the Species page
+const speciesName = (id) => bookNames.get(id) ?? "not yet named";
 
 function eats(g) {  // what its guts make it: by which gut is bigger, and by how much
   const meat = g.meat_gut ?? 0, grass = g.grass_gut ?? 0;
@@ -1869,6 +1916,7 @@ async function drawSpecies() {
   const answer = await fetch(`/species?run=${encodeURIComponent(run.name)}`, { cache: "no-store" }).catch(() => null);
   if (!answer || !answer.ok) { tree.textContent = `${run.name}: no tree yet (it begins at the first chart point; a world started before species has none until it is updated).`; return; }
   speciesBook = await answer.json();
+  bookNames = speciesNames(speciesBook);
   const all = speciesBook.species, byId = new Map(all.map((s) => [s.id, s]));
   // The tree of life, as the owner's poster (2026-11-28): one root at the bottom, each species a circle holding its
   // body, branches fanning up from its parent; each daughter of the first life gives its branch a colour its own
@@ -1912,7 +1960,7 @@ async function drawSpecies() {
       `<circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--surface)" stroke="${home === "land animal" ? land : water}" stroke-width="4"/>` +
       (home === "both" ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${land}" stroke-width="4" stroke-dasharray="${around / 2} ${around / 2}"/>` : "") +
       (picture ? `<image href="${picture}" x="${cx - r}" y="${cy - r}" width="${2 * r}" height="${2 * r}" clip-path="url(#clip-${s.id})"/>` : "") +
-      `<text x="${cx}" y="${cy + r + 13}" font-size="11" text-anchor="middle" fill="currentColor">${speciesName(s.id)}${ended ? " †" : ""}</text>` +
+      `<text x="${cx}" y="${cy + r + 13}" font-size="11" text-anchor="middle" fill="currentColor" font-style="italic">${speciesName(s.id)}${ended ? " †" : ""}</text>` +
       `<text x="${cx}" y="${cy + r + 25}" font-size="10" text-anchor="middle" fill="var(--muted)">${home === "both" ? "land and water" : home.split(" ")[0]}</text></g>`;
   }
   svg += "</svg>";
@@ -1920,9 +1968,9 @@ async function drawSpecies() {
   tree.querySelectorAll(".node").forEach((node) => node.addEventListener("click", () => speciesCard(Number(node.dataset.species))));
   const alive = all.filter((s) => s.ended === null && s.facts);
   document.getElementById("species-table").innerHTML = "<tr><th></th><th>Species</th><th>Alive</th><th>Typical member</th><th>From</th></tr>" +
-    alive.map((s) => `<tr data-species="${s.id}"><td class="species-body"></td><td><span style="color:${speciesColour(s.id)}">■</span> ${speciesName(s.id)}</td>` +
+    alive.map((s) => `<tr data-species="${s.id}"><td class="species-body"></td><td><span style="color:${speciesColour(s.id)}">■</span> <i>${speciesName(s.id)}</i></td>` +
       `<td>${s.facts.alive}</td><td>${speciesWords(s.now)}${s.facts.in_water !== undefined ? `, ${inWater(s.facts)}` : ""}</td>` +
-      `<td>${s.parent === null ? "-" : speciesName(s.parent)}</td></tr>`).join("");
+      `<td>${s.parent === null ? "-" : `<i>${speciesName(s.parent)}</i>`}</td></tr>`).join("");
   document.querySelectorAll("#species-table tr[data-species]").forEach((tr) => {
     tr.addEventListener("click", () => speciesCard(Number(tr.dataset.species)));
     const s = byId.get(Number(tr.dataset.species));
@@ -1939,13 +1987,13 @@ function speciesCard(id) {
   if (!s) return;
   const g = s.now || {}, f = s.facts || {}, d = s.deaths || {}, n = (v, k = 2) => (v === null || v === undefined ? "-" : Number(v).toFixed(k));
   const range = (r, k = 2) => (r ? `${n(r[0], k)} · ${n(r[1], k)} · ${n(r[2], k)}` : "-");
-  const daughters = speciesBook.species.filter((x) => x.parent === id).map((x) => speciesName(x.id));
+  const daughters = speciesBook.species.filter((x) => x.parent === id).map((x) => `<i>${speciesName(x.id)}</i>`);
   const changed = s.start && s.now ? Object.keys(s.now).map((k) => [k, s.now[k] - s.start[k]])
     .filter(([, v]) => Math.abs(v) > 1e-9).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 4) : [];
   const facts = [
     ["alive", `${f.alive ?? 0} now, ${s.largest || 0} at most`],
     ["lived", `from step ${s.began.toLocaleString()}${s.ended !== null ? ` to step ${s.ended.toLocaleString()} (ended)` : " on"}`],
-    ["from", s.parent === null ? "the beginning" : speciesName(s.parent)],
+    ["from", s.parent === null ? "the beginning" : `<i>${speciesName(s.parent)}</i>`],
     ["gave rise to", daughters.length ? daughters.join(", ") : "none yet"],
     ["what it is", `${eats(g)} (grass gut ${n(g.grass_gut)}, meat gut ${n(g.meat_gut)}); ${lives(g) === "both" ? "lives on land and in water" : `a ${lives(g)}`} (gills ${n(g.gills)}, lungs ${n(g.lungs)})${inWater(f) ? `; ${inWater(f)}` : ""}`],
     ["how smart", `earns ${n(f.smart)} energy for each 1 it spends; steers to food it sees ${f.to_food === null || f.to_food === undefined ? "-" : Math.round(f.to_food * 100) + " %"} of its moves`],
@@ -1961,7 +2009,7 @@ function speciesCard(id) {
     ["deaths", `died of hunger ${d.hunger || 0}, hunted ${d.attack || 0}, old age ${d.age || 0}`],
     ["changed most", changed.length ? changed.map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${n(v)}`).join(", ") : "nothing yet"],
   ];
-  card.innerHTML = `<h2><span style="color:${speciesColour(id)}">■</span> ${speciesName(id)}${s.ended !== null ? " † (extinct)" : ""}</h2><dl>` +
+  card.innerHTML = `<h2><span style="color:${speciesColour(id)}">■</span> <i>${speciesName(id)}</i>${s.ended !== null ? " † (extinct)" : ""} <small>number ${id} in this world</small></h2><dl>` +
     facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("") + "</dl>";
   if (s.ended !== null && s.now) {  // the owner, 2026-11-28: "able to bring a instikt creature back"
     card.insertAdjacentHTML("beforeend", '<p><button type="button" class="act bring-back">Bring it back</button> ' +

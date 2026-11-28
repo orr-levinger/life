@@ -52,7 +52,7 @@ Test `tests/test_viewer.py`.
 
 **Interfaces:** `speciesNames(book: {species: [{id, parent, start}]}) → Map<number, string>`.
 
-- [ ] Step 1: tests first (`tests/test_viewer.py`):
+- [x] Step 1: tests first (`tests/test_viewer.py`):
   - `test_species_are_named_in_latin`: the page has `function speciesNames(` and `NAME_GENES` with 16 rows; the
     starts Phyto, Sarco, Panto and the six endings are in `speciesNames`; no "`species ${`" and no `"first life"` left
     in the page; the card says `number ${`.
@@ -67,11 +67,14 @@ Test `tests/test_viewer.py`.
       `Sarcoichthys solitomutabilis incuriopumilus`.
     The test fails loudly when `node` is missing (it is on this box: v24).
   Run `python -m unittest tests.test_viewer` → FAIL (no `speciesNames`).
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK.
-- [ ] Step 3: on a half-size check world: the tree, a card, "Alive now" and the Make list show Latin names in italics
+- [x] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK (103 tests).
+- [x] Step 3: on a half-size check world: the tree, a card, "Alive now" and the Make list show Latin names in italics
   (the list in plain text), the card "number N in this world"; screenshot; no new console error. Stop the world and
   the viewer; close the browser pane.
-- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "Species are named in Latin" (`git show --stat` →
+  Done 2026-11-28 on the 42-species check world resumed from step 4,424: for example *Pantobatrachus cerebrotacitus
+  constomyops* (first life) and *Phytoichthys cerebroprofundus circumoconspicuus* "number 3 in this world"; the Make
+  list the same names; console: only 404s of the tree asked for before the world's first chart point wrote it.
+- [x] Step 4: `python scripts/run_tests.py` → OK under 300 s (OK in 281.6 s); commit "Species are named in Latin" (`git show --stat` →
   `src/viewer.html`, `tests/test_viewer.py`, this plan); push to `evolve-from-scratch`.
 
 ## Must be completed to mark this as done

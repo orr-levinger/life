@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import subprocess
 import tempfile
 import threading
 import time
@@ -916,6 +918,47 @@ class TestControlRoom(unittest.TestCase):
         self.assertIn("const WATER_LIFT", planet)
         self.assertIn("SphereGeometry(R + WATER_LIFT", planet)
         self.assertGreaterEqual(planet.count("WATER_LIFT +"), 3)  # the hunger rings, the call rings, the follow ring
+
+    def test_species_are_named_in_latin(self):
+        """The owner, 2026-11-28: "Species 16 is a boring name ... Just not species number"; "Latin"."""
+        page, _ = self.page_files()
+        naming = self.function_of(page, "function speciesNames(")
+        for words in ("Phyto", "Sarco", "Panto", "mys", "therium", "saurus", "ichthys", "cetus", "batrachus", "eats(", "lives("):
+            self.assertIn(words, naming)
+        table = page.split("const NAME_GENES = [", 1)[1].split("];\n", 1)[0]
+        self.assertEqual(table.count("\n  ["), 16)  # one row per gene of the spec's table
+        self.assertNotIn("`species ${", page)
+        self.assertNotIn('"first life"', page)
+        self.assertIn("number ${", self.function_of(page, "function speciesCard("))
+
+    def test_the_names_of_a_small_tree(self):
+        """The names of a hand-made tree, worked out by the page's own functions (run in node)."""
+        page, _ = self.page_files()
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "node is needed to run the page's naming")  # on this box: node v24
+        code = "\n".join([
+            "function eats(" + self.function_of(page, "function eats(") + "\n}",
+            "function lives(" + self.function_of(page, "function lives(") + "\n}",
+            "const NAME_GENES = [" + page.split("const NAME_GENES = [", 1)[1].split("];\n", 1)[0] + "];",
+            "function speciesNames(" + self.function_of(page, "function speciesNames(") + "\n}",
+        ])
+        middle = {"size": 1.25, "stealth": 0.5, "armour": 0.5, "vision_width": 75, "vision_reach": 15.5, "hearing": 2,
+                  "calls": 5, "kin": 0.5, "fear": 50.05, "love": 50.05, "learns": 0.505,
+                  "learning_speed": 10 ** -3.5, "mutations": 7, "mutation_size": 0.105, "neurons": 32.5, "layers": 2}
+        first = {**middle, "grass_gut": 1, "meat_gut": 0, "gills": 0, "lungs": 1, "size": 1.0, "hearing": 3.6,
+                 "fear": 95, "neurons": 60, "learning_speed": 1e-5}
+        second = {**first, "meat_gut": 1, "grass_gut": 0, "size": 1.5, "armour": 1, "stealth": 0.9, "neurons": 20}
+        fourth = {**second, "gills": 1, "lungs": 0, "size": 1.0, "kin": 0, "mutations": 12, "love": 10}
+        book = {"species": [{"id": 1, "parent": None, "start": first}, {"id": 2, "parent": 1, "start": second},
+                            {"id": 3, "parent": 1, "start": second}, {"id": 4, "parent": 2, "start": fourth}]}
+        code += f"\nconsole.log(JSON.stringify([...speciesNames({json.dumps(book)}).entries()]));"
+        out = subprocess.run([node, "-e", code], capture_output=True, text=True, timeout=30)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(dict(json.loads(out.stdout)), {
+            1: "Phytotherium lentospinosus cerebrauritus",
+            2: "Sarcosaurus simplicoloricatus occultogiganteus",
+            3: "Sarcosaurus simplicoloricatus occultogiganteus II",
+            4: "Sarcoichthys solitomutabilis incuriopumilus"})
 
     def test_make_shows_the_body_big(self):
         """The owner, 2026-11-28: "the Make screen the view of the animal is too smal screen!", then, after the mockup,

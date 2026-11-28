@@ -4,7 +4,7 @@ Asked by the owner on 2026-11-28: "Species 16 is a boring name. The system shoul
 genes and use some common way to name animals… Just not species number." Then, choosing between Latin and English
 names: "Latin". Then: "Names should be generated only when a new species is created." Then, on two species that
 could share a name: "if we use few genes for the name, we need to add more genes for the name. We need to make it
-more complex."
+more complex." Then "Ok" to this design (2026-11-28).
 
 Nothing in the world changes: no rule, no save, no file the world writes. Only the page changes.
 

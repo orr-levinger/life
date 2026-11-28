@@ -89,7 +89,7 @@
   #make-page h2 { font-size: 15px; margin: 0 0 6px; } #make-page small { color: var(--muted); }
   #make-sliders { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 18px; font-size: 13px; }
   #make-sliders label { display: grid; grid-template-columns: 1fr auto; } #make-sliders input { grid-column: 1 / -1; width: 100%; }
-  #make-page canvas { display: block; margin: 6px auto; }
+  #make-page canvas { display: block; margin: 6px auto; width: 100%; max-width: 560px; height: auto; }
   #make-page select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
   #placing { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 13px; }
   #species-page { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 14px; align-items: start; }
@@ -211,9 +211,6 @@
 </section>
 <section id="rules-page" hidden></section>
 <section id="make-page" hidden>
-  <div class="panel"><h2>Make a creature <small>every gene, within this world's limits</small></h2>
-    <label>Start from <select id="make-from" aria-label="Start from a species' typical member"></select></label>
-    <div id="make-sliders"></div></div>
   <div class="panel"><h2>Its body <small>as the world draws it</small></h2><div id="make-body"></div>
     <label>Brain <select id="make-brain" aria-label="Its brain">
       <option value="new">a new, empty brain: it learns from zero</option>
@@ -221,6 +218,9 @@
       <option value="creature">a copy of the creature you followed last in Live</option></select></label>
     <p><button type="button" class="act" id="make-place">Place it</button> <small id="make-said"></small></p>
     <small>Place it opens the world: click the ground where it should be, as many times as you like; Esc or Done ends.</small></div>
+  <div class="panel"><h2>Make a creature <small>every gene, within this world's limits</small></h2>
+    <label>Start from <select id="make-from" aria-label="Start from a species' typical member"></select></label>
+    <div id="make-sliders"></div></div>
 </section>
 <section id="species-page" hidden>
   <div class="panel"><h2>The tree of life <small>from one root at the bottom; a circle as big as how many are alive; its rim: blue water, brown land; click one</small></h2>
@@ -1794,11 +1794,12 @@ function madeGenes() {  // what the world gets: every gene, and the brain's laye
            layers: made.layers, neurons: made.neurons.slice(0, made.layers) };
 }
 
+const MADE_PX = 560;  // the made body's picture: big and sharp in its wide column (the owner: "too smal")
 function drawMadeBody() {
   if (!window.Planet || !made) return;
   const g = madeGenes();
-  const body = Planet.genesPicture({ ...g, neurons: g.neurons.reduce((a, b) => a + b, 0) });
-  document.getElementById("make-body").replaceChildren(speciesBody(body, 220));
+  const body = Planet.genesPicture({ ...g, neurons: g.neurons.reduce((a, b) => a + b, 0) }, MADE_PX);
+  document.getElementById("make-body").replaceChildren(speciesBody(body, MADE_PX));
 }
 
 document.getElementById("make-brain").addEventListener("change", () => { if (made) drawMakeSliders(); });

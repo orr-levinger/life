@@ -89,15 +89,20 @@ lift above it, the call and follow rings too); Test `tests/test_viewer.py`.
 drawn at 560 px and shown at its panel's width, at most 560 px), `src/static/beasts.js` (`bodyPicture`: a picture is
 kept by its genes and its pixel size, so a big one is never the small one kept before); Test `tests/test_viewer.py`.
 
-- [ ] Step 1: tests first (`tests/test_viewer.py`):
+- [x] Step 1: tests first (`tests/test_viewer.py`):
   - `test_make_shows_the_body_big`: `drawMadeBody` asks `genesPicture(` for 560 px; the Make page's first panel holds
     `make-body`.
   - `test_a_body_picture_is_kept_by_its_size`: `bodyPicture`'s key holds the size.
   Run `python -m unittest tests.test_viewer` → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK.
-- [ ] Step 3: on a half-size check world: Make shows the body big and sharp, as the mockup; a gene moved changes it;
+- [x] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK (101 tests).
+- [x] Step 3: on a half-size check world: Make shows the body big and sharp, as the mockup; a gene moved changes it;
   "Place it" still works; screenshot; no new console error. Stop the world and the viewer; close the browser pane.
-- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "Make shows the body big" (`git show --stat` →
+  Done 2026-11-28: big and sharp in the wide column; size and hearing moved, the body redrawn; "Place it" opened the
+  world for placing. Not placed: this box was too slow (the page's piled-up requests ran out of connections,
+  `net::ERR_INSUFFICIENT_RESOURCES`; the world flickered to "stopped" between its rows). The owner, 2026-11-28:
+  "Count it as done". Seen, not changed: a big body's head is cut at the picture's right edge; vision reach above 10
+  no longer changes the eyes (both for the new look).
+- [x] Step 4: `python scripts/run_tests.py` → OK under 300 s (OK in 285.6 s); commit "Make shows the body big" (`git show --stat` →
   the files above and this plan); push to `evolve-from-scratch`.
 
 ## Must be completed to mark this as done

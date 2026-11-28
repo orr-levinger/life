@@ -204,7 +204,7 @@ function farGeometry(key) {
 let pictureRenderer = null;
 const pictures = new Map();
 export function bodyPicture(genes, size = 120) {
-  const key = JSON.stringify(genes);
+  const key = JSON.stringify([genes, size]);  // kept by its size too: a big picture is never a small one stretched
   if (pictures.has(key)) return pictures.get(key);
   if (!pictureRenderer) {
     pictureRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });

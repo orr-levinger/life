@@ -917,6 +917,23 @@ class TestControlRoom(unittest.TestCase):
         self.assertIn("SphereGeometry(R + WATER_LIFT", planet)
         self.assertGreaterEqual(planet.count("WATER_LIFT +"), 3)  # the hunger rings, the call rings, the follow ring
 
+    def test_make_shows_the_body_big(self):
+        """The owner, 2026-11-28: "the Make screen the view of the animal is too smal screen!", then, after the mockup,
+        "yes fix the editor"."""
+        page, _ = self.page_files()
+        self.assertIn("Planet.genesPicture(", self.function_of(page, "function drawMadeBody("))
+        self.assertIn("MADE_PX = 560", page)
+        make = page[page.index('<section id="make-page"'):]
+        first_panel = make[:make.index("</div>", make.index('<div class="panel'))]
+        self.assertIn('id="make-body"', first_panel)  # the body in the wide left column, the sliders to its right
+
+    def test_a_body_picture_is_kept_by_its_size(self):
+        """A big picture is never the small one kept before for the same genes."""
+        with urllib.request.urlopen(self.server.base + "/static/beasts.js") as response:
+            beasts = response.read().decode("utf-8")
+        picture = self.function_of(beasts, "export function bodyPicture(")
+        self.assertIn("const key = JSON.stringify([genes, size]);", picture)
+
     def test_a_species_card_tells_its_story(self):  # "how smart a species is, how big of a brain ... Size"
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")

@@ -62,6 +62,7 @@ class SpeciesBook:
     def __init__(self) -> None:
         self.species: Dict[int, Dict[str, Any]] = {FIRST: self.new_entry(FIRST, parent=None, began=0)}
         self.next_id = FIRST + 1
+        self.alive: Optional[int] = None  # species alive at the last look (None before the first)
 
     @staticmethod
     def new_entry(number: int, parent: Optional[int], began: int) -> Dict[str, Any]:
@@ -110,6 +111,7 @@ class SpeciesBook:
         members: Dict[int, List[Creature]] = {}
         for c in creatures:
             members.setdefault(c.species, []).append(c)
+        self.alive = len(members)
         for number, entry in self.species.items():
             mine = members.get(number, [])
             if not mine:
@@ -126,7 +128,7 @@ class SpeciesBook:
         return happened
 
     def state(self) -> Dict[str, Any]:
-        return {"next_id": self.next_id, "species": [self.species[k] for k in sorted(self.species)]}
+        return {"next_id": self.next_id, "alive": self.alive, "species": [self.species[k] for k in sorted(self.species)]}
 
     @staticmethod
     def from_state(state: Optional[Dict[str, Any]]) -> "SpeciesBook":
@@ -134,5 +136,6 @@ class SpeciesBook:
         if state:
             book.species = {entry["id"]: entry for entry in state["species"]}
             book.next_id = state["next_id"]
+            book.alive = state.get("alive")  # a save from before: counted at its next look
         return book
 

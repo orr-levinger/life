@@ -580,6 +580,29 @@ class TestLifeAndDeath(unittest.TestCase):
         self.assertEqual(w.creatures[-1].policy, "brain")
         self.assertIsNotNone(w.creatures[-1].brain)
 
+    def species_soup(self, alive_species, crowd_to=None):
+        """A small world with the soup of few species on: 5 creatures standing still, the book's last count
+        `alive_species`; how many such newcomers arrive in 100 steps, and the newcomers Auto reads."""
+        w = make_world(NO_FOOD)
+        w.rules.update(soup=0.0, soup_species=10.0, soup_species_every=50.0)
+        for i in range(5):
+            add(w, 10 + i * 5, 10, energy=100.0, policy="brain", brain=fixed_brain(STAY))
+        if crowd_to is not None:
+            w.rules["room"] = float(crowd_to)
+        w.species_book.alive = alive_species
+        for _ in range(100):
+            w.step()
+        return w.species_newcomers, w.newcomers
+
+    def test_few_species_bring_newcomers(self):  # the owner, 2026-11-28: "less then 10 unique species"
+        self.assertEqual(self.species_soup(3), (2, 0))  # at steps 50 and 100; not what Auto reads as dying out
+
+    def test_enough_species_bring_none(self):
+        self.assertEqual(self.species_soup(10), (0, 0))
+
+    def test_a_full_world_gets_none(self):
+        self.assertEqual(self.species_soup(3, crowd_to=5), (0, 0))
+
     def test_newcomer_is_of_the_world_species(self):
         self.assertEqual(make_world(species="random").add_newcomer().policy, "random")
         newcomer = make_world(species="brain").add_newcomer()

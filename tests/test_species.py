@@ -19,6 +19,15 @@ def drift(creatures):
 
 
 class TestSpecies(unittest.TestCase):
+    def test_the_book_counts_species_alive(self):
+        from src.species import SpeciesBook
+        self.assertIsNone(SpeciesBook().alive)  # no look yet
+        w = make_world(NO_FOOD)
+        for i, number in enumerate((1, 2, 3)):
+            add(w, 10 + i * 5, 10).species = number
+        w.species_book.look(w, 250)
+        self.assertEqual(w.species_book.alive, 3)
+
     def test_a_creature_counts_its_steps_in_water(self):
         """Where it really lives (the owner, 2026-11-28: "Actually also activity")."""
         w = make_world(NO_FOOD)

@@ -14,7 +14,7 @@ from src.settings import START, TODAY_SENSES, Settings
 from src.world import World
 
 TEST_RADIUS = 1.0e6  # a test planet: flat to ~1e-11 over the few units a test uses (above the rule's highest, on purpose)
-SMALL_WORLD = {"planet_radius": 10.9, "room": 80.0, "first_creatures": 30.0, "soup": 10.0,
+SMALL_WORLD = {"planet_radius": 10.9, "room": 80.0, "first_creatures": 30.0, "soup": 10.0, "soup_species": 0.0,
                "obstacles": 6.0, "trees": 8.0, "auto_target": 64.0,
                "save_every": 400.0, "row_every": 50.0, "auto_every": 100.0, "auto_measure": 200.0, "exam_every": 400.0,
                "exam_steps": 100.0, "control_every": 5.0, "report_every": 100.0}  # its runner 5× quicker: short test runs  # a test world stays small and quick, whatever a

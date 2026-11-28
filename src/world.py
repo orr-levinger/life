@@ -79,6 +79,7 @@ class World:
         self.deaths: Counter = Counter()
         self.births = 0
         self.newcomers = 0
+        self.species_newcomers = 0  # the soup's of few species: not what Auto reads as dying out (src/dial.py)
         self.placed: Optional[Dict[str, Any]] = None  # the owner's last creature to place: {seq, id} or {seq, why}
         self.calls: List[Tuple[Creature, int, float]] = []  # the last step's calls: caller, kind, volume
         self.total_bites = 0
@@ -148,9 +149,9 @@ class World:
         self.deaths[cause] += 1
         self.dead_this_step.append(creature)
 
-    def add_newcomer(self) -> Creature:
+    def add_newcomer(self, counted: bool = True) -> Creature:
         """A creature of this world's species with a random brain, at a random spot: the first creatures, and the
-        primordial soup."""
+        primordial soup. Not `counted` (the soup of few species): kept apart from `newcomers`, which Auto reads."""
         r = self.rules
         spot = self._free_spot(r["gene.size.new_high"] * r["body_radius"])
         size = self.rng.uniform(r["gene.size.new_low"], r["gene.size.new_high"])
@@ -169,7 +170,10 @@ class World:
             "kin": drawn("kin"), "gills": drawn("gills"), "lungs": drawn("lungs"), "stealth": drawn("stealth"),
             "armour": drawn("armour"), "eye_pixels": whole("eye_pixels"), "mutations": whole("mutations"),
             "mutation_size": drawn("mutation_size")})
-        self.newcomers += 1
+        if counted:
+            self.newcomers += 1
+        else:
+            self.species_newcomers += 1
         return newcomer
 
     def _arrive(self, spot: np.ndarray, size: float, brain: Optional[Brain], slot: Optional[int]) -> Creature:
@@ -351,6 +355,10 @@ class World:
             self._births()
             if len(self.creatures) < self.rules["soup"]:
                 self.add_newcomer()
+            few = self.species_book.alive is None or self.species_book.alive < self.rules["soup_species"]
+            if (few and len(self.creatures) < self.rules["room"]
+                    and self.step_count % max(1, round(self.rules["soup_species_every"])) == 0):
+                self.add_newcomer(counted=False)  # few species: a random newcomer now and then (the owner, 2026-11-28)
         self._decay_food()
 
     def _teach(self, acting: List[Creature], energy_before: List[float]) -> None:

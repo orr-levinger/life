@@ -13,7 +13,8 @@ a multiple of `soup_species_every`, the book's `alive` is under `soup_species` a
 
 **Tech Stack:** Python 3.12 (unittest).
 
-**Spec:** `docs/superpowers/specs/2026-11-28-species-soup-design.md`.
+**Spec:** `docs/superpowers/specs/2026-11-28-species-soup-design.md`. The spec and this plan approved by the owner,
+2026-11-28: "So do the waiting for, the random newcomers ... Do it now".
 
 ## Global Constraints
 
@@ -34,7 +35,7 @@ look, `None` before the first), `src/world.py` (`step`: the new soup; `add_newco
 `self.species_newcomers`), `tests/helpers.py` (`SMALL_WORLD`: `"soup_species": 0.0`). Test `tests/test_world_rules.py`,
 `tests/test_species.py`.
 
-- [ ] Step 1: tests first:
+- [x] Step 1: tests first:
   - `test_few_species_bring_newcomers` (test_world_rules): a small world with `soup_species` 10, the book's `alive` 3,
     room left, food enough: over 100 steps from step 0, exactly 2 such newcomers (at steps 50 and 100), none between;
     `newcomers` unchanged by them, `species_newcomers` 2.
@@ -43,10 +44,13 @@ look, `None` before the first), `src/world.py` (`step`: the new soup; `add_newco
   - `test_the_book_counts_species_alive` (test_species): after a look with 3 species holding members, `alive` is 3;
     a new book's is `None`.
   Run `python -m unittest tests.test_world_rules tests.test_species` → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_world_rules tests.test_species tests.test_evolve
-  tests.test_place tests.test_guts` → OK (today's soup and newcomers unchanged).
-- [ ] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "Random newcomers while few species live" (`git show
+- [x] Step 2: the changes. Run `python -m unittest tests.test_world_rules tests.test_species tests.test_evolve
+  tests.test_place tests.test_guts` → OK (today's soup and newcomers unchanged). Done: OK, 141 tests with `tests.test_rules`.
+- [x] Step 3: `python scripts/run_tests.py` → OK under 300 s; commit "Random newcomers while few species live" (`git show
   --stat` → the files above and this plan); push to `evolve-from-scratch`.
+  Not passed: the whole suite went over 300 s (2026-11-28, the owner's world running on this box; still running
+  `test_evolve_runs`, `test_water_map`, `test_world_rules`; none failed). Asked whether to push without it, the owner
+  answered "Go": committed and pushed.
 
 ## Must be completed to mark this as done
 

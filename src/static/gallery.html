@@ -20,25 +20,27 @@ each creature shows its hunger (green full, yellow half, red hungry).</p>
 import * as THREE from "three";
 import { beastModel } from "/static/beasts.js";
 
-const BASE = { size: 1, meat: 0, swim: 0, love: 0.3, fear: 0, layers: 1, neurons: 0.25, learns: 0, learning: 0, width: 0.5,
-               reach: 0.5, hearing: 0.4, armour: 0, stealth: 0, calls: 0, kin: 0 };
+const BASE = { size: 1, meat: 0, swim: 0, lungs: 0.5, grass: 0.5, love: 0.3, fear: 0, layers: 1, brain: [0.4], learns: 0,
+               learning: 0, width: 0.5, reach: 0.5, hearing: 0.4, armour: 0, stealth: 0, calls: 0, kin: 0 };
 const ROWS = [
-  ["Plant eater · in between · meat eater (meat gut)", [{ meat: 0 }, { meat: 0.5 }, { meat: 1 }]],
-  ["Swimmers (gills 1): plant eater · in between · meat eater", [{ swim: 1 }, { swim: 1, meat: 0.5 }, { swim: 1, meat: 1 }]],
-  ["Gills: land · half · full (a meat eater)", [{ meat: 1 }, { meat: 1, swim: 0.5 }, { meat: 1, swim: 1 }]],
+  ["Diet: plant eater · both · meat eater (the coat: green-gold, red)", [{ meat: 0, grass: 1 }, { meat: 0.5, grass: 0.5 }, { meat: 1, grass: 0 }]],
+  ["Gills: land · half (short legs, flippers) · full (no legs, a fish face; the coat blue)", [{ meat: 1, lungs: 1 }, { meat: 1, swim: 0.5 }, { meat: 1, swim: 1, lungs: 0 }]],
+  ["Lungs → a deep chest and big nostrils", [{ lungs: 0 }, { lungs: 0.5 }, { lungs: 1 }]],
+  ["Grass gut → a big belly", [{ grass: 0 }, { grass: 0.5 }, { grass: 1 }]],
   ["Size", [{ size: 0.6 }, { size: 1.2 }, { size: 1.8 }]],
-  ["Love of babies → a rounder body", [{ love: 0 }, { love: 0.5 }, { love: 1 }]],
-  ["Fear of death → quills", [{ fear: 0.2 }, { fear: 0.6 }, { fear: 1 }]],
-  ["Brain layers → horn tines (a grazer) / a crest (a hunter)", [{ layers: 1, meat: 1 }, { layers: 2, meat: 1 }, { layers: 3, meat: 1 }]],
-  ["Neurons → head size", [{ neurons: 0 }, { neurons: 0.5 }, { neurons: 1 }]],
-  ["Learns from others → antennae", [{ learns: 0.1 }, { learns: 0.5 }, { learns: 1 }]],
-  ["Learning speed → bands on the coat", [{ learning: 0, meat: 1 }, { learning: 0.5, meat: 1 }, { learning: 1, meat: 1 }]],
+  ["Brain: layer 1's neurons → head size", [{ brain: [0] }, { brain: [0.5] }, { brain: [1] }]],
+  ["Brain: layer 2's neurons → horn tines (a grazer): few · many; then 3 layers, all full", [{ layers: 2, brain: [0.5, 0.1] }, { layers: 2, brain: [0.5, 1] }, { layers: 3, brain: [1, 1, 1] }]],
+  ["Brain: layer 2's neurons → crest plates (a hunter)", [{ meat: 1, layers: 2, brain: [0.5, 0.1] }, { meat: 1, layers: 2, brain: [0.5, 1] }, { meat: 1, layers: 3, brain: [1, 1, 1] }]],
+  ["Armour → bands of bone, a darker coat; at full armour a shell and a helmet", [{ armour: 0 }, { armour: 0.5 }, { armour: 1 }]],
+  ["Care for kin → a frill around the neck (gold markings)", [{ kin: 0 }, { kin: 0.5 }, { kin: 1 }]],
+  ["Hearing → ears, as big as the head at full hearing", [{ hearing: 0.1 }, { hearing: 0.5 }, { hearing: 1 }]],
+  ["Fear of death → quills and a bright coat", [{ fear: 0 }, { fear: 0.5 }, { fear: 1 }]],
+  ["Love of babies → a rounder body, pink markings", [{ love: 0 }, { love: 0.5 }, { love: 1 }]],
+  ["Stealth → a dull coat (a hunter)", [{ meat: 1, stealth: 0, fear: 0.6 }, { meat: 1, stealth: 0.5, fear: 0.6 }, { meat: 1, stealth: 1, fear: 0.6 }]],
   ["Vision width → eyes to the sides · vision reach → eye size", [{ width: 0 }, { width: 1 }, { reach: 1 }]],
-  ["Hearing → ears", [{ hearing: 0.1 }, { hearing: 0.5 }, { hearing: 1 }]],
-  ["Armour → bone plates (a hunter)", [{ meat: 1, armour: 0.3 }, { meat: 1, armour: 0.65 }, { meat: 1, armour: 1 }]],
-  ["Stealth → a duller coat (a hunter)", [{ meat: 1, stealth: 0 }, { meat: 1, stealth: 0.5 }, { meat: 1, stealth: 1 }]],
+  ["Learns from others → antennae (violet tips)", [{ learns: 0.1 }, { learns: 0.5 }, { learns: 1 }]],
+  ["Learning speed → bands on the coat", [{ learning: 0, meat: 1 }, { learning: 0.5, meat: 1 }, { learning: 1, meat: 1 }]],
   ["Calls → a throat sac", [{ calls: 1 }, { calls: 5 }, { calls: 10 }]],
-  ["Care for kin → a pale blaze on the face", [{ kin: 0.2 }, { kin: 0.6 }, { kin: 1 }]],
 ];
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1);

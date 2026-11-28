@@ -960,6 +960,43 @@ class TestControlRoom(unittest.TestCase):
             3: "Sarcosaurus simplicoloricatus occultogiganteus II",
             4: "Sarcoichthys solitomutabilis incuriopumilus"})
 
+    def beasts_file(self):
+        with urllib.request.urlopen(self.server.base + "/static/beasts.js") as response:
+            return response.read().decode("utf-8")
+
+    def test_every_gene_shows(self):
+        """The owner, 2026-11-28: "lungs has 0 affect on look", "grass gus 0 affect", "gills 1 should have 0 legs",
+        "neurons in layer 2 ... same changes", "care for kin 0 affect"; "more drastic changes to look"."""
+        beasts = self.beasts_file()
+        genes = self.function_of(beasts, "function genesOf(")
+        for words in ("c.lungs", "c.grass_gut", "c.brain", "c.vision_reach", "/ 29", "* 10) / 10"):
+            self.assertIn(words, genes)
+        model = self.function_of(beasts, "export function beastModel(")
+        for words in ("g.lungs", "g.grass", "g.brain[", "g.kin", "legLen > 0.05"):
+            self.assertIn(words, model)
+
+    def test_the_coat_comes_from_the_genes(self):
+        """The owner, 2026-11-28: "all animal have same color thats borring"; colour "From its genes"."""
+        beasts = self.beasts_file()
+        coat = self.function_of(beasts, "function coatOf(")
+        for words in ("g.meat", "g.swim", "g.fear", "g.stealth", "g.armour"):
+            self.assertIn(words, coat)
+        mark = self.function_of(beasts, "function markOf(")
+        for words in ("g.love", "g.kin", "g.learns"):
+            self.assertIn(words, mark)
+
+    def test_the_picture_frames_the_body(self):
+        """A big creature's head is not cut at the picture's edge."""
+        self.assertIn("new THREE.Box3()", self.function_of(self.beasts_file(), "export function bodyPicture("))
+
+    def test_make_and_species_pass_each_layer(self):
+        """Each brain layer shows its own neurons: Make passes its layers; a species shares its neurons over its layers."""
+        page, _ = self.page_files()
+        self.assertIn("brain:", self.function_of(page, "function drawMadeBody("))
+        genes = self.function_of(self.beasts_file(), "function genesOf(")
+        self.assertIn("c.neurons /", genes)
+        self.assertIn("c.layers", genes)
+
     def test_make_shows_the_body_big(self):
         """The owner, 2026-11-28: "the Make screen the view of the animal is too smal screen!", then, after the mockup,
         "yes fix the editor"."""

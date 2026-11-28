@@ -1799,7 +1799,7 @@ const MADE_PX = 560;  // the made body's picture: big and sharp in its wide colu
 function drawMadeBody() {
   if (!window.Planet || !made) return;
   const g = madeGenes();
-  const body = Planet.genesPicture({ ...g, neurons: g.neurons.reduce((a, b) => a + b, 0) }, MADE_PX);
+  const body = Planet.genesPicture({ ...g, brain: g.neurons }, MADE_PX);  // each layer's own neurons
   document.getElementById("make-body").replaceChildren(speciesBody(body, MADE_PX));
 }
 

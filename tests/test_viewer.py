@@ -875,6 +875,48 @@ class TestControlRoom(unittest.TestCase):
         for words in ('id="tab-species"', 'id="species-page"', "function drawSpecies(", "/species?run=", "<svg"):
             self.assertIn(words, page)
 
+    def page_files(self):
+        files = {}
+        for name, path in (("page", "/"), ("planet", "/static/planet.js")):
+            with urllib.request.urlopen(self.server.base + path) as response:
+                files[name] = response.read().decode("utf-8")
+        return files["page"], files["planet"]
+
+    @staticmethod
+    def function_of(text, head):
+        return text.split(head, 1)[1].split("\n}\n", 1)[0]
+
+    def test_the_tree_of_life_is_circles_with_bodies(self):
+        """The owner, 2026-11-28, with a poster of the tree of life: "the tree of life should look like this"."""
+        page, _ = self.page_files()
+        tree = self.function_of(page, "async function drawSpecies(")
+        for words in ("<circle", "Planet.speciesPicture(", "lives("):
+            self.assertIn(words, tree)
+        self.assertNotIn('class="band"', page)  # the time bands are gone; their facts stay on the card
+
+    def test_land_or_water_and_time_in_water(self):
+        """The owner, 2026-11-28: "Land or water is genes based", then "Actually also activity"."""
+        page, _ = self.page_files()
+        words = self.function_of(page, "function lives(")
+        for said in ("water animal", "land animal", "both"):
+            self.assertIn(said, words)
+        self.assertIn("f.in_water", page.split("const inWater = (f) =>", 1)[1].split("\n", 1)[0])  # one place says it
+        self.assertIn("inWater(f)", self.function_of(page, "function speciesCard("))
+        self.assertIn("inWater(s.facts)", self.function_of(page, "async function drawSpecies("))  # Alive now says it too
+
+    def test_an_extinct_species_can_be_brought_back(self):
+        """The owner, 2026-11-28: "i want to see instinct cretures and able to bring a instikt creature back"."""
+        page, _ = self.page_files()
+        self.assertIn("Bring it back", self.function_of(page, "function speciesCard("))
+        self.assertIn("(extinct)", self.function_of(page, "async function drawMake("))
+
+    def test_the_rings_are_above_the_water(self):
+        """The owner, 2026-11-28: "the circle in water invosible we need to bring it a bit higher"."""
+        _, planet = self.page_files()
+        self.assertIn("const WATER_LIFT", planet)
+        self.assertIn("SphereGeometry(R + WATER_LIFT", planet)
+        self.assertGreaterEqual(planet.count("WATER_LIFT +"), 3)  # the hunger rings, the call rings, the follow ring
+
     def test_a_species_card_tells_its_story(self):  # "how smart a species is, how big of a brain ... Size"
         with urllib.request.urlopen(self.server.base + "/") as response:
             page = response.read().decode("utf-8")
@@ -883,7 +925,7 @@ class TestControlRoom(unittest.TestCase):
         self.assertIn("eats(g)", card)
         self.assertIn("lives(g)", card)
         words_of = page[page.index("function eats("):page.index("function speciesWords(")]  # what it eats, where it lives
-        for words in ("hunter", "grazer", "eats both", "aquatic", "walker"):
+        for words in ("hunter", "grazer", "eats both", "water animal", "land animal"):
             self.assertIn(words, words_of)
         for words in ("grass gut", "meat gut", "gills", "lungs", "eyesight", "hearing", "how smart", "brain", "size", "armour",
                       "stealth", "calls", "kin", "fear of death", "love of babies", "learns from others", "babies born",

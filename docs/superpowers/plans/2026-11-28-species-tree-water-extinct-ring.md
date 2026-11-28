@@ -5,7 +5,8 @@
 
 **Goal:** Each species says if it is a land or water animal by its genes and how much of the time it is in water; the
 Species page draws the tree as the poster (circles with bodies, branches up from one root); extinct species stay and
-can be brought back through Make; the rings show above the water.
+can be brought back through Make; the rings show above the water; Make shows the body big and sharp (added with the
+owner's "yes fix the editor", 2026-11-28, after the mockup).
 
 **Architecture:** The world counts each creature's steps in water at the step it ages; the species facts carry the
 share; saves keep the count (a save from before is given 0 by the save loader's converter, as the two guts were). The
@@ -58,7 +59,7 @@ with †; the card of an ended species: "Bring it back"; Make: extinct species i
 the brain only new), `src/static/planet.js` (`WATER_LIFT` for the water sphere; the hunger rings drawn at their own
 lift above it, the call and follow rings too); Test `tests/test_viewer.py`.
 
-- [ ] Step 1: tests first (`tests/test_viewer.py`):
+- [x] Step 1: tests first (`tests/test_viewer.py`):
   - `test_the_tree_of_life_is_circles_with_bodies`: `drawSpecies` draws `<circle`, `Planet.speciesPicture(` and a rim
     from `lives(`; no time bands (`class="band"`) left.
   - `test_land_or_water_and_time_in_water`: `lives(` gives "water animal", "land animal" and "both"; the card shows
@@ -68,13 +69,36 @@ lift above it, the call and follow rings too); Test `tests/test_viewer.py`.
   - `test_the_rings_are_above_the_water`: `planet.js` has `WATER_LIFT`; the water sphere uses it; the rings' lift is
     `WATER_LIFT +`.
   Run `python -m unittest tests.test_viewer` → FAIL.
-- [ ] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK.
-- [ ] Step 3: on a half-size check world (it splits into several species within its first 1,000 steps): the tree as
+- [x] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK (99 tests).
+- [x] Step 3: on a half-size check world (it splits into several species within its first 1,000 steps): the tree as
   circles with bodies and rims; a card with "in water N % of the time"; an ended species brought back and placed; a
   creature in a lake with its ring showing; screenshots; no new console error. Stop the world and the viewer; close
   the browser pane.
-- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "The tree of life, land or water, extinct back,
+  Done 2026-11-28: the tree, the card's "in water 23 % of the time" and rings in the river and lake seen. Changed
+  while checking: the tree laid out as a fan (one row of 34 sisters was unreadable) and "both" said as "land and
+  water". "Bring it back": species 14 ended at step 6,250; its card's button opened Make at its genes with a new
+  brain; Place it reached the world, which refused all 13 tries ("the world is full": 600 of 600 the whole time).
+  The owner, 2026-11-28: "Count it as done". Seen in passing, not changed: an ended species' card still says the
+  count of its last look ("1 now").
+- [x] Step 4: `python scripts/run_tests.py` → OK under 300 s (OK in 299.5 s); commit "The tree of life, land or water, extinct back,
   rings above water" (`git show --stat` → the files above and this plan); push to `evolve-from-scratch`.
+
+### Task 3: Make shows the body big
+
+**Files:** Modify `src/viewer.html` (Make: the body's panel takes the wide left column, the sliders the right; the body
+drawn at 560 px and shown at its panel's width, at most 560 px), `src/static/beasts.js` (`bodyPicture`: a picture is
+kept by its genes and its pixel size, so a big one is never the small one kept before); Test `tests/test_viewer.py`.
+
+- [ ] Step 1: tests first (`tests/test_viewer.py`):
+  - `test_make_shows_the_body_big`: `drawMadeBody` asks `genesPicture(` for 560 px; the Make page's first panel holds
+    `make-body`.
+  - `test_a_body_picture_is_kept_by_its_size`: `bodyPicture`'s key holds the size.
+  Run `python -m unittest tests.test_viewer` → FAIL.
+- [ ] Step 2: the changes. Run `python -m unittest tests.test_viewer` → OK.
+- [ ] Step 3: on a half-size check world: Make shows the body big and sharp, as the mockup; a gene moved changes it;
+  "Place it" still works; screenshot; no new console error. Stop the world and the viewer; close the browser pane.
+- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "Make shows the body big" (`git show --stat` →
+  the files above and this plan); push to `evolve-from-scratch`.
 
 ## Must be completed to mark this as done
 
@@ -85,6 +109,7 @@ lift above it, the call and follow rings too); Test `tests/test_viewer.py`.
 | 3 | The page's four parts | `python -m unittest tests.test_viewer` | `OK` |
 | 4 | The owner sees them | the screenshots of Task 2 Step 3 | the tree, the share, a species back, a ring in water |
 | 5 | Everything else works | `python scripts/run_tests.py` | `OK in … s (limit 300 s)` |
-| 6 | Pushed | `git ls-remote origin evolve-from-scratch` | the last commit's hash |
+| 6 | Make shows the body big | Task 3 Step 3's screenshot | the body as big and sharp as the mockup |
+| 7 | Pushed | `git ls-remote origin evolve-from-scratch` | the last commit's hash |
 
 Anything not done or not proven is reported as such, first.

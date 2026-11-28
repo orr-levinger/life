@@ -95,7 +95,7 @@
   #species-page { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 14px; align-items: start; }
   #species-page .panel { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
   #species-page h2 { font-size: 15px; margin: 0 0 6px; } #species-page small { color: var(--muted); }
-  #species-tree svg { width: 100%; display: block; } #species-tree .band { cursor: pointer; }
+  #species-tree svg { width: 100%; display: block; } #species-tree .node:hover circle { filter: brightness(1.15); }
   #species-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   #species-table td, #species-table th { padding: 3px 6px; border-bottom: 1px solid var(--grid); text-align: left; }
   #species-table tr { cursor: pointer; } #species-table tr:hover { background: var(--page); }
@@ -223,7 +223,7 @@
     <small>Place it opens the world: click the ground where it should be, as many times as you like; Esc or Done ends.</small></div>
 </section>
 <section id="species-page" hidden>
-  <div class="panel"><h2>The tree of species <small>time runs left to right; a band's thickness: how many alive; click one</small></h2>
+  <div class="panel"><h2>The tree of life <small>from one root at the bottom; a circle as big as how many are alive; its rim: blue water, brown land; click one</small></h2>
     <div id="species-tree"></div></div>
   <div><div class="panel" id="species-card"><h2>A species</h2><small>Click a species in the tree or the table.</small></div>
     <div class="panel" style="margin-top: 14px"><h2>Alive now</h2><table id="species-table"></table></div></div>
@@ -1712,6 +1712,7 @@ document.getElementById("tab-make").addEventListener("click", () => show("make")
 const RULE_GENE = { fear_of_death: "fear", love_of_babies: "love", learns_from_others: "learns" };  // the rules' names
 let made = null;  // {run, limit, genes: {name: value}, layers, neurons: [..]}: the sliders' creature
 let placingNow = null;  // {run, genes, brain} while the owner places it in the world
+let makeFrom = null;  // a species to start Make from (Bring it back on an extinct species' card)
 
 const typicalGenes = (t) => ({ ...t, fear_of_death: t.fear, love_of_babies: t.love, learns_from_others: t.learns });
 
@@ -1719,19 +1720,35 @@ async function drawMake() {
   const run = data.find((r) => r.status === "running");
   const sliders = document.getElementById("make-sliders"), said = document.getElementById("make-said");
   if (!run) { sliders.textContent = "Start a world in Live first: a creature is made for a running world."; return; }
-  if (made && made.run === run.name) return;  // built: the owner's slider positions stay
+  if (made && made.run === run.name) return startFrom();  // built: the owner's slider positions stay
   const rules = (await (await fetch(`/rules?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })).json()).rules;
   const limit = (gene, end) => (rules.find((r) => r.name === `gene.${RULE_GENE[gene] || gene}.${end}`) || {}).value;
   const book = await fetch(`/species?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : { species: [] }), () => ({ species: [] }));
   const alive = book.species.filter((s) => s.ended === null && s.now).sort((a, b) => (b.facts?.alive || 0) - (a.facts?.alive || 0));
+  const gone = book.species.filter((s) => s.ended !== null && s.now);
   const from = document.getElementById("make-from");
-  from.innerHTML = alive.map((s) => `<option value="${s.id}">${speciesName(s.id)} (${s.facts?.alive || 0} alive)</option>`).join("")
+  from.innerHTML = [...alive.map((s) => `<option value="${s.id}">${speciesName(s.id)} (${s.facts?.alive || 0} alive)</option>`),
+    ...gone.map((s) => `<option value="${s.id}">${speciesName(s.id)} (extinct)</option>`)].join("")
     || "<option value=\"\">no species yet: the middle of each gene</option>";
   made = { run: run.name, limit, genes: {}, layers: 1, neurons: [] };
-  setMade(alive[0] ? typicalGenes(alive[0].now) : null);
-  from.onchange = () => { const s = book.species.find((x) => x.id === Number(from.value)); setMade(s ? typicalGenes(s.now) : null); };
+  from.onchange = () => {
+    const s = book.species.find((x) => x.id === Number(from.value)), brain = document.getElementById("make-brain");
+    for (const option of brain.options) option.disabled = !!(s && s.ended !== null) && option.value !== "new";  // its brains died
+    if (s && s.ended !== null) brain.value = "new";
+    setMade(s ? typicalGenes(s.now) : null);
+  };
+  from.onchange();
   say(said, "", "");
+  startFrom();
+}
+
+function startFrom() {  // Make opened from a species' card (Bring it back): its typical member on the sliders
+  const from = document.getElementById("make-from");
+  if (makeFrom === null || ![...from.options].some((o) => Number(o.value) === makeFrom)) return;
+  from.value = String(makeFrom);
+  makeFrom = null;
+  from.onchange();
 }
 
 function setMade(typical) {  // the sliders at a species' typical member (or the middle of each gene's limits)
@@ -1833,14 +1850,15 @@ function eats(g) {  // what its guts make it: by which gut is bigger, and by how
   const meat = g.meat_gut ?? 0, grass = g.grass_gut ?? 0;
   return meat > grass + 0.2 ? "hunter" : grass > meat + 0.2 ? "grazer" : "eats both";
 }
-function lives(g) {  // where its gills and lungs make it at home
+function lives(g) {  // a water animal, a land animal or both: by its gills and lungs (its genes), as eats() by its guts
   const gills = g.gills ?? 0, lungs = g.lungs ?? 0;
-  return gills > 0.5 && lungs < 0.5 ? "aquatic" : gills > 0.2 ? "swims too" : "walker";
+  return gills > lungs + 0.2 ? "water animal" : lungs > gills + 0.2 ? "land animal" : "both";
 }
+const inWater = (f) => (f && f.in_water !== undefined && f.in_water !== null ? `in water ${Math.round(f.in_water * 100)} % of the time` : "");
 
 function speciesWords(g) {  // its typical member in a few words
   if (!g) return "";
-  return `${eats(g)}, ${lives(g)}, size ${g.size.toFixed(2)}, eye ${Math.round(g.eye_pixels)} px`;
+  return `${eats(g)}, ${lives(g) === "both" ? "land and water" : lives(g)}, size ${g.size.toFixed(2)}, eye ${Math.round(g.eye_pixels)} px`;
 }
 
 async function drawSpecies() {
@@ -1851,36 +1869,59 @@ async function drawSpecies() {
   if (!answer || !answer.ok) { tree.textContent = `${run.name}: no tree yet (it begins at the first chart point; a world started before species has none until it is updated).`; return; }
   speciesBook = await answer.json();
   const all = speciesBook.species, byId = new Map(all.map((s) => [s.id, s]));
+  // The tree of life, as the owner's poster (2026-11-28): one root at the bottom, each species a circle holding its
+  // body, branches fanning up from its parent; each daughter of the first life gives its branch a colour its own
+  // daughters keep; a circle as big as how many are alive; an ended species grey and faded, marked †.
   const children = new Map(all.map((s) => [s.id, []]));
   for (const s of all) if (s.parent !== null && children.has(s.parent)) children.get(s.parent).push(s.id);
-  const order = [], visit = (id) => { order.push(id); for (const c of children.get(id) || []) visit(c); };
-  for (const s of all) if (s.parent === null || !byId.has(s.parent)) visit(s.id);
-  const last = Math.max(1, ...all.flatMap((s) => s.counts.map(([step]) => step)));
-  const most = Math.max(1, ...all.map((s) => s.largest || 0));
-  const W = 520, row = 20, H = order.length * row + 30, x = (step) => 10 + (step / last) * (W - 90);  // room for names
-  const y = new Map(order.map((id, k) => [id, 15 + k * row + row / 2]));
-  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="The tree of species">`;
-  for (const s of all) {  // the line from its parent's band at the step it split off
-    if (s.parent === null || !y.has(s.parent)) continue;
-    svg += `<path d="M${x(s.began)},${y.get(s.parent)} V${y.get(s.id)}" stroke="${speciesColour(s.id)}" stroke-width="1.5" fill="none" opacity="0.8"/>`;
+  const roots = all.filter((s) => s.parent === null || !byId.has(s.parent)).map((s) => s.id);
+  // Laid out as a fan: the root at the bottom middle, each generation of species on an arc further out, leaves spread
+  // over the half circle and a parent at the middle of its daughters' angles; many sisters alternate between 3 arcs.
+  const depth = new Map(), slot = new Map(), hue = new Map(), lift = new Map();
+  let leaves = 0;
+  const place = (id, d, colour) => {
+    depth.set(id, d); hue.set(id, colour);
+    const kids = children.get(id) || [];
+    kids.forEach((k, i) => { place(k, d + 1, d === 0 ? speciesColour(k) : colour); lift.set(k, kids.length > 8 ? i % 3 : 0); });
+    slot.set(id, kids.length ? kids.reduce((a, k) => a + slot.get(k), 0) / kids.length : leaves++);
+  };
+  roots.forEach((id) => place(id, 0, "var(--muted)"));
+  const most = Math.max(1, ...all.map((s) => (s.facts && s.ended === null ? s.facts.alive : 0)));
+  const arcs = [...lift.values()].some((v) => v > 0) ? 3 : 1, sub = 70, ring = 150;  // sisters spread over up to 3 arcs
+  const first = Math.max(110, (Math.max(1, leaves) * 78) / (Math.PI * arcs));  // the first arc: room for every leaf
+  const reach = (id) => (depth.get(id) === 0 ? 0 : first + (depth.get(id) - 1) * (ring + (arcs - 1) * sub) + (lift.get(id) || 0) * sub);
+  const far = Math.max(140, ...all.map((s) => reach(s.id))), W = 2 * far + 160, H = far + 150;
+  const angle = (id) => Math.PI - ((slot.get(id) + 0.5) / Math.max(1, leaves)) * Math.PI;
+  const px = (id) => W / 2 + reach(id) * Math.cos(angle(id)), py = (id) => H - 70 - reach(id) * Math.sin(angle(id));
+  const room = (id) => (depth.get(id) === 0 ? 40 : 0.45 * (reach(id) * Math.PI / Math.max(1, leaves)) * arcs);
+  const radius = (s) => Math.max(9, Math.min(room(s.id), s.ended !== null ? 14 : 18 + 16 * Math.sqrt((s.facts ? s.facts.alive : 0) / most)));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="The tree of life: click a species">`;
+  for (const s of all) {  // the branch from its parent's circle up to its own
+    if (s.parent === null || !byId.has(s.parent)) continue;
+    const [x0, y0, x1, y1] = [px(s.parent), py(s.parent), px(s.id), py(s.id)], mid = (y0 + y1) / 2;
+    svg += `<path d="M${x0},${y0} C${x0},${mid} ${x1},${mid} ${x1},${y1}" stroke="${s.ended !== null ? "var(--muted)" : hue.get(s.id)}"` +
+      ` stroke-width="${s.ended !== null ? 2 : 5}" fill="none" opacity="${s.ended !== null ? 0.45 : 0.9}"/>`;
   }
-  for (const id of order) {
-    const s = byId.get(id), points = s.counts;
-    for (let k = 0; k < points.length; k++) {  // its band, as thick as how many were alive
-      const [from, n] = points[k], to = k + 1 < points.length ? points[k + 1][0] : (s.ended ?? from + 1);
-      const h = Math.max(2, (row - 4) * Math.sqrt(n / most));
-      svg += `<rect class="band" data-species="${id}" x="${x(from)}" y="${y.get(id) - h / 2}" width="${Math.max(1.5, x(to) - x(from))}" height="${h}" fill="${speciesColour(id)}"/>`;
-    }
-    const end = s.ended ?? (points.length ? points[points.length - 1][0] : s.began);
-    svg += `<text x="${x(end) + 6}" y="${y.get(id) + 4}" font-size="11" fill="currentColor">${speciesName(id)}${s.ended !== null ? " †" : ""}</text>`;
+  for (const s of all) {  // its circle: its body inside, a rim by where its genes make it live, its name under it
+    const cx = px(s.id), cy = py(s.id), r = radius(s), home = s.now ? lives(s.now) : "both", ended = s.ended !== null;
+    const around = 2 * Math.PI * r, water = "#3a7bd5", land = "#a0703c";
+    const picture = window.Planet && s.now ? Planet.speciesPicture(s.now, 96).toDataURL() : null;
+    svg += `<g class="node" data-species="${s.id}" opacity="${ended ? 0.5 : 1}" style="cursor:pointer">` +
+      `<clipPath id="clip-${s.id}"><circle cx="${cx}" cy="${cy}" r="${r - 2}"/></clipPath>` +
+      `<circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--surface)" stroke="${home === "land animal" ? land : water}" stroke-width="4"/>` +
+      (home === "both" ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${land}" stroke-width="4" stroke-dasharray="${around / 2} ${around / 2}"/>` : "") +
+      (picture ? `<image href="${picture}" x="${cx - r}" y="${cy - r}" width="${2 * r}" height="${2 * r}" clip-path="url(#clip-${s.id})"/>` : "") +
+      `<text x="${cx}" y="${cy + r + 13}" font-size="11" text-anchor="middle" fill="currentColor">${speciesName(s.id)}${ended ? " †" : ""}</text>` +
+      `<text x="${cx}" y="${cy + r + 25}" font-size="10" text-anchor="middle" fill="var(--muted)">${home === "both" ? "land and water" : home.split(" ")[0]}</text></g>`;
   }
-  svg += `<text x="10" y="${H - 4}" font-size="11" fill="currentColor">step 0</text><text x="${W - 10}" y="${H - 4}" font-size="11" text-anchor="end" fill="currentColor">step ${last.toLocaleString()}</text></svg>`;
+  svg += "</svg>";
   tree.innerHTML = svg;
-  tree.querySelectorAll(".band").forEach((band) => band.addEventListener("click", () => speciesCard(Number(band.dataset.species))));
+  tree.querySelectorAll(".node").forEach((node) => node.addEventListener("click", () => speciesCard(Number(node.dataset.species))));
   const alive = all.filter((s) => s.ended === null && s.facts);
   document.getElementById("species-table").innerHTML = "<tr><th></th><th>Species</th><th>Alive</th><th>Typical member</th><th>From</th></tr>" +
     alive.map((s) => `<tr data-species="${s.id}"><td class="species-body"></td><td><span style="color:${speciesColour(s.id)}">■</span> ${speciesName(s.id)}</td>` +
-      `<td>${s.facts.alive}</td><td>${speciesWords(s.now)}</td><td>${s.parent === null ? "-" : speciesName(s.parent)}</td></tr>`).join("");
+      `<td>${s.facts.alive}</td><td>${speciesWords(s.now)}${s.facts.in_water !== undefined ? `, ${inWater(s.facts)}` : ""}</td>` +
+      `<td>${s.parent === null ? "-" : speciesName(s.parent)}</td></tr>`).join("");
   document.querySelectorAll("#species-table tr[data-species]").forEach((tr) => {
     tr.addEventListener("click", () => speciesCard(Number(tr.dataset.species)));
     const s = byId.get(Number(tr.dataset.species));
@@ -1905,7 +1946,7 @@ function speciesCard(id) {
     ["lived", `from step ${s.began.toLocaleString()}${s.ended !== null ? ` to step ${s.ended.toLocaleString()} (ended)` : " on"}`],
     ["from", s.parent === null ? "the beginning" : speciesName(s.parent)],
     ["gave rise to", daughters.length ? daughters.join(", ") : "none yet"],
-    ["what it is", `${eats(g)} (grass gut ${n(g.grass_gut)}, meat gut ${n(g.meat_gut)}); ${lives(g)} (gills ${n(g.gills)}, lungs ${n(g.lungs)})`],
+    ["what it is", `${eats(g)} (grass gut ${n(g.grass_gut)}, meat gut ${n(g.meat_gut)}); ${lives(g) === "both" ? "lives on land and in water" : `a ${lives(g)}`} (gills ${n(g.gills)}, lungs ${n(g.lungs)})${inWater(f) ? `; ${inWater(f)}` : ""}`],
     ["how smart", `earns ${n(f.smart)} energy for each 1 it spends; steers to food it sees ${f.to_food === null || f.to_food === undefined ? "-" : Math.round(f.to_food * 100) + " %"} of its moves`],
     ["brain", `${range(f.layers, 1)} layers, ${range(f.neurons, 0)} neurons (smallest · typical · largest)`],
     ["size", `${range(f.size)} (smallest · typical · largest); tank ${n(f.tank, 0)}; runs ${n(f.speed)} a step`],
@@ -1919,8 +1960,13 @@ function speciesCard(id) {
     ["deaths", `died of hunger ${d.hunger || 0}, hunted ${d.attack || 0}, old age ${d.age || 0}`],
     ["changed most", changed.length ? changed.map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${n(v)}`).join(", ") : "nothing yet"],
   ];
-  card.innerHTML = `<h2><span style="color:${speciesColour(id)}">■</span> ${speciesName(id)}</h2><dl>` +
+  card.innerHTML = `<h2><span style="color:${speciesColour(id)}">■</span> ${speciesName(id)}${s.ended !== null ? " † (extinct)" : ""}</h2><dl>` +
     facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("") + "</dl>";
+  if (s.ended !== null && s.now) {  // the owner, 2026-11-28: "able to bring a instikt creature back"
+    card.insertAdjacentHTML("beforeend", '<p><button type="button" class="act bring-back">Bring it back</button> ' +
+      "<small>opens Make at its last typical member; its brain is new (the brains died with them)</small></p>");
+    card.querySelector(".bring-back").addEventListener("click", () => { makeFrom = id; show("make"); });
+  }
   if (window.Planet && s.now) card.querySelector("h2").after(speciesBody(Planet.speciesPicture(s.now), 160));  // its typical member
 }
 

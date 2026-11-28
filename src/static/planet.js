@@ -20,6 +20,7 @@ const look = BEASTS;  // how creatures look: their genes' bodies (src/static/bea
 
 // ---------- small helpers
 const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+const WATER_LIFT = 0.03;  // the water's surface above the ground: the rings are drawn above it, on land and in water
 function slerp(a, b, t) {  // between two unit vectors, along the ball
   const dot = Math.max(-1, Math.min(1, a.dot(b)));
   const angle = Math.acos(dot);
@@ -219,7 +220,7 @@ function showWater(run, R) {
     picture.colorSpace = THREE.SRGBColorSpace;
     picture.generateMipmaps = false; picture.minFilter = THREE.LinearFilter;  // plain sampling: sharpened or mipmapped,
     // this ball cost 12 ms a frame on this box (no graphics card); plain, under 4
-    state.water = new THREE.Mesh(new THREE.SphereGeometry(R + 0.03, 128, 64),
+    state.water = new THREE.Mesh(new THREE.SphereGeometry(R + WATER_LIFT, 128, 64),
                                  new THREE.MeshLambertMaterial({ map: picture, alphaTest: 0.5 }));
     state.scene.add(state.water);
   }, undefined, () => {});  // a world without water (or from before it): no picture, no water
@@ -246,12 +247,13 @@ function drawFood(picture, R, sensed) {
 
 function drawBeasts(placed, R, sensed, followed, options) {
   // near the camera each creature has its full body; far away it joins its body plan's batch; all rings are one batch
-  const keep = new Set(), far = new Map(), eye = state.camera.position, at = new THREE.Object3D();
+  const keep = new Set(), far = new Map(), eye = state.camera.position, at = new THREE.Object3D(), ringAt = new THREE.Object3D();
   const shown = sensed ? placed.filter((x) => x === followed || sensed.sees.has(x.c.id)) : placed;
   const rings = batch("rings", look.ringGeometry, look.ringMaterial, shown.length);
   shown.forEach((x, i) => {
     standOn(at, x.p, R, 0, x.f); at.scale.setScalar(x.c.radius); at.updateMatrix();  // its true size, as rocks and trees
-    rings.setMatrixAt(i, at.matrix); rings.setColorAt(i, look.ring(x.c)); rings.userData.ids[i] = x.c.id;
+    standOn(ringAt, x.p, R, WATER_LIFT + 0.01, x.f); ringAt.scale.setScalar(x.c.radius); ringAt.updateMatrix();  // above the water
+    rings.setMatrixAt(i, ringAt.matrix); rings.setColorAt(i, look.ring(x.c)); rings.userData.ids[i] = x.c.id;
     const away = at.position.distanceTo(eye);
     if (away >= NEAR) {
       const key = look.farKey(x.c, away >= DOT ? "dot" : "far");
@@ -329,12 +331,12 @@ function drawMarks(shown, R, sensed, followed, options) {
     }
     if (x.c.call) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 48).rotateX(-Math.PI / 2), markMats.call);
-      ring.scale.setScalar(Math.max(x.c.call[1], 0.5)); ground(ring, x.p, x.f, 0.03);
+      ring.scale.setScalar(Math.max(x.c.call[1], 0.5)); ground(ring, x.p, x.f, WATER_LIFT + 0.01);
     }
   }
   if (followed) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.12, 40).rotateX(-Math.PI / 2), markMats.ring);
-    ring.scale.setScalar(Math.max(followed.c.radius * 3, 0.6)); ground(ring, followed.p, followed.f, 0.04);
+    ring.scale.setScalar(Math.max(followed.c.radius * 3, 0.6)); ground(ring, followed.p, followed.f, WATER_LIFT + 0.02);
   }
   if (sensed) for (const x of state.lastPlaced || []) {
     if (!sensed.hears.has(x.c.id)) continue;  // a sound: a blur where it came from, never its size

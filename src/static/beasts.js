@@ -127,14 +127,14 @@ export function beastModel(g, detail = "near") {
         put("white", new THREE.ConeGeometry(0.035 + 0.02 * p, 0.12 + 0.12 * p, 4), hx + headR * 1.45, hy - headR * 0.2, s * headR * 0.22, Math.PI);
         put("white", new THREE.ConeGeometry(0.03, 0.09 + 0.08 * p, 4), hx + headR * 1.25, hy - headR * 0.32, s * headR * 0.18, 0);
       }
-      put("dark", new THREE.BoxGeometry(headR * 0.9, 0.05, headR * 1.3), hx + headR * 0.25, hy + headR * 0.55, 0, 0, 0, -0.25);
+      put("dark", new THREE.BoxGeometry(headR * 0.9, 0.05, headR * 1.3), hx + headR * 0.1, hy + headR * 0.85, 0, 0, 0, -0.25);  // the brow above the eyes
     }
     // eyes: a grazer's to the sides, a hunter's to the front (vision width moves them); their size its vision reach
-    const eyeR = 0.035 + 0.12 * g.reach, sideA = Math.min(1.45, mix(1.2, 0.45, p) + 0.5 * (g.width - 0.5) * 2);
+    const eyeR = headR * (0.15 + 0.45 * g.reach), sideA = Math.min(1.45, mix(1.2, 0.45, p) + 0.5 * (g.width - 0.5) * 2);
     for (const s of [1, -1]) {
       const ex = hx + headR * 0.75 * Math.cos(sideA), ez = s * headR * 0.85 * Math.sin(sideA);
-      put("white", new THREE.IcosahedronGeometry(eyeR, 1), ex, hy + headR * 0.3, ez);
-      put("eye", new THREE.IcosahedronGeometry(eyeR * 0.55, 0), ex + eyeR * 0.6 * Math.cos(sideA), hy + headR * 0.32, ez + s * eyeR * 0.6 * Math.sin(sideA), 0, 0, 0, p > 0.5 ? 0.5 : 1, 1, 1);
+      put("white", new THREE.IcosahedronGeometry(eyeR, 1), ex, hy + headR * 0.45, ez);  // on the upper head: a hunter's show
+      put("eye", new THREE.IcosahedronGeometry(eyeR * 0.55, 0), ex + eyeR * 0.6 * Math.cos(sideA), hy + headR * 0.47, ez + s * eyeR * 0.6 * Math.sin(sideA), 0, 0, 0, p > 0.5 ? 0.5 : 1, 1, 1);
     }
     // ears by hearing: a grazer's broad leaves to the side, a hunter's pointed and upright
     if (g.hearing > 0.08) for (const s of [1, -1]) {
@@ -228,8 +228,8 @@ function farGeometry(key) {
 // A small picture of one body as the planet draws it (genes 0..1, as `beastModel`), for the legend: drawn once each.
 let pictureRenderer = null;
 const pictures = new Map();
-export function bodyPicture(genes, size = 120) {
-  const key = JSON.stringify([genes, size]);  // kept by its size too: a big picture is never a small one stretched
+export function bodyPicture(genes, size = 120, close = false) {  // close: the body fills the picture (a species' picture)
+  const key = JSON.stringify([genes, size, close]);  // kept by its size too: a big picture is never a small one stretched
   if (pictures.has(key)) return pictures.get(key);
   if (!pictureRenderer) {
     pictureRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -246,7 +246,7 @@ export function bodyPicture(genes, size = 120) {
   const box = new THREE.Box3().setFromObject(body), middle = box.getCenter(new THREE.Vector3());
   const fits = (box.getSize(new THREE.Vector3()).length() / 2) / Math.sin(THREE.MathUtils.degToRad(14));
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-  camera.position.copy(middle).addScaledVector(new THREE.Vector3(0, 1.65, 6.4).normalize(), Math.max(6.6, fits));
+  camera.position.copy(middle).addScaledVector(new THREE.Vector3(0, 1.65, 6.4).normalize(), close ? fits : Math.max(6.6, fits));
   camera.lookAt(middle);
   pictureRenderer.render(scene, camera);
   const c = document.createElement("canvas"); c.width = c.height = size;
@@ -258,13 +258,13 @@ export function bodyPicture(genes, size = 120) {
 // A species' typical member (its `now` or `start` in species.json: each gene its members' mean), drawn as the planet
 // draws a creature with those genes; the species' names for the feelings are the creature's own.
 export function speciesPicture(t, size = 120) {
-  return genesPicture({ ...t, fear_of_death: t.fear, love_of_babies: t.love, learns_from_others: t.learns }, size);
+  return genesPicture({ ...t, fear_of_death: t.fear, love_of_babies: t.love, learns_from_others: t.learns }, size, true);
 }
 
 // A creature's genes by the world's own names (`brain`: each layer's neurons, or a species' `neurons` and `layers`), drawn as the planet draws that creature: the
 // species card's and the Make page's bodies.
-export function genesPicture(c, size = 120) {
-  return bodyPicture({ ...genesOf(c), size: c.size ?? 1 }, size);
+export function genesPicture(c, size = 120, close = false) {
+  return bodyPicture({ ...genesOf(c), size: c.size ?? 1 }, size, close);
 }
 
 export const BEASTS = {

@@ -90,7 +90,8 @@
   #make-sliders { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 18px; font-size: 13px; }
   #make-sliders label { display: grid; grid-template-columns: 1fr auto; } #make-sliders input { grid-column: 1 / -1; width: 100%; }
   #make-page canvas { display: block; margin: 6px auto; width: 100%; max-width: 560px; height: auto; }
-  #make-page select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
+  #make-page select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px;
+                      max-width: 100%; text-overflow: ellipsis; }  /* a long Latin name never widens the page */
   #placing { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 13px; }
   #species-page { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 14px; align-items: start; }
   #species-page .panel { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
@@ -102,7 +103,7 @@
   #species-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 6px 0; font-size: 13px; }
   #species-card dt { color: var(--muted); }
   #species-card canvas.species-body { display: block; margin: 4px 0; }  /* its typical member, as the planet draws it */
-  #species-table td.species-body { width: 40px; padding: 0 4px; } #species-table canvas.species-body { display: block; }
+  #species-table td.species-body { width: 56px; padding: 0 4px; } #species-table canvas.species-body { display: block; }
   .chart-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: var(--muted); font-size: 12px; }
   .chart-bar > span { display: inline-flex; align-items: center; gap: 6px; }
   .chart-bar .go-back { color: var(--ink); }  /* back in time: the step clicked on a chart, and its button */
@@ -236,6 +237,7 @@
 <script type="module">
 import * as Planet from "/static/planet.js";
 window.Planet = Planet;  // the live view's 3D planet (src/static/planet.js)
+render();  // the page may have drawn before the 3D code loaded: drawn again, with its pictures
 </script>
 <script>
 const PANELS = [
@@ -1720,9 +1722,14 @@ async function drawMake() {
   const run = data.find((r) => r.status === "running");
   const sliders = document.getElementById("make-sliders"), said = document.getElementById("make-said");
   if (!run) { sliders.textContent = "Start a world in Live first: a creature is made for a running world."; return; }
-  if (made && made.run === run.name) return startFrom();  // built: the owner's slider positions stay
   const rules = (await (await fetch(`/rules?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })).json()).rules;
   const limit = (gene, end) => (rules.find((r) => r.name === `gene.${RULE_GENE[gene] || gene}.${end}`) || {}).value;
+  if (made && made.run === run.name) {  // built: the owner's slider positions stay, within the world's limits of now
+    made.limit = limit;
+    keepWithin();
+    drawMakeSliders();
+    return startFrom();
+  }
   const book = await fetch(`/species?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : { species: [] }), () => ({ species: [] }));
   const alive = book.species.filter((s) => s.ended === null && s.now).sort((a, b) => (b.facts?.alive || 0) - (a.facts?.alive || 0));
@@ -1742,6 +1749,14 @@ async function drawMake() {
   from.onchange();
   say(said, "", "");
   startFrom();
+}
+
+function keepWithin() {  // the owner's slider positions kept; only one outside the world's limits of now moves in
+  const { limit } = made, clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  for (const [name] of GENE_BOXES) made.genes[name] = clamp(made.genes[name], limit(name, "low"), limit(name, "high"));
+  made.layers = clamp(made.layers, limit("layers", "low"), limit("layers", "high"));
+  made.neurons = Array.from({ length: made.layers },
+    (_, i) => clamp(made.neurons[i] ?? made.neurons[0], limit("neurons", "low"), limit("neurons", "high")));
 }
 
 function startFrom() {  // Make opened from a species' card (Bring it back): its typical member on the sliders
@@ -1974,7 +1989,7 @@ async function drawSpecies() {
   document.querySelectorAll("#species-table tr[data-species]").forEach((tr) => {
     tr.addEventListener("click", () => speciesCard(Number(tr.dataset.species)));
     const s = byId.get(Number(tr.dataset.species));
-    if (window.Planet) tr.querySelector(".species-body").append(speciesBody(Planet.speciesPicture(s.now), 40));
+    if (window.Planet) tr.querySelector(".species-body").append(speciesBody(Planet.speciesPicture(s.now, 56), 56));
   });
   if (speciesPicked !== null && byId.has(speciesPicked)) speciesCard(speciesPicked);
 }
@@ -2016,7 +2031,7 @@ function speciesCard(id) {
       "<small>opens Make at its last typical member; its brain is new (the brains died with them)</small></p>");
     card.querySelector(".bring-back").addEventListener("click", () => { makeFrom = id; show("make"); });
   }
-  if (window.Planet && s.now) card.querySelector("h2").after(speciesBody(Planet.speciesPicture(s.now), 160));  // its typical member
+  if (window.Planet && s.now) card.querySelector("h2").after(speciesBody(Planet.speciesPicture(s.now, 320), 320));  // its typical member
 }
 
 // A copy of a body's picture at this many pixels (the 3D module draws each body once; each place gets its own canvas).

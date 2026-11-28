@@ -997,6 +997,37 @@ class TestControlRoom(unittest.TestCase):
         self.assertIn("c.neurons /", genes)
         self.assertIn("c.layers", genes)
 
+    def test_eyes_grow_with_reach(self):
+        """The owner, 2026-11-28: "THE EYES eveer grow enogu ... predetor eyes are even none seen at all"."""
+        self.assertIn("headR * (0.15 + 0.45 * g.reach)", self.function_of(self.beasts_file(), "export function beastModel("))
+
+    def test_make_reads_the_rules_each_time(self):
+        """A rule changed after Make was opened reaches its sliders without a reload."""
+        page, _ = self.page_files()
+        make = self.function_of(page, "async function drawMake(")
+        self.assertLess(make.index("/rules?run="), make.index("made.run === run.name"))
+        self.assertIn("function keepWithin(", page)
+
+    def test_long_names_do_not_widen_make(self):
+        page, _ = self.page_files()
+        rule = page.split("#make-page select {", 1)[1].split("}", 1)[0]
+        self.assertIn("max-width: 100%", rule)
+
+    def test_the_page_draws_again_when_the_planet_loads(self):
+        page, _ = self.page_files()
+        module = page.split("window.Planet = Planet;", 1)[1].split("</script>", 1)[0]
+        self.assertIn("render()", module)
+
+    def test_species_pictures_fill_their_frame(self):
+        """The owner, 2026-11-28: "the animal image in the species too small!!"."""
+        beasts = self.beasts_file()
+        self.assertIn("true)", self.function_of(beasts, "export function speciesPicture("))
+        picture = self.function_of(beasts, "export function bodyPicture(")
+        self.assertIn("close", picture.split("\n", 1)[0])
+        self.assertIn("JSON.stringify([genes, size, close])", picture)
+        page, _ = self.page_files()
+        self.assertIn("speciesBody(Planet.speciesPicture(s.now, 320), 320)", self.function_of(page, "function speciesCard("))
+
     def test_make_shows_the_body_big(self):
         """The owner, 2026-11-28: "the Make screen the view of the animal is too smal screen!", then, after the mockup,
         "yes fix the editor"."""
@@ -1012,7 +1043,7 @@ class TestControlRoom(unittest.TestCase):
         with urllib.request.urlopen(self.server.base + "/static/beasts.js") as response:
             beasts = response.read().decode("utf-8")
         picture = self.function_of(beasts, "export function bodyPicture(")
-        self.assertIn("const key = JSON.stringify([genes, size]);", picture)
+        self.assertIn("const key = JSON.stringify([genes, size, close]);", picture)  # its size (and framing) in the key
 
     def test_a_species_card_tells_its_story(self):  # "how smart a species is, how big of a brain ... Size"
         with urllib.request.urlopen(self.server.base + "/") as response:

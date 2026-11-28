@@ -104,8 +104,9 @@ RULES = (
     Rule("call_reach", "senses", "A call at full volume carries this far", 12.0, 0.5, 60.0),
     Rule("diet_bite", "senses", "A meat eater's hit takes more: × (1 + meat gut × this)", 1.0, 0.0, 5.0),
     Rule("hunter_share", "senses", "A hunter keeps this share of what it takes", 0.8, 0.0, 1.0),
-    Rule("corpse_energy", "senses", "A corpse's food, × the dead one's size", 8.0, 0.0, 50.0),
-    Rule("corpse_steps", "senses", "A corpse lasts this many steps", 5.0, 1.0, 100.0),
+    Rule("corpse_energy", "senses", "A corpse's food, × the dead one's size", 40.0, 0.0, 200.0),
+    Rule("corpse_steps", "senses", "A corpse lasts this many steps, × the dead one's size", 100.0, 1.0, 1000.0),
+    Rule("meat_value", "senses", "A bite or a hit of meat gives this × what a bite of plants gives", 2.0, 1.0, 5.0),
     Rule("first_creatures", "world", "A new world starts with this many creatures", 200.0, 1.0, 600.0),
     Rule("obstacles", "world", "Rocks a new world gets", 70.0, 0.0, 300.0),
     Rule("water_share", "world", "Share of a new planet under water", 0.5, 0.0, 0.8),
@@ -301,7 +302,10 @@ MEANS = {
              "1 means touching.",
     "hunter_share": "Of the energy a hit takes from the prey, the hunter keeps this share (0.8 = 80 %).",
     "corpse_energy": "When a creature dies, it leaves food worth this × its size.",
-    "corpse_steps": "How many steps a dead creature's food stays before it is gone.",
+    "corpse_steps": "How many steps a dead creature's food stays before it is gone, × its size: a big body lies "
+                    "longer.",
+    "meat_value": "Meat is richer than plants: a bite of meat, or a hit, gives this × what the same bite of "
+                  "plants gives (the owner, 2026-11-28: \"from meat should give double the energy\").",
     "first_creatures": "How many creatures a brand-new world starts with.",
     "obstacles": "How many rocks a new world gets. Nothing can enter them, nothing grows on them, nobody sees "
                  "through them.",

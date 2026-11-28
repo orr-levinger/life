@@ -119,7 +119,8 @@ def world_view(world: World, follow: Optional[int] = None) -> Dict[str, Any]:
                        "call": None if c.called is None else [c.called[0], round(c.called[1], 2)],
                        "brain": world.learner.brain_size(c.slot) if c.policy == "learner" else None,
                        "learning_speed": world.learner.lr(c.slot) if c.policy == "learner" else None} for c in world.creatures],
-        "foods": [{"p": [round(float(v), 6) for v in f.p], "radius": round(f.radius, 3), "fruit": f.fruit, "meat": f.meat}
+        "foods": [{"p": [round(float(v), 6) for v in f.p], "radius": round(f.radius, 3), "fruit": f.fruit, "meat": f.meat,
+                   "left": round(f.left, 3)}  # the share of it not yet eaten: drawn smaller as it goes
                   for f in world.foods],
         "terrain": world.terrain.state(),
     }

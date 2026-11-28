@@ -6,6 +6,9 @@ import math
 import numpy as np
 
 
+RADIUS_PER_ENERGY = 0.01  # a food's radius by the energy it was made with
+
+
 class Food:
     """
     Represents a food item in the world that creatures can eat.
@@ -37,10 +40,14 @@ class Food:
         self.fruit = fruit  # dropped by a tree (it looks different; a plant all the same)
         self.meat = meat  # a corpse: it feeds by the eater's diet, plants by the rest
 
-        # Radius is 0.01 of the energy
-        self.radius = 0.01 * self.energy
+        self.radius = RADIUS_PER_ENERGY * self.energy  # as made: it keeps this radius as it is eaten
 
         self.remaining_duration = remaining_duration
+
+    @property
+    def left(self) -> float:
+        """The share of its energy left, against what it was made with (its radius says how much that was)."""
+        return self.energy * RADIUS_PER_ENERGY / self.radius if self.radius > 0 else 0.0
 
     def decay(self) -> None:
         """

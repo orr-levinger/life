@@ -35,7 +35,7 @@ class TestDiet(unittest.TestCase):
 
     def test_meat_feeds_a_meat_eater(self):
         bite = make_world().rules["bite"]
-        self.assertAlmostEqual(eats(0.25, meat=True)[0], 0.25 * bite)
+        self.assertAlmostEqual(eats(0.25, meat=True)[0], 0.25 * bite * make_world().rules["meat_value"])
         self.assertAlmostEqual(eats(0.0, meat=True)[0], 0.0)
 
     def test_a_hit_feeds_by_the_diet_and_hurts_more(self):
@@ -47,7 +47,7 @@ class TestDiet(unittest.TestCase):
         self.assertAlmostEqual(damage, hunter.size * w.rules["attack_damage"] * (1 + 0.5 * w.rules["diet_bite"]))
         hunter.apply_action(("ATTACK", prey), w)
         self.assertAlmostEqual(prey.energy, 50.0 - damage)
-        self.assertAlmostEqual(hunter.energy, 20.0 + w.rules["hunter_share"] * damage * 0.5)
+        self.assertAlmostEqual(hunter.energy, 20.0 + w.rules["hunter_share"] * damage * 0.5 * w.rules["meat_value"])
 
     def test_a_corpse_is_meat(self):
         w = quiet(make_world(NO_FOOD_ATTACKS))

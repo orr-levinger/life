@@ -13,7 +13,8 @@ file; `src/static/planet.js` draws meat as a lying body and every food by `left`
 
 **Tech Stack:** Python 3.12 (unittest), JavaScript (three.js).
 
-**Spec:** `docs/superpowers/specs/2026-11-28-meat-and-corpses-design.md`.
+**Spec:** `docs/superpowers/specs/2026-11-28-meat-and-corpses-design.md`. The spec and this plan approved by the owner,
+2026-11-28: "Build it".
 
 ## Global Constraints
 
@@ -39,7 +40,7 @@ radius), `src/saves.py` (`_meat_and_corpses(about)`: a save without `meat_value`
 a lying body, flattened grey-brown with pale ribs; every food scaled by `Math.sqrt(f.left ?? 1)`). Tests:
 `tests/test_world_rules.py`, `tests/test_saves.py`, `tests/test_evolve_runs.py`, `tests/test_viewer.py`.
 
-- [ ] Step 1: tests first:
+- [x] Step 1: tests first:
   - `test_meat_is_worth_twice` (test_world_rules): two creatures of meat gut and grass gut 0.5 each, one eating a
     corpse, one a grass piece, one bite: the meat eater gains twice.
   - `test_a_hit_is_worth_meat_value` (test_world_rules): a hit's gain is `0.8 × taken × meat gut × 2`.
@@ -52,11 +53,16 @@ a lying body, flattened grey-brown with pale ribs; every food scaled by `Math.sq
     `Math.sqrt(f.left`; the meat kind is not the plant's or fruit's shape.
   Run `python -m unittest tests.test_world_rules tests.test_saves tests.test_viewer` and
   `python -m unittest tests.test_evolve_runs` → FAIL.
-- [ ] Step 2: the changes. Run the same commands → OK.
-- [ ] Step 3: on a half-size check world with hunters on: a corpse seen lying where a creature died, unlike food, still
+- [x] Step 2: the changes. Run the same commands → OK (218 tests; `test_evolve_runs` 20). The tests that held the old
+  values were changed to the new rule: `test_guts` (meat bites and hits × `meat_value`), `test_diet` (the same),
+  `test_world_rules` (the hunter's 80 % × 2; corpses of size 1: 40 food, 100 steps).
+- [x] Step 3: on a half-size check world with hunters on: a corpse seen lying where a creature died, unlike food, still
   there many steps later; a piece being eaten drawn smaller; screenshot; no new console error. Stop the world and its
   viewer; close the browser pane.
-- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "Meat worth more, corpses that stay" (`git show
+  Done 2026-11-28 on the check world resumed from step 4,424 (hunters as its save had them): 6 corpses lying at step
+  4,488, two being eaten (22 % and 41 % left); one seen as a lying body with pale ribs beside tan grass and red fruit;
+  grass pieces drawn at different sizes as they are eaten (273 part-eaten in the view).
+- [x] Step 4: `python scripts/run_tests.py` → OK under 300 s (OK in 268.9 s); commit "Meat worth more, corpses that stay" (`git show
   --stat` → the files above and this plan); push to `evolve-from-scratch`.
 
 ## Must be completed to mark this as done

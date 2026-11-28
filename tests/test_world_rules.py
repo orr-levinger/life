@@ -348,8 +348,8 @@ class TestHunting(unittest.TestCase):
         prey = add(w, 11, 10, size=1.0, energy=50.0)
         hunter.apply_action(("ATTACK", prey), w)
         self.assertAlmostEqual(prey.energy, 40.0)
-        self.assertAlmostEqual(hunter.energy, 100.0 + 0.8 * 10.0 - 2.0 - living(2.0))
-        self.assertAlmostEqual(w.energy_earned, 0.8 * 10.0)
+        self.assertAlmostEqual(hunter.energy, 100.0 + 0.8 * 10.0 * 2.0 - 2.0 - living(2.0))  # meat: worth twice
+        self.assertAlmostEqual(w.energy_earned, 0.8 * 10.0 * 2.0)
         self.assertAlmostEqual(w.energy_spent, 2.0 + living(2.0))
 
     def test_kill_leaves_corpse_and_counts_attack_death(self):
@@ -362,7 +362,7 @@ class TestHunting(unittest.TestCase):
         self.assertIn(prey, w.dead_this_step)
         corpse = w.foods[-1]
         np.testing.assert_allclose(corpse.p, at(11, 10))
-        self.assertEqual((corpse.energy, corpse.remaining_duration), (8.0, 5))
+        self.assertEqual((corpse.energy, corpse.remaining_duration), (40.0, 100))  # size 1: 40 food, 100 steps
 
     def test_a_hungry_death_leaves_a_corpse(self):  # the owner, 2026-11-27: "the same if they die of hunger or old age"
         w = make_world()
@@ -373,7 +373,7 @@ class TestHunting(unittest.TestCase):
         corpses = [f for f in w.foods if f.meat]
         self.assertEqual(len(corpses), 1)
         np.testing.assert_allclose(corpses[0].p, c.p)
-        self.assertEqual((corpses[0].energy, corpses[0].remaining_duration), (8.0, 5))
+        self.assertEqual((corpses[0].energy, corpses[0].remaining_duration), (40.0, 100))  # size 1: 40 food, 100 steps
 
     def test_an_old_death_leaves_a_corpse(self):
         w = make_world()
@@ -385,7 +385,7 @@ class TestHunting(unittest.TestCase):
         corpses = [f for f in w.foods if f.meat]
         self.assertEqual(len(corpses), 1)
         np.testing.assert_allclose(corpses[0].p, c.p)
-        self.assertEqual((corpses[0].energy, corpses[0].remaining_duration), (8.0, 5))
+        self.assertEqual((corpses[0].energy, corpses[0].remaining_duration), (40.0, 100))  # size 1: 40 food, 100 steps
 
     def test_a_creature_hit_feels_it(self):
         from src.senses import sense
@@ -424,6 +424,33 @@ class TestHunting(unittest.TestCase):
         hunter.apply_action(("ATTACK", prey), w)
         self.assertEqual(hunter.last_action, "ATTACK_MISS")
         self.assertEqual(prey.energy, 50.0)
+
+
+class TestMeat(unittest.TestCase):
+    """The owner, 2026-11-28: "from meat should give double the energy as grass and fruits"; "corpse should remain
+    much longer"; "Corpse should stay depending on its size"."""
+
+    def test_meat_is_worth_twice(self):
+        from tests.test_guts import bite
+        self.assertAlmostEqual(bite(0.5, 0.5, meat=True), 2 * bite(0.5, 0.5))  # the same gut, a bite of meat: twice
+        self.assertEqual(make_world().rules["meat_value"], 2.0)
+
+    def test_a_hit_is_worth_meat_value(self):
+        from tests.test_guts import quiet
+        w = quiet(make_world(NO_FOOD_ATTACKS))
+        hunter, prey = add(w, 10, 10, energy=20.0), add(w, 11, 10, energy=50.0)
+        hunter.grass_gut, hunter.meat_gut = 1.0, 0.5
+        damage = hunter.attack_damage(w)
+        hunter.apply_action(("ATTACK", prey), w)
+        self.assertAlmostEqual(hunter.energy, 20.0 + 0.8 * damage * 0.5 * 2.0)
+
+    def test_a_corpse_lasts_by_its_size(self):
+        for size, energy, steps in ((1.0, 40.0, 100), (0.5, 20.0, 50), (2.0, 80.0, 200)):
+            w = make_world(NO_FOOD)
+            c = add(w, 10, 10, size=size)
+            w.kill(c, "hunger")
+            corpse = w.foods[-1]
+            self.assertEqual((corpse.meat, corpse.energy, corpse.remaining_duration), (True, energy, steps), size)
 
 
 class TestLifeAndDeath(unittest.TestCase):

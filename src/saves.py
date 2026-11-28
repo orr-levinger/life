@@ -155,6 +155,14 @@ def _water_steps(about: Dict[str, Any]) -> None:
         saved.setdefault("in_water", 0)
 
 
+def _meat_and_corpses(about: Dict[str, Any]) -> None:
+    """A save of before meat was worth double (2026-11-28): its world goes on with the new meat and corpses (the owner:
+    meat "double the energy", corpses lying 100 steps × their size); its lying corpses keep the steps they had left."""
+    rules = about["rules"]
+    if "meat_value" not in rules:
+        rules.update(meat_value=2.0, corpse_energy=40.0, corpse_steps=100.0)
+
+
 def _two_guts(about: Dict[str, Any]) -> None:
     """A save of before the two guts (2026-11-27), made one of now in place: diet d becomes a meat gut d and a grass gut
     1 - d, water w gills w and lungs 1 - w, so each creature eats, moves and pays as it did; the hit it felt shows the
@@ -192,6 +200,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         learner.load_state({key[len(LEARNER):]: value for key, value in arrays.items() if key.startswith(LEARNER)})
     _two_guts(about)
     _water_steps(about)
+    _meat_and_corpses(about)
     rules = {**starting_rules(), **about["rules"]}  # a rule born after the save starts at its start value
     if "step_cost" not in about["rules"]:  # saved before the costs were rules (2026-11-27): it keeps the costs it paid
         for name in COST_NAMES:

@@ -39,9 +39,10 @@ class TestGuts(unittest.TestCase):
         full = make_world().rules["bite"]
         self.assertAlmostEqual(bite(0.5, 0.0), 0.5 * full)
         self.assertAlmostEqual(bite(0.5, 0.0, fruit=True), 0.5 * full)
-        self.assertAlmostEqual(bite(0.0, 0.5, meat=True), 0.5 * full)
+        meat = make_world().rules["meat_value"]  # a bite of meat is worth this × a bite of plants
+        self.assertAlmostEqual(bite(0.0, 0.5, meat=True), 0.5 * full * meat)
         self.assertAlmostEqual(bite(1.0, 1.0), full)  # both guts: the full bite of each
-        self.assertAlmostEqual(bite(1.0, 1.0, meat=True), full)
+        self.assertAlmostEqual(bite(1.0, 1.0, meat=True), full * meat)
         self.assertAlmostEqual(bite(1.0, 0.0, meat=True), 0.0)  # a grass eater gets nothing from meat
 
     def test_a_hit_takes_and_feeds_by_the_meat_gut(self):
@@ -52,7 +53,7 @@ class TestGuts(unittest.TestCase):
         self.assertAlmostEqual(damage, hunter.size * w.rules["attack_damage"] * (1 + 0.5 * w.rules["diet_bite"]))
         hunter.apply_action(("ATTACK", prey), w)
         self.assertAlmostEqual(prey.energy, 50.0 - damage)
-        self.assertAlmostEqual(hunter.energy, 20.0 + w.rules["hunter_share"] * damage * 0.5)
+        self.assertAlmostEqual(hunter.energy, 20.0 + w.rules["hunter_share"] * damage * 0.5 * w.rules["meat_value"])
 
     def test_gills_in_a_pond_lungs_on_land(self):
         w = make_world(NO_FOOD)

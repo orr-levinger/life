@@ -270,7 +270,7 @@ class Creature:
             return
         amount = min(self.rules["bite"], food.energy)
         food.energy -= amount
-        gained = amount * (self.meat_gut if food.meat else self.grass_gut)  # what its gut for that food makes of it
+        gained = amount * (self.meat_gut * self.rules["meat_value"] if food.meat else self.grass_gut)  # its gut for that food; meat richer
         self.energy += gained
         self.food_eaten += gained
         world.total_bites += 1
@@ -322,7 +322,7 @@ class Creature:
         ahead, left = bearing(target.p, target.facing, self.p)  # in the one hit's own view: where the hitter stands
         target.hurt = (taken / target.max_energy, float(ahead), float(left),  # how much, and where the hitter stands
                        float(arc(self.p, target.p, world.radius)), *map(float, genes_seen(self, world)))  # how far, who
-        gained = self.rules["hunter_share"] * taken * self.meat_gut  # a hit feeds a meat gut
+        gained = self.rules["hunter_share"] * taken * self.meat_gut * self.rules["meat_value"]  # a hit feeds a meat gut, as meat
         self.energy += gained
         self._earn(gained, world)
         self.last_action = "ATTACK"

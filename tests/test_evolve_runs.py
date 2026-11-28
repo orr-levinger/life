@@ -39,6 +39,17 @@ class TestEvolveRuns(unittest.TestCase):
             parse_args(["--seed", "1", "--species", "instinct", "--policy", "random"])
 
 
+    def test_the_view_says_how_much_food_is_left(self):
+        """The owner, 2026-11-28: "they size should srhink as its being eating"."""
+        from src.evolve import world_view
+        from src.food import Food
+        from tests.helpers import NO_FOOD, at, make_world
+        w = make_world(NO_FOOD)
+        piece = Food(at(10.0, 10.0), remaining_duration=-1, energy=10.0)
+        w.foods.append(piece)
+        piece.energy = 5.0  # half eaten
+        self.assertAlmostEqual(world_view(w)["foods"][-1]["left"], 0.5)
+
     def test_watched_world_writes_its_view(self):
         with tempfile.TemporaryDirectory() as folder, no_waiting():
             watched(folder)
@@ -55,7 +66,7 @@ class TestEvolveRuns(unittest.TestCase):
                                          "learning_speed", "intent", "target", "baby"})
         self.assertTrue(0.0 <= creature["energy"] <= 1.0)
         self.assertAlmostEqual(sum(v * v for v in creature["p"]), 1.0, places=4)  # a point on the planet
-        self.assertEqual(set(view["foods"][0]), {"p", "radius", "fruit", "meat"})
+        self.assertEqual(set(view["foods"][0]), {"p", "radius", "fruit", "meat", "left"})
         self.assertEqual(set(view["terrain"]), {"radius", "obstacles", "trees"})
         self.assertEqual(view["radius"], 10.9)  # the small test planet
 

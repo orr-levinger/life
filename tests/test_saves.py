@@ -90,6 +90,12 @@ class TestSaves(unittest.TestCase):
             for gene in ("grass_gut", "meat_gut", "gills", "lungs"):
                 self.assertTrue(0.0 <= getattr(c, gene) <= 1.0, gene)
 
+    def test_a_save_from_before_gets_the_new_meat(self):
+        """A world saved before meat was worth double (2026-11-28) goes on with the new meat and corpses."""
+        world, _, _ = load_world(Path(__file__).parent / "data" / "before_guts" / "save.npz", learner_seed=0)
+        self.assertEqual((world.rules["meat_value"], world.rules["corpse_energy"], world.rules["corpse_steps"]),
+                         (2.0, 40.0, 100.0))
+
     def test_a_save_from_before_has_no_water_steps(self):
         world, _, _ = load_world(Path(__file__).parent / "data" / "before_guts" / "save.npz", learner_seed=0)
         self.assertTrue(world.creatures)

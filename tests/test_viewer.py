@@ -1028,6 +1028,14 @@ class TestControlRoom(unittest.TestCase):
         page, _ = self.page_files()
         self.assertIn("speciesBody(Planet.speciesPicture(s.now, 320), 320)", self.function_of(page, "function speciesCard("))
 
+    def test_corpses_look_like_bodies_and_food_shrinks(self):
+        """The owner, 2026-11-28: corpses "should look different then regualr food"; food shrinks as it is eaten."""
+        _, planet = self.page_files()
+        self.assertIn("Math.sqrt(f.left", self.function_of(planet, "function drawFood("))
+        kinds = planet.split("const FOOD_KINDS", 1)[1].split("};", 1)[0]
+        meat = kinds.split("meat:", 1)[1]
+        self.assertIn("corpseGeometry", meat)  # a lying body, not the plant's or the fruit's shape
+
     def test_make_shows_the_body_big(self):
         """The owner, 2026-11-28: "the Make screen the view of the animal is too smal screen!", then, after the mockup,
         "yes fix the editor"."""

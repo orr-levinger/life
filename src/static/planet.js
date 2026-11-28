@@ -129,10 +129,25 @@ function makeTerrain(terrain, R) {
 }
 
 // ---------- food: tan seeds, red berries (fruit), dark lumps (meat)
+// A corpse: a lying body (a flattened grey-brown trunk and head) with pale ribs, unlike grass, fruit or a creature
+// (the owner, 2026-11-28: corpses "should look different then regualr food"); its colours on its corners.
+const corpseGeometry = (() => {
+  const part = (geo, colour, x, y, z, sx, sy, sz, rz = 0) => {
+    const g = geo.toNonIndexed().scale(sx, sy, sz).rotateZ(rz).translate(x, y, z), c = new THREE.Color(colour);
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).map((_, i) => [c.r, c.g, c.b][i % 3]), 3));
+    g.deleteAttribute("uv");
+    return g;
+  };
+  const parts = [part(new THREE.IcosahedronGeometry(0.5, 1), 0x6b5a4e, 0, 0.12, 0, 1.6, 0.35, 0.8),
+                 part(new THREE.IcosahedronGeometry(0.28, 0), 0x5e4e44, 0.95, 0.1, 0, 1.2, 0.6, 0.9)];
+  for (let k = 0; k < 4; k++) parts.push(part(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 5).rotateX(Math.PI / 2), 0xe8dcc4, -0.3 + k * 0.2, 0.28, 0, 1, 1, 1));
+  return mergeGeometries(parts);
+})();
+
 const FOOD_KINDS = {
   plant: { geometry: new THREE.OctahedronGeometry(1, 0), material: new THREE.MeshStandardMaterial({ color: 0xc9a46a, flatShading: true }) },
   fruit: { geometry: new THREE.IcosahedronGeometry(1, 1), material: new THREE.MeshStandardMaterial({ color: 0xe0483b, roughness: 0.4 }) },
-  meat: { geometry: new THREE.DodecahedronGeometry(1, 0), material: new THREE.MeshStandardMaterial({ color: 0x7a1f1f, roughness: 0.6 }) },
+  meat: { geometry: corpseGeometry, material: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8 }) },
 };
 const foodKind = (f) => (f.fruit ? "fruit" : f.meat ? "meat" : "plant");
 
@@ -238,7 +253,7 @@ function drawFood(picture, R, sensed) {
       state.food[kind] = mesh; state.scene.add(mesh);
     }
     list.forEach((f, i) => {
-      const s = Math.max(0.12, f.radius) * (kind === "plant" ? 1.4 : 1.0);
+      const s = Math.max(0.12, f.radius * Math.sqrt(f.left ?? 1)) * (kind === "plant" || kind === "meat" ? 1.4 : 1.0);  // smaller as it is eaten
       standOn(o, v3(f.p), R, s * 0.6); o.scale.setScalar(s); o.updateMatrix(); mesh.setMatrixAt(i, o.matrix);
     });
     mesh.count = list.length; mesh.instanceMatrix.needsUpdate = true;

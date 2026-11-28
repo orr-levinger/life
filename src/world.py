@@ -244,7 +244,7 @@ class World:
         whole = int(per_step)  # e.g. 2.4 per step: 2 every step and a third 40 % of the time
         extra = self.food_rng.random() < per_step - whole
         ponds = self.terrain.has_water()
-        fruit = sum(f.fruit for f in self.foods)  # fruit has its own room (max_fruit); the rest share max_food
+        fruit = sum(f.fruit for f in self.foods)  # fruit has its own room (the max_fruit knob); the rest share max_food
         for _ in range(whole + extra):
             p = self._land_spot() if ponds else random_point(self.food_rng)
             energy = self.food_rng.uniform(*self.settings.food_energy)
@@ -265,7 +265,7 @@ class World:
             e1, e2 = local_frame(trunk)
             p = exp_map(trunk, e1, e2, away * math.cos(angle), away * math.sin(angle), self.radius)
             dropped = Food(p, remaining_duration=-1, energy=self.food_rng.uniform(*self.settings.food_energy), fruit=True)
-            if fruit < int(self.rules["max_fruit"]) and self._fits(dropped):
+            if fruit < int(self.settings.max_fruit) and self._fits(dropped):
                 self.foods.append(dropped)
                 self.foods_created_this_step.add(id(dropped))
                 fruit += 1

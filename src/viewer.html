@@ -560,7 +560,7 @@ function message(title, detail) {
 
 // The world card's sliders in groups: each of Auto's knobs named in exactly one (every cost is a knob, 2026-11-26).
 const KNOB_GROUPS = [
-  ["Food", ["max_food", "food_energy", "food_per_step", "fruit_rate"]],
+  ["Food", ["max_food", "max_fruit", "food_energy", "food_per_step", "fruit_rate"]],
   ["Life", ["lifespan"]],
 ];
 
@@ -1052,7 +1052,9 @@ async function fetchView() {
   watching.cur = picture;
   watching.curAt = now;
   document.getElementById("watch-where").textContent =
-    `step ${picture.step.toLocaleString()} · ${picture.creatures.length} alive · ${picture.foods.length} food`;
+    `step ${picture.step.toLocaleString()} · ${picture.creatures.length} alive · ` +  // what lies on the ground, apart
+    `${picture.foods.filter((f) => !f.fruit && !f.meat).length} grass · ${picture.foods.filter((f) => f.fruit).length} fruit · ` +
+    `${picture.foods.filter((f) => f.meat).length} corpses`;
 }
 
 // Hunger as a colour: red when empty, yellow at half, green from 70 % of a full tank (enough for a baby).

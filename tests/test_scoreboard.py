@@ -5,7 +5,7 @@ from pathlib import Path
 
 from src.exam import ExamResult
 from src.food import Food
-from src.scoreboard import ROW_KEYS, Scoreboard
+from src.scoreboard import BEFORE_FRUIT_ROOM, OLDER_LAYOUTS, ROW_KEYS, Scoreboard
 from src.senses import sense
 from tests.helpers import at, add, make_world
 
@@ -138,6 +138,7 @@ class TestScoreboard(unittest.TestCase):
             "fear_of_death", "love_of_babies", "learns_from_others", "neurons", "layers", "fruit_rate",
             "sprint_power", "eat_miss", "attack_cost", "attack_damage", "bump_cost", "vision_cost", "hearing_cost",
             "neuron_cost", "stealth_cost", "armour_cost",  # every cost a knob (2026-11-26)
+            "max_fruit",  # the fruit cap a knob (2026-11-28)
         ))
         w, me = food_world()
         me.generation = 4
@@ -268,3 +269,10 @@ class TestScoreboard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFruitRoom(unittest.TestCase):
+    def test_the_scoreboard_keeps_the_fruit_cap(self):
+        self.assertEqual(ROW_KEYS[-1], "max_fruit")
+        self.assertEqual(BEFORE_FRUIT_ROOM, ROW_KEYS[:-1])  # a scoreboard of before: read with it empty
+        self.assertIn(BEFORE_FRUIT_ROOM, OLDER_LAYOUTS)

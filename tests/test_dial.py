@@ -49,6 +49,11 @@ def rows(alive, energy, start=250):
 
 
 class TestRates(unittest.TestCase):
+    def test_auto_turns_the_fruit_cap(self):  # the owner, 2026-11-28: "total fruts should also be nobed"
+        knob = knob_named("max_fruit")
+        self.assertEqual((knob.easiest, knob.hardest), (800.0, 20.0))
+        self.assertLess(knob.nudged(300.0, 0.05, True), 300.0)  # harder: fewer fruit at most
+
     def test_slope_of_a_straight_line(self):
         self.assertAlmostEqual(slope([(250, 10.0), (500, 12.0), (750, 14.0), (1000, 16.0)]), 8.0)  # per 1,000 steps
         self.assertIsNone(slope([(250, 10.0)]))
@@ -169,7 +174,7 @@ class TestDial(unittest.TestCase):
 
     def test_knobs_stay_within_their_ends(self):
         hard, easy = Dial(), Dial()
-        for _ in range(200):
+        for _ in range(300):  # enough nudges for every knob to reach its end
             hard.review(80, 1.0, 0.0, 0)
             easy.review(10, -1.0, -1.0, 0)
         for k in KNOBS:

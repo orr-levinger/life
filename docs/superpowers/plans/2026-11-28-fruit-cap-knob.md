@@ -13,7 +13,8 @@ knobs (`KNOB_ENDS`), so the dial (`src/dial.py`), the control file (`src/control
 
 **Tech Stack:** Python 3.12 (unittest), JavaScript (the page).
 
-**Spec:** `docs/superpowers/specs/2026-11-28-fruit-cap-knob-design.md`.
+**Spec:** `docs/superpowers/specs/2026-11-28-fruit-cap-knob-design.md`. The spec and this plan approved by the owner,
+2026-11-28: "Approve it".
 
 ## Global Constraints
 
@@ -40,7 +41,7 @@ the scoreboard row's `max_fruit`), `src/viewer.py` (`KNOB_LABELS`: `"max_food": 
 setting), `tests/test_dial.py`, `tests/test_saves.py`, `tests/test_scoreboard.py`, `tests/test_evolve_runs.py` (the now
 file's keys), `tests/test_viewer.py`.
 
-- [ ] Step 1: tests first:
+- [x] Step 1: tests first:
   - `test_fruit_has_its_own_knob` (test_terrain): the fruit world with `settings.max_fruit` 3 holds 3 fruit at most
     after 20 steps (today's `fruit_world` test, given the setting instead of the rule).
   - `test_auto_turns_the_fruit_cap` (test_dial): `knob_named("max_fruit")` exists with ends 800 and 20; one harder
@@ -54,13 +55,25 @@ file's keys), `tests/test_viewer.py`.
     the page's food tile shows `grass` and `fruit`.
   Run `python -m unittest tests.test_terrain tests.test_dial tests.test_saves tests.test_scoreboard tests.test_viewer`
   and `python -m unittest tests.test_evolve_runs` → FAIL (no fruit knob yet).
-- [ ] Step 2: the changes. Run the same commands → OK; `grep -rn '"max_fruit"\]' src tests` → no rule use left
+- [x] Step 2: the changes. Run the same commands → OK (234 tests; `test_evolve_runs` 21); `grep -rn
+  'rules\["max_fruit"\]' src tests` → nothing. Older tests changed with it: `test_rules` (the rule's test now the
+  knob's), `test_seasons` (the cap as a setting), `test_scoreboard` (the new last column), `test_dial` (300 nudges
+  instead of 200 to bring every knob to its end, one knob more).
   (`rules["max_fruit"]`).
-- [ ] Step 3: on a half-size check world: Live shows "Grass pieces at most" and "Fruit pieces at most" and the tile
+- [x] Step 3: on a half-size check world: Live shows "Grass pieces at most" and "Fruit pieces at most" and the tile
   "grass N · fruit M"; in Manual the fruit cap set to 50: the fruit lying stays at 50 or under after 500 steps; back to
   Auto. Screenshot. Stop the world and its viewer; close the browser pane.
-- [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "The fruit cap is a knob" (`git show --stat` →
+  Done 2026-11-28 on the check world resumed from step 4,424 (its save from before: the fruit cap 300 as a knob):
+  the knobs answer and Live show "Grass pieces at most" and "Fruit pieces at most"; the world's line "374 grass ·
+  98 fruit · 1 corpses"; Manual with the fruit cap 50 at step 4,435: fruit 95 → 60 (4,521) → 50 (4,616), then 47 to
+  50 to step 5,087; back to Auto. Read from the world's view file and the page (no screenshot).
+- [x] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "The fruit cap is a knob" (`git show --stat` →
   the files above and this plan); push to `evolve-from-scratch`.
+  Not done yet: the first whole run found two more older tests holding the old knobs (`test_costs`: the knob list;
+  `test_settings`: the start), changed with the knob; then the whole suite went over 300 s three times (2026-11-28,
+  the owner's world running on this box), still running `test_evolve_runs`, `test_world_rules` and once `test_viewer`;
+  none failed. Alone: `test_world_rules` OK (72 tests, 29 s), `test_evolve_runs` OK (21 tests, 219 s).
+  The owner, 2026-11-28: "Push": committed and pushed without the whole suite passing.
 
 ## Must be completed to mark this as done
 

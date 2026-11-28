@@ -13,7 +13,7 @@ TEST_WORLD = exam_settings(starting_rules())
 class TestSettings(unittest.TestCase):
     def test_the_start_is_the_easy_start_of_the_design(self):
         self.assertEqual(START, Settings(max_food=400, food_energy=(20, 40), food_per_step=6.0, lifespan=(4000, 6000),
-                                         attacks=False, fruit_rate=0.02))  # the costs are rules (tests/test_costs.py)
+                                         attacks=False, fruit_rate=0.02, max_fruit=300.0))  # the costs are rules (tests/test_costs.py)
 
     def test_the_start_is_easier_than_the_test_world(self):
         self.assertGreater(START.max_food, TEST_WORLD.max_food)

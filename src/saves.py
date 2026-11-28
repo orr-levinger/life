@@ -155,6 +155,16 @@ def _water_steps(about: Dict[str, Any]) -> None:
         saved.setdefault("in_water", 0)
 
 
+def _fruit_room(about: Dict[str, Any]) -> None:
+    """A save of when the fruit cap was a rule (before 2026-11-28): its world goes on with that cap as its knob, in its
+    settings, Auto's and every nudge Auto can take back; the rule is dropped."""
+    cap = about["rules"].pop("max_fruit", 300.0)
+    dial = about.get("dial") or {}
+    for settings in (about["settings"], dial.get("settings"), *dial.get("taken", [])):
+        if settings is not None:
+            settings.setdefault("max_fruit", cap)
+
+
 def _meat_and_corpses(about: Dict[str, Any]) -> None:
     """A save of before meat was worth double (2026-11-28): its world goes on with the new meat and corpses (the owner:
     meat "double the energy", corpses lying 100 steps × their size); its lying corpses keep the steps they had left."""
@@ -201,6 +211,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
     _two_guts(about)
     _water_steps(about)
     _meat_and_corpses(about)
+    _fruit_room(about)
     rules = {**starting_rules(), **about["rules"]}  # a rule born after the save starts at its start value
     if "step_cost" not in about["rules"]:  # saved before the costs were rules (2026-11-27): it keeps the costs it paid
         for name in COST_NAMES:

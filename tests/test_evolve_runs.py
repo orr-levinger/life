@@ -39,6 +39,16 @@ class TestEvolveRuns(unittest.TestCase):
             parse_args(["--seed", "1", "--species", "instinct", "--policy", "random"])
 
 
+    def test_now_has_grass_and_fruit_apart(self):
+        from src.evolve import world_now
+        from src.food import Food
+        from tests.helpers import NO_FOOD, at, make_world
+        w = make_world(NO_FOOD)
+        w.foods += [Food(at(5.0, 5.0), -1, 10.0), Food(at(8.0, 5.0), -1, 10.0, fruit=True),
+                    Food(at(11.0, 5.0), -1, 10.0, fruit=True)]
+        now = world_now(w)
+        self.assertEqual((now["grass"], now["fruit"]), (1, 2))
+
     def test_the_view_says_how_much_food_is_left(self):
         """The owner, 2026-11-28: "they size should srhink as its being eating"."""
         from src.evolve import world_view
@@ -152,8 +162,8 @@ class TestEvolveRuns(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "200", "--species", "instinct", "--out", folder]))
             now = json.loads((Path(folder) / "now.json").read_text())
-        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time", "rules", "season", "genes",
-                                    "placed"})  # placed: the owner's last creature to place, for the page
+        self.assertEqual(set(now), {"step", "alive", "energy", "food", "grass", "fruit", "births", "deaths", "time", "rules",
+                                    "season", "genes", "placed"})  # placed: the owner's last creature to place, for the page
         low, mean, high = now["genes"]["size"]
         self.assertTrue(low <= mean <= high)
         self.assertEqual((now["step"], now["alive"]), (200, int(rows[-1]["population"])))

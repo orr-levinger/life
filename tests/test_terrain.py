@@ -57,9 +57,9 @@ class TestMakingTerrain(unittest.TestCase):
 
     def fruit_world(self, max_fruit):
         """Room for 5 plants, 5 new ones a step; a tree dropping fruit every step; fruit's own room `max_fruit`."""
-        w = make_world(replace(NO_FOOD, max_food=5, food_per_step=5.0, fruit_rate=1.0))
+        w = make_world(replace(NO_FOOD, max_food=5, food_per_step=5.0, fruit_rate=1.0, max_fruit=max_fruit))
         w.terrain = Terrain([], [tree(0.0, 0.0, 3.0)], w.radius)
-        w.rules.update({"max_fruit": max_fruit, "season_depth": 0.0, "fruit_spread": 4.0})
+        w.rules.update({"season_depth": 0.0, "fruit_spread": 4.0})
         for _ in range(40):
             w.spawn_food()
         return sum(not f.fruit for f in w.foods), sum(f.fruit for f in w.foods)
@@ -68,6 +68,9 @@ class TestMakingTerrain(unittest.TestCase):
         plants, fruit = self.fruit_world(50)
         self.assertEqual(plants, 5)  # the plants' room is full
         self.assertGreater(fruit, 5)  # and the tree still drops fruit
+
+    def test_fruit_has_its_own_knob(self):  # the owner, 2026-11-28: "total fruts should also be nobed"
+        self.assertEqual(self.fruit_world(3)[1], 3)  # the setting, not a rule, holds it
 
     def test_fruit_stops_at_its_own_limit(self):
         plants, fruit = self.fruit_world(3)

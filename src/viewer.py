@@ -43,7 +43,8 @@ NEXT_WORLD = "next_world.json"  # in the runs folder: the owner's changes to the
 HANDOVER_WAIT = 300.0  # seconds Update code waits for a world to save and end before giving up
 HANDOVER_LOOK = 0.2
 KNOB_LABELS = {  # what the page calls each knob, and how far one notch of its slider moves it
-    "max_food": ("Food pieces at most", 1.0),
+    "max_food": ("Grass pieces at most", 1.0),
+    "max_fruit": ("Fruit pieces at most", 1.0),
     "food_energy": ("Energy per food", 0.5),
     "food_per_step": ("New food per step", 0.05),
     "fruit_rate": ("Fruit a tree drops per step", 0.002),

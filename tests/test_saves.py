@@ -90,6 +90,12 @@ class TestSaves(unittest.TestCase):
             for gene in ("grass_gut", "meat_gut", "gills", "lungs"):
                 self.assertTrue(0.0 <= getattr(c, gene) <= 1.0, gene)
 
+    def test_a_save_from_before_keeps_its_fruit_cap(self):
+        """A world saved when the fruit cap was a rule goes on with it as its knob."""
+        world, _, _ = load_world(Path(__file__).parent / "data" / "before_guts" / "save.npz", learner_seed=0)
+        self.assertEqual(world.settings.max_fruit, 300.0)
+        self.assertNotIn("max_fruit", world.rules)
+
     def test_a_save_from_before_gets_the_new_meat(self):
         """A world saved before meat was worth double (2026-11-28) goes on with the new meat and corpses."""
         world, _, _ = load_world(Path(__file__).parent / "data" / "before_guts" / "save.npz", learner_seed=0)

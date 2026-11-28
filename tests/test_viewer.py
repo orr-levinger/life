@@ -249,6 +249,13 @@ class TestControlRoom(unittest.TestCase):
                          ("Energy per food", 100.0, 3.0, 30.0))
         self.assertIs(answer["hunters"], False)
 
+    def test_live_shows_both_caps(self):  # the owner, 2026-11-28: "there should be sepeate totals for fruits and grass"
+        labels = {k["name"]: k["label"] for k in self.server.get("/knobs")["knobs"]}
+        self.assertEqual((labels["max_food"], labels["max_fruit"]), ("Grass pieces at most", "Fruit pieces at most"))
+        page, _ = self.page_files()
+        self.assertIn("grass ·", page)
+        self.assertIn("fruit ·", page)
+
     def test_the_next_worlds_rules_are_changed_with_nothing_running(self):
         answer = self.server.get("/rules")
         first = next(r for r in answer["rules"] if r["name"] == "first_creatures")

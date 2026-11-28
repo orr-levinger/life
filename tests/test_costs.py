@@ -39,7 +39,7 @@ class TestCostsAreRules(unittest.TestCase):
 
     def test_auto_turns_the_costs_with_food_and_lifespan(self):
         self.assertEqual({k.name for k in KNOBS},
-                         {"max_food", "food_energy", "food_per_step", "fruit_rate", "lifespan", *NATURE})
+                         {"max_food", "food_energy", "food_per_step", "fruit_rate", "max_fruit", "lifespan", *NATURE})
 
     def test_auto_raises_a_cost_up_to_nature_and_no_further(self):
         dial = dial_turning("move_cost")

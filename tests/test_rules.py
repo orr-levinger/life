@@ -83,11 +83,10 @@ class TestRules(unittest.TestCase):
         self.assertIn("easy end", check(rules, "knob.lifespan.hard", 20000.0))  # a shorter life is the harder end
         self.assertIsNone(check(rules, "knob.lifespan.easy", 9000.0))
 
-    def test_the_fruit_limit_rule(self):  # fruit has its own room (the owner, 2026-11-27)
-        from src.rules import means
-        r = {r.name: r for r in RULES}["max_fruit"]
-        self.assertEqual((r.start, r.low, r.high, r.group), (300.0, 0.0, 3000.0, "world"))
-        self.assertGreater(len(means("max_fruit")), 15)
+    def test_the_fruit_limit_is_a_knob(self):  # its own room (2026-11-27), a knob (the owner, 2026-11-28)
+        from src.rules import KNOB_ENDS
+        self.assertIn(("max_fruit", 800.0, 20.0, "Fruit pieces at most"), KNOB_ENDS)
+        self.assertNotIn("max_fruit", {r.name for r in RULES})
 
     def test_vision_reaches_30(self):  # the owner, 2026-11-27: "set max vision to 30"
         by_name = {r.name: r for r in RULES}

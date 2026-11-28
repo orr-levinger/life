@@ -28,7 +28,7 @@ EXAM_BODIES = {"tank_power": 1.0, "living_power": 1.0, "speed_power": 1.0, "life
 
 def exam_settings(rules: Rules) -> Settings:
     """The exam's own world, from the rules: always the same unless the owner changes it on the Rules page."""
-    return Settings(fruit_rate=0.0, max_food=rules["exam_max_food"], food_energy=(rules["exam_food_energy_low"], rules["exam_food_energy_high"]),
+    return Settings(fruit_rate=0.0, max_fruit=0.0, max_food=rules["exam_max_food"], food_energy=(rules["exam_food_energy_low"], rules["exam_food_energy_high"]),
                     food_per_step=rules["exam_food_per_step"], lifespan=(4000.0, 6000.0), attacks=False)
 
 

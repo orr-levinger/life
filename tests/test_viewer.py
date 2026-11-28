@@ -455,6 +455,45 @@ class TestControlRoom(unittest.TestCase):
         for words in ("back_to:", "Go back to step", "/saves?run="):
             self.assertIn(words, page)
 
+    MADE = {"size": 1.2, "grass_gut": 0.3, "meat_gut": 0.9, "gills": 0.0, "lungs": 1.0, "vision_width": 90.0,
+            "vision_reach": 5.0, "hearing": 2.0, "fear_of_death": 3.0, "love_of_babies": 20.0,
+            "learns_from_others": 0.4, "learning_speed": 0.001, "mutations": 2, "mutation_size": 0.05, "calls": 1,
+            "kin": 0.5, "stealth": 0.2, "armour": 0.6, "layers": 2, "neurons": [12, 7]}
+
+    def test_place_is_written_for_the_world(self):
+        """The owner, 2026-11-27: "spawn it if I wish in map where ever I click"."""
+        name = self.running_world()
+        place = {"spot": [0.0, 0.6, 0.8], "genes": self.MADE, "brain": {"kind": "smartest"}}
+        self.assertEqual(self.server.post("/control", {"run": name, "place": place})[0], 200)
+        first = read_control(self.root / name).place
+        self.assertEqual({k: first[k] for k in ("spot", "genes", "brain")}, place)
+        self.assertEqual(self.server.post("/control", {"run": name, "place": place})[0], 200)
+        self.assertNotEqual(read_control(self.root / name).place["seq"], first["seq"])  # each one placed once
+
+    def test_a_bad_place_is_refused(self):
+        name = self.running_world()
+        good = {"spot": [0.0, 0.6, 0.8], "genes": self.MADE, "brain": {"kind": "new"}}
+        for bad in ({**good, "genes": {**self.MADE, "size": 99.0}}, {**good, "spot": [0.0, 1.0]},
+                    {**good, "spot": [0.0, 0.0, 0.0]}, {**good, "brain": {"kind": "borrowed"}},
+                    {**good, "brain": {"kind": "creature"}}):
+            status, answer = self.server.post("/control", {"run": name, "place": bad})
+            self.assertEqual(status, 400, bad)
+            self.assertTrue(answer["error"])
+        self.assertIsNone(read_control(self.root / name).place)
+
+    def test_the_page_makes_and_places(self):
+        with urllib.request.urlopen(self.server.base + "/") as response:
+            page = response.read().decode("utf-8")
+        with urllib.request.urlopen(self.server.base + "/static/beasts.js") as response:
+            beasts = response.read().decode("utf-8")
+        with urllib.request.urlopen(self.server.base + "/static/planet.js") as response:
+            planet = response.read().decode("utf-8")
+        for words in ('id="tab-make"', "Planet.genesPicture(", "Planet.groundAt(", "place:", "Place it"):
+            self.assertIn(words, page)
+        self.assertIn("genesPicture(", beasts.split("export function speciesPicture", 1)[1].split("\n}\n", 1)[0])
+        self.assertIn("export function groundAt(", planet)
+        self.assertRegex(planet, r'export \{[^}]*genesPicture[^}]*\} from "/static/beasts.js"')
+
     def test_resume_from_a_missing_save_is_refused(self):
         name = self.saved_world()
         status, answer = self.server.post("/start", {"from": {"run": name, "step": 3000}, "mode": "auto"})
@@ -603,9 +642,11 @@ class TestControlRoom(unittest.TestCase):
         made = beasts.split("export function speciesPicture", 1)
         self.assertEqual(len(made), 2)
         body = made[1].split("\n}\n", 1)[0]
-        for words in ("genesOf(", "bodyPicture(", "fear_of_death: t.fear", "love_of_babies: t.love",
-                      "learns_from_others: t.learns"):
-            self.assertIn(words, body)  # the planet's own body maker, fed the species' gene names as a creature's
+        for words in ("genesPicture(", "fear_of_death: t.fear", "love_of_babies: t.love", "learns_from_others: t.learns"):
+            self.assertIn(words, body)  # the species' gene names given as a creature's
+        maker = beasts.split("export function genesPicture", 1)[1].split("\n}\n", 1)[0]
+        for words in ("genesOf(", "bodyPicture("):
+            self.assertIn(words, maker)  # the planet's own body maker
         self.assertRegex(planet, r'export \{[^}]*speciesPicture[^}]*\} from "/static/beasts.js"')
         for function in ("function speciesCard(", "async function drawSpecies("):
             self.assertIn("Planet.speciesPicture(", page.split(function, 1)[1].split("\n}\n", 1)[0], function)

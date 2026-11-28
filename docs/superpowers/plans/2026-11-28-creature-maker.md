@@ -68,7 +68,7 @@ placing), `src/viewer.html` (the "Make" tab: sliders from `/rules`' gene limits,
 "Place it"; in Live, placing mode: each click on the ground sends `place`; the outcome from `/now`'s `placed`; Esc or
 "Done" ends it); Test `tests/test_viewer.py`.
 
-- [ ] Step 1: tests first (`tests/test_viewer.py`):
+- [x] Step 1: tests first (`tests/test_viewer.py`):
   - `test_place_is_written_for_the_world`: `/control {run, place: {spot, genes, brain}}` → 200; the control file's
     `place` has those and a `seq`; a second one gets a new `seq`.
   - `test_a_bad_place_is_refused`: a gene outside its limits, a spot not of three numbers, an unknown brain kind:
@@ -76,13 +76,16 @@ placing), `src/viewer.html` (the "Make" tab: sliders from `/rules`' gene limits,
   - `test_the_page_makes_and_places`: the page has the "Make" tab, `Planet.genesPicture(`, `Planet.groundAt(` and
     sends `place:`; `beasts.js`'s `speciesPicture` calls `genesPicture(`.
   Run `python -m unittest tests.test_viewer` → FAIL (no `place`).
-- [ ] Step 2: the server change. Run `python -m unittest tests.test_viewer` → the two server tests OK.
-- [ ] Step 3: the page. Run `python -m unittest tests.test_viewer` → OK.
-- [ ] Step 4: on a half-size check world (planet radius 18.5, 100 first creatures): in "Make", move size and the guts:
+- [x] Step 2: the server change. Run `python -m unittest tests.test_viewer` → the two server tests OK.
+- [x] Step 3: the page. Run `python -m unittest tests.test_viewer` → OK.
+- [x] Step 4: on a half-size check world (planet radius 18.5, 100 first creatures): in "Make", move size and the guts:
   the body changes; "Place it", click the ground: the creature is there in the view where clicked (its id in the
   outcome, its genes on its card when followed); a click on a rock is refused with its reason; screenshots; no console
-  error. Stop the world and the viewer; close the browser pane.
-- [ ] Step 5: `python scripts/run_tests.py` → OK under 300 s; commit "Make a creature and place it" (`git show
+  error. Stop the world and the viewer; close the browser pane. Done: the body changed with the guts and size (a rust hunter with quills); a click on
+  the grass placed creature 203 (its `placed` event at the clicked point with the given genes); a click on the water: "Not
+  placed: that is water, and it has no gills"; the dropdowns styled as the page's others. The console's 404s are the
+  view asked for before the world drew its first picture after jumping in (as before).
+- [x] Step 5: `python scripts/run_tests.py` → OK under 300 s (OK in 286.0 s; three older tests updated for the change: `_Knobs` takes the reporter in `test_costs` and `test_evolve`, `now.json`'s new `placed` in `test_evolve_runs`); commit "Make a creature and place it" (`git show
   --stat` → the files above and this plan); push to `evolve-from-scratch`.
 
 ## Must be completed to mark this as done

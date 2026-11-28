@@ -229,8 +229,13 @@ export function bodyPicture(genes, size = 120) {
 // A species' typical member (its `now` or `start` in species.json: each gene its members' mean), drawn as the planet
 // draws a creature with those genes; the species' names for the feelings are the creature's own.
 export function speciesPicture(t, size = 120) {
-  const g = genesOf({ ...t, fear_of_death: t.fear, love_of_babies: t.love, learns_from_others: t.learns });
-  return bodyPicture({ ...g, size: t.size ?? 1 }, size);
+  return genesPicture({ ...t, fear_of_death: t.fear, love_of_babies: t.love, learns_from_others: t.learns }, size);
+}
+
+// A creature's genes by the world's own names (neurons: all its brain's), drawn as the planet draws that creature: the
+// species card's and the Make page's bodies.
+export function genesPicture(c, size = 120) {
+  return bodyPicture({ ...genesOf(c), size: c.size ?? 1 }, size);
 }
 
 export const BEASTS = {

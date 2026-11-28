@@ -141,7 +141,8 @@ class TestEvolveRuns(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             rows = read_rows(quiet_run(["--seed", "1", "--steps", "200", "--species", "instinct", "--out", folder]))
             now = json.loads((Path(folder) / "now.json").read_text())
-        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time", "rules", "season", "genes"})
+        self.assertEqual(set(now), {"step", "alive", "energy", "food", "births", "deaths", "time", "rules", "season", "genes",
+                                    "placed"})  # placed: the owner's last creature to place, for the page
         low, mean, high = now["genes"]["size"]
         self.assertTrue(low <= mean <= high)
         self.assertEqual((now["step"], now["alive"]), (200, int(rows[-1]["population"])))

@@ -84,6 +84,14 @@
   .row .num strong { font-weight: 600; font-size: 15px; }
   .good { color: var(--eat); } .bad { color: var(--warn); }
   #rules-page { display: grid; gap: 14px; }
+  #make-page { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 14px; align-items: start; }
+  #make-page .panel { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
+  #make-page h2 { font-size: 15px; margin: 0 0 6px; } #make-page small { color: var(--muted); }
+  #make-sliders { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 18px; font-size: 13px; }
+  #make-sliders label { display: grid; grid-template-columns: 1fr auto; } #make-sliders input { grid-column: 1 / -1; width: 100%; }
+  #make-page canvas { display: block; margin: 6px auto; }
+  #make-page select { background: var(--page); border: 1px solid var(--grid); border-radius: 6px; padding: 2px 6px; }
+  #placing { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 13px; }
   #species-page { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 14px; align-items: start; }
   #species-page .panel { border: 1px solid var(--grid); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
   #species-page h2 { font-size: 15px; margin: 0 0 6px; } #species-page small { color: var(--muted); }
@@ -159,6 +167,7 @@
     <button id="tab-history" type="button">History</button>
     <button id="tab-rules" type="button">Rules</button>
     <button id="tab-species" type="button">Species</button>
+    <button id="tab-make" type="button">Make</button>
   </div>
   <div id="legend"></div>
   <div id="clock"><i class="dot stale"></i>connecting…</div>
@@ -194,12 +203,25 @@
     <div class="gene-boxes"></div>
     <button class="act" type="submit">Apply to this creature</button> <span class="error" id="genes-said"></span>
   </form>
+  <div id="placing" hidden><b>Placing your creature: click the ground</b> <button type="button" class="act" id="placing-done">Done</button> <span id="placing-said"></span></div>
   <div id="watch-planet" role="img" aria-label="The world: a planet you can spin (drag) and zoom (wheel or pinch); click a creature to follow it"></div>
   <canvas id="pixel-view" hidden aria-label="What the followed creature sees and hears, as its brain gets them"></canvas>
   <div id="watch-handle" role="separator" title="Drag to make the planet taller or shorter"></div>
   <canvas id="watch-legend" hidden height="120" aria-label="What a creature's look means: point at a creature in the world to see its numbers"></canvas>
 </section>
 <section id="rules-page" hidden></section>
+<section id="make-page" hidden>
+  <div class="panel"><h2>Make a creature <small>every gene, within this world's limits</small></h2>
+    <label>Start from <select id="make-from" aria-label="Start from a species' typical member"></select></label>
+    <div id="make-sliders"></div></div>
+  <div class="panel"><h2>Its body <small>as the world draws it</small></h2><div id="make-body"></div>
+    <label>Brain <select id="make-brain" aria-label="Its brain">
+      <option value="new">a new, empty brain: it learns from zero</option>
+      <option value="smartest">a copy of the smartest creature alive now</option>
+      <option value="creature">a copy of the creature you followed last in Live</option></select></label>
+    <p><button type="button" class="act" id="make-place">Place it</button> <small id="make-said"></small></p>
+    <small>Place it opens the world: click the ground where it should be, as many times as you like; Esc or Done ends.</small></div>
+</section>
 <section id="species-page" hidden>
   <div class="panel"><h2>The tree of species <small>time runs left to right; a band's thickness: how many alive; click one</small></h2>
     <div id="species-tree"></div></div>
@@ -254,7 +276,7 @@ const PANELS = [
 const W = 520, H = 250, M = { l: 44, r: 108, t: 10, b: 30 };
 const PENDING_FOR = 20000;  // ms a value moved by hand is shown before the world's own row must confirm it
 let data = [], lastChange = 0, signature = "", picked = null, KNOBS = [], COSTS = [], startMode = "auto";
-let view = { "#history": "history", "#rules": "rules", "#species": "species" }[location.hash] || "live";
+let view = { "#history": "history", "#rules": "rules", "#species": "species", "#make": "make" }[location.hash] || "live";
 const cards = new Map();  // a running world's controls, kept between polls so a drag is never interrupted
 
 const colorOf = (kind) => {
@@ -1090,8 +1112,10 @@ function zoomBy(factor) {  // the zoom buttons: the camera nearer or farther (th
   if (window.Planet) Planet.zoomBy(factor);
   document.getElementById("zoom-shown").textContent = `${camera.zoom < 10 ? camera.zoom.toFixed(1) : Math.round(camera.zoom)}×`;
 }
+let lastFollowed = null;  // the creature followed last in Live: the Make page may copy its brain
 function follow(id, name) {
   camera.follow = id;
+  if (id !== null) lastFollowed = { id, name };
   if (watching) send("/control", { run: watching.name, follow: id }).catch(() => {});  // the world sends what it sees
   if (window.Planet) Planet.followCreature(id);
   if (id === null) setView("above");
@@ -1158,6 +1182,7 @@ function paint() {
     } });
     planetMade = true;
   }
+  Planet.placing(placingNow ? placeAt : null);  // while placing, a click on the planet is for the ground
   if (camera.follow !== null && !picture.creatures.some((c) => c.id === camera.follow)) follow(null);  // it died
   Planet.updatePlanet(picture, watching.prev, t, { cones: camera.cones, hover: watching.hover, run: watching.name });
   Planet.render();
@@ -1628,11 +1653,17 @@ async function drawRules() {
 }
 
 function render() {
-  for (const name of ["live", "history", "rules", "species"]) document.getElementById(`tab-${name}`).classList.toggle("on", view === name);
-  const live = view === "live", rulesView = view === "rules", speciesView = view === "species";
+  for (const name of ["live", "history", "rules", "species", "make"]) document.getElementById(`tab-${name}`).classList.toggle("on", view === name);
+  const live = view === "live", rulesView = view === "rules", speciesView = view === "species", makeView = view === "make";
   document.getElementById("rules-page").hidden = !rulesView;
   document.getElementById("species-page").hidden = !speciesView;
-  document.getElementById("charts").hidden = rulesView || speciesView;
+  document.getElementById("make-page").hidden = !makeView;
+  document.getElementById("charts").hidden = rulesView || speciesView || makeView;
+  if (makeView) {
+    for (const id of ["start", "worlds", "runs"]) document.getElementById(id).hidden = true;
+    if (watching) jumpOut();
+    return drawMake();
+  }
   if (speciesView) {
     for (const id of ["start", "worlds", "runs"]) document.getElementById(id).hidden = true;
     if (watching) jumpOut();
@@ -1674,6 +1705,124 @@ document.getElementById("tab-live").addEventListener("click", () => show("live")
 document.getElementById("tab-history").addEventListener("click", () => show("history"));
 document.getElementById("tab-rules").addEventListener("click", () => show("rules"));
 document.getElementById("tab-species").addEventListener("click", () => show("species"));
+document.getElementById("tab-make").addEventListener("click", () => show("make"));
+
+// ---- Make a creature (the owner, 2026-11-27: "play with genes and see how the creature will look like and spawn it
+// if I wish in map where ever I click"): a slider for every gene, the body they make, and Place it ----
+const RULE_GENE = { fear_of_death: "fear", love_of_babies: "love", learns_from_others: "learns" };  // the rules' names
+let made = null;  // {run, limit, genes: {name: value}, layers, neurons: [..]}: the sliders' creature
+let placingNow = null;  // {run, genes, brain} while the owner places it in the world
+
+const typicalGenes = (t) => ({ ...t, fear_of_death: t.fear, love_of_babies: t.love, learns_from_others: t.learns });
+
+async function drawMake() {
+  const run = data.find((r) => r.status === "running");
+  const sliders = document.getElementById("make-sliders"), said = document.getElementById("make-said");
+  if (!run) { sliders.textContent = "Start a world in Live first: a creature is made for a running world."; return; }
+  if (made && made.run === run.name) return;  // built: the owner's slider positions stay
+  const rules = (await (await fetch(`/rules?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })).json()).rules;
+  const limit = (gene, end) => (rules.find((r) => r.name === `gene.${RULE_GENE[gene] || gene}.${end}`) || {}).value;
+  const book = await fetch(`/species?run=${encodeURIComponent(run.name)}`, { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : { species: [] }), () => ({ species: [] }));
+  const alive = book.species.filter((s) => s.ended === null && s.now).sort((a, b) => (b.facts?.alive || 0) - (a.facts?.alive || 0));
+  const from = document.getElementById("make-from");
+  from.innerHTML = alive.map((s) => `<option value="${s.id}">${speciesName(s.id)} (${s.facts?.alive || 0} alive)</option>`).join("")
+    || "<option value=\"\">no species yet: the middle of each gene</option>";
+  made = { run: run.name, limit, genes: {}, layers: 1, neurons: [] };
+  setMade(alive[0] ? typicalGenes(alive[0].now) : null);
+  from.onchange = () => { const s = book.species.find((x) => x.id === Number(from.value)); setMade(s ? typicalGenes(s.now) : null); };
+  say(said, "", "");
+}
+
+function setMade(typical) {  // the sliders at a species' typical member (or the middle of each gene's limits)
+  const { limit } = made, clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  for (const [name] of GENE_BOXES) {
+    const lo = limit(name, "low"), hi = limit(name, "high");
+    made.genes[name] = clamp(typical && typical[name] !== undefined ? Number(typical[name]) : (lo + hi) / 2, lo, hi);
+  }
+  made.layers = clamp(Math.round(typical ? typical.layers : 1), limit("layers", "low"), limit("layers", "high"));
+  const each = clamp(Math.round((typical ? typical.neurons : 32) / made.layers), limit("neurons", "low"), limit("neurons", "high"));
+  made.neurons = Array(made.layers).fill(each);
+  drawMakeSliders();
+}
+
+function drawMakeSliders() {
+  const { limit } = made, copied = document.getElementById("make-brain").value !== "new";
+  const row = (name, label, shown, value, lo, hi, step, locked) => `<label>${label}<b data-shows="${name}">${shown}</b>
+    <input type="range" data-gene="${name}" min="${lo}" max="${hi}" step="${step}" value="${value}"${locked ? " disabled" : ""}></label>`;
+  let html = GENE_BOXES.map(([name, label, digits]) => name === "learning_speed"  // a slider in tenfold steps
+    ? row(name, label, made.genes[name].toPrecision(2), Math.log10(made.genes[name]), Math.log10(limit(name, "low")),
+          Math.log10(limit(name, "high")), 0.01, false)
+    : row(name, label, made.genes[name].toFixed(digits), made.genes[name], limit(name, "low"), limit(name, "high"),
+          digits ? 10 ** -digits : 1, false)).join("");
+  const why = copied ? " (the copied brain's own)" : "";
+  html += row("layers", `Brain layers${why}`, made.layers, made.layers, limit("layers", "low"), limit("layers", "high"), 1, copied);
+  html += made.neurons.map((n, i) => row(`neurons${i}`, `Neurons in layer ${i + 1}${why}`, n, n, limit("neurons", "low"),
+                                         limit("neurons", "high"), 1, copied)).join("");
+  const box = document.getElementById("make-sliders");
+  box.innerHTML = html;
+  box.querySelectorAll("input[data-gene]").forEach((input) => input.addEventListener("input", () => {
+    const name = input.dataset.gene, v = Number(input.value), digits = (GENE_BOXES.find(([n]) => n === name) || [])[2] ?? 0;
+    if (name === "layers") { made.layers = v; made.neurons = Array(v).fill(made.neurons[0]); return drawMakeSliders(); }
+    if (name.startsWith("neurons")) made.neurons[Number(name.slice(7))] = v;
+    else made.genes[name] = name === "learning_speed" ? 10 ** v : v;
+    box.querySelector(`[data-shows="${name}"]`).textContent = name === "learning_speed" ? (10 ** v).toPrecision(2) : v.toFixed(digits);
+    drawMadeBody();
+  }));
+  drawMadeBody();
+}
+
+function madeGenes() {  // what the world gets: every gene, and the brain's layers and neurons
+  return { ...made.genes, mutations: Math.round(made.genes.mutations), calls: Math.round(made.genes.calls),
+           layers: made.layers, neurons: made.neurons.slice(0, made.layers) };
+}
+
+function drawMadeBody() {
+  if (!window.Planet || !made) return;
+  const g = madeGenes();
+  const body = Planet.genesPicture({ ...g, neurons: g.neurons.reduce((a, b) => a + b, 0) });
+  document.getElementById("make-body").replaceChildren(speciesBody(body, 220));
+}
+
+document.getElementById("make-brain").addEventListener("change", () => { if (made) drawMakeSliders(); });
+document.getElementById("make-place").addEventListener("click", async () => {
+  const said = document.getElementById("make-said"), run = data.find((r) => r.status === "running");
+  if (!made || !run) return say(said, "Start a world in Live first.", "refused");
+  const kind = document.getElementById("make-brain").value;
+  if (kind === "creature" && !lastFollowed) return say(said, "Follow a creature in Live first (click it), then come back.", "refused");
+  const brain = kind === "creature" ? { kind, id: lastFollowed.id } : { kind };
+  placingNow = { run: run.name, genes: madeGenes(), brain };
+  show("live");
+  if (!watching || watching.name !== run.name) await jumpIn(run);
+  document.getElementById("placing").hidden = false;
+  say(document.getElementById("placing-said"), "", "");
+});
+
+async function placeAt(event) {  // a click on the planet while placing: the creature goes there, or the world says why not
+  const spot = Planet.groundAt(event), said = document.getElementById("placing-said");
+  if (!spot || !placingNow) return;
+  try {
+    const answer = await send("/control", { run: placingNow.run, place: { spot, genes: placingNow.genes, brain: placingNow.brain } });
+    say(said, "Placing…", "");
+    for (let k = 0; k < 40; k++) {  // the world says how it went in its numbers (written every 25 steps)
+      await new Promise((r) => setTimeout(r, 500));
+      const now = await (await fetch(`/now?run=${encodeURIComponent(placingNow.run)}`, { cache: "no-store" })).json().catch(() => null);
+      const placed = now && now.placed;
+      if (placed && placed.seq === answer.placing) {
+        const ok = placed.id !== undefined;
+        return say(said, ok ? `Placed: creature ${placed.id}. Click again for another.` : `Not placed: ${placed.why}.`, ok ? "" : "refused");
+      }
+    }
+    say(said, "The world has not answered yet (is it paused?).", "refused");
+  } catch (problem) { say(said, problem.message, "refused"); }
+}
+
+function stopPlacing() {
+  placingNow = null;
+  document.getElementById("placing").hidden = true;
+}
+document.getElementById("placing-done").addEventListener("click", stopPlacing);
+document.addEventListener("keydown", (event) => { if (event.key === "Escape" && placingNow) stopPlacing(); });
 
 // ---- The tree of species (src/species.py): the running world's, else the run picked in History, else the newest ----
 let speciesBook = null, speciesPicked = null;

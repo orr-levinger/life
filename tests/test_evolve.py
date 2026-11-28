@@ -15,6 +15,7 @@ from tests.helpers import SMALL_WORLD, small_world
 from src.control import Control, read_control, write_control
 from src.dial import Dial, rates, value, with_value
 from src.evolve import _Knobs, _new_world, parse_args, run
+from src.report import Reporter
 from src.scoreboard import ROW_KEYS
 from src.settings import START
 from src.rules import rule, starting_rules
@@ -268,7 +269,7 @@ class TestGeneChanges(unittest.TestCase):
     def test_a_gene_change_reaches_the_world_once(self):
         world, dial = mock.Mock(), mock.Mock()
         change = {"seq": 3, "id": 9, "genes": {"size": 1.1}}
-        knobs = _Knobs(Control("auto", None, False))
+        knobs = _Knobs(Control("auto", None, False), Reporter(Path("unused")))  # writes only when a creature is placed
         for _ in range(3):  # the control file is read again and again
             knobs.take(Control("auto", None, False, edit=change), dial, world)
         world.edit_genes.assert_called_once_with(9, {"size": 1.1})

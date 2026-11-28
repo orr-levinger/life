@@ -7,8 +7,8 @@ import * as THREE from "three";
 import { OrbitControls } from "/static/OrbitControls.js";
 import { mergeGeometries } from "/static/BufferGeometryUtils.js";
 import { BEASTS, NEAR, DOT } from "/static/beasts.js";
-export { bodyPicture, speciesPicture } from "/static/beasts.js";  // the legend's and the species' bodies (the page has
-// only this module)
+export { bodyPicture, speciesPicture, genesPicture } from "/static/beasts.js";  // the legend's, the species' and the
+// Make page's bodies (the page has only this module)
 
 const UP = new THREE.Vector3(0, 1, 0);
 const NEAR_FAR = { near: 0.05, far: 4000 };
@@ -169,8 +169,12 @@ export function makePlanet(container, { onPick } = {}) {
 }
 
 function pick(event) {
-  if (state && state.onPick) state.onPick(creatureAt(event));
+  if (!state) return;
+  if (state.onGround) return state.onGround(event);  // placing the owner's creature: the click is for the ground
+  if (state.onPick) state.onPick(creatureAt(event));
 }
+// While the owner places a creature, each click on the planet goes to `onGround` (null: clicks pick creatures again).
+export function placing(onGround) { if (state) state.onGround = onGround; }
 
 // ---------- each picture of the world
 export function updatePlanet(picture, before, t, options) {
@@ -483,6 +487,14 @@ export function zoomBy(factor) {  // the page's zoom buttons: nearer (factor > 1
   const { camera, controls } = state, d = camera.position.distanceTo(controls.target);
   const want = Math.max(controls.minDistance, Math.min(controls.maxDistance, d / factor));
   camera.position.sub(controls.target).setLength(want).add(controls.target); controls.update();
+}
+export function groundAt(event) {  // the point of the ball under the pointer (length 1, as the world keeps points), or null
+  if (!state || !state.R) return null;
+  const box = state.renderer.domElement.getBoundingClientRect();
+  const mouse = new THREE.Vector2(((event.clientX - box.left) / box.width) * 2 - 1, -((event.clientY - box.top) / box.height) * 2 + 1);
+  const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, state.camera);
+  const hit = ray.ray.intersectSphere(new THREE.Sphere(new THREE.Vector3(), state.R), new THREE.Vector3());
+  return hit ? hit.normalize().toArray() : null;
 }
 export function creatureAt(event) {  // the creature under the pointer, or null
   if (!state) return null;

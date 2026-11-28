@@ -27,7 +27,7 @@ from .control import (HUNTERS, MODES, WATCH_LEASE, Control, knob_values, new_run
 from .dial import KNOBS, value
 from .evolve import SPECIES
 from .saves import FIRST_PLANET, FLAT_WORLD, SaveError, save_format, save_header, save_path, saves_of
-from .rules import COST_NAMES, GENE_MEANS, GROUPS, RULES, check, check_genes, means, starting_rules
+from .rules import COST_NAMES, EDITABLE_GENES, GENE_MEANS, GROUPS, RULES, check, check_genes, means, starting_rules
 from .scoreboard import OLDER_LAYOUTS, ROW_KEYS, read_rows
 from .settings import START, Settings
 from .upload import ServerLog, Uploader
@@ -310,6 +310,9 @@ class Controls:
             follow = body["follow"]
             if follow is not None and (isinstance(follow, bool) or not isinstance(follow, int)):
                 raise Refused(400, "follow must be a creature's id or null")
+        place = current.place
+        if "place" in body:  # the owner's creature, to be placed where they clicked
+            place = {"seq": time.time_ns(), **self._place(folder, body["place"])}
         update = body.get("update", False)
         if not isinstance(update, bool):
             raise Refused(400, "update must be true or false")
@@ -323,14 +326,15 @@ class Controls:
                 raise Refused(409, f"{name}: {FLAT_WORLD} (it keeps running on the code it started with)")
             stop, paused = True, False
         write_control(folder, Control(mode, settings, stop, watch_until, watch_speed, paused, hunters, rules, edit,
-                                      follow))
+                                      follow, place))
         if update:
             threading.Thread(target=self._hand_over, args=(folder,), daemon=True).start()
         if back_to is not None:
             threading.Thread(target=self._go_back, args=(folder, back_to, mode), daemon=True).start()
         return {"mode": mode, "settings": None if settings is None else knob_values(settings), "stop": stop,
                 "paused": paused, "watching": watch_until is not None, "watch_speed": watch_speed, "updating": update,
-                "going_back": None if back_to is None else body["back_to"]}
+                "going_back": None if back_to is None else body["back_to"],
+                "placing": place["seq"] if "place" in body else None}
 
     def _ended(self, folder: Path, what: str) -> bool:
         """Waits for the world to save and end (its time.txt); False, said in the log, when it does not in time."""
@@ -341,6 +345,30 @@ class Controls:
                 return False
             time.sleep(HANDOVER_LOOK)
         return True
+
+    def _place(self, folder: Path, given: object) -> Dict:
+        """The owner's creature to place, checked: a point (three numbers, not all 0), every gene within the world's
+        limits, and a brain: new, the smartest's, or a creature's by its id."""
+        if not isinstance(given, dict) or set(given) != {"spot", "genes", "brain"}:
+            raise Refused(400, "place must say the spot, the genes and the brain")
+        spot = given["spot"]
+        if not (isinstance(spot, list) and len(spot) == 3 and all(
+                isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) for x in spot)
+                and any(spot)):
+            raise Refused(400, "the spot must be a point: three numbers, not all 0")
+        genes = given["genes"]
+        missing = sorted({*EDITABLE_GENES, "layers", "neurons"} - set(genes if isinstance(genes, dict) else ()))
+        if missing:
+            raise Refused(400, f"a creature needs every gene; missing: {', '.join(missing)}")
+        problem = check_genes(self._world_rules(folder), genes)
+        if problem:
+            raise Refused(400, problem)
+        brain = given["brain"]
+        kinds = {"new": set(), "smartest": set(), "creature": {"id"}}
+        if not (isinstance(brain, dict) and brain.get("kind") in kinds and set(brain) == {"kind", *kinds[brain["kind"]]}
+                and (brain["kind"] != "creature" or (isinstance(brain["id"], int) and not isinstance(brain["id"], bool)))):
+            raise Refused(400, "the brain must be new, the smartest's, or a creature's: {kind: creature, id}")
+        return {"spot": [float(x) for x in spot], "genes": genes, "brain": brain}
 
     def _go_back(self, folder: Path, save: Path, mode: str) -> None:
         """Back in time: once the world has saved and ended (it stays in History), a new world from the chosen save, in

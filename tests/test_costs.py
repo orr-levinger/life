@@ -91,10 +91,13 @@ class TestCostsAreRules(unittest.TestCase):
         self.assertEqual((dial.rules["move_cost"], dial.rules["bump_cost"], dial.rules["step_cost"]), (0.4, 0.2, 0.05))
 
     def test_an_earlier_cost_change_is_not_applied_again(self):  # Auto turned the cost since: it stays as Auto left it
+        from pathlib import Path
+
         from src.control import Control
         from src.evolve import _Knobs
+        from src.report import Reporter
         w = make_world()
-        knobs = _Knobs(Control("auto", None, False))
+        knobs = _Knobs(Control("auto", None, False), Reporter(Path("unused")))  # writes only when a creature is placed
         knobs.take(Control("auto", None, False, rules={"move_cost": 0.3}), Dial(), w)
         w.rules["move_cost"] = 0.32  # Auto's nudge
         knobs.take(Control("auto", None, False, rules={"move_cost": 0.3, "tank": 120.0}), Dial(), w)

@@ -332,6 +332,8 @@ class World:
         for creature in list(self.creatures):
             if self.evolving:
                 creature.age += 1
+                if self.terrain.in_pond(creature.p):
+                    creature.in_water += 1
             if not self.evolving:
                 creature.energy = max(creature.energy, 0.0)  # nobody dies in an exam
             elif creature.energy <= 0:

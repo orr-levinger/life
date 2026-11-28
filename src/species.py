@@ -54,7 +54,8 @@ def facts(members: Sequence[Creature], world: Any) -> Dict[str, Any]:
             "size": _spread([c.size for c in members]), "tank": round(float(np.mean([c.max_energy for c in members])), 2),
             "speed": round(float(np.mean([c.top_speed for c in members])), 4),
             "age": round(float(np.mean([c.age for c in members])), 1), "oldest": int(max(c.age for c in members)),
-            "generations": int(max(c.generation for c in members))}
+            "generations": int(max(c.generation for c in members)),
+            "in_water": round(sum(c.in_water for c in members) / max(1, sum(c.age for c in members)), 4)}
 
 
 class SpeciesBook:

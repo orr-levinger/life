@@ -84,7 +84,7 @@ def save_world(path: Path, world: World, dial: Dial, extra: Dict[str, Any]) -> N
                        "parent_id": c.parent_id, "generation": c.generation, "energy": c.energy, "age": c.age,
                        "lifespan": c.lifespan, "food_eaten": c.food_eaten, "last_action": c.last_action,
                        "intent": c.intent, "heading": list(c.intended_vector), "brain": brain,
-                       "earned": c.earned, "spent": c.spent, "vision_width": c.vision_width,
+                       "earned": c.earned, "spent": c.spent, "in_water": c.in_water, "vision_width": c.vision_width,
                        "vision_reach": c.vision_reach, "hearing": c.hearing, "facing": list(map(float, c.facing)),
                        "fear_of_death": c.fear_of_death, "love_of_babies": c.love_of_babies,
                        "learns_from_others": c.learns_from_others, "mutations": c.mutations,
@@ -149,6 +149,12 @@ def save_header(path: Path) -> Dict[str, Any]:
     return {"step": about["step"], "seed": about["extra"]["seed"], "kind": about["extra"]["kind"]}
 
 
+def _water_steps(about: Dict[str, Any]) -> None:
+    """A save of before creatures counted their steps in water (2026-11-28): each counts from its load on."""
+    for saved in about["creatures"]:
+        saved.setdefault("in_water", 0)
+
+
 def _two_guts(about: Dict[str, Any]) -> None:
     """A save of before the two guts (2026-11-27), made one of now in place: diet d becomes a meat gut d and a grass gut
     1 - d, water w gills w and lungs 1 - w, so each creature eats, moves and pays as it did; the hit it felt shows the
@@ -185,6 +191,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         learner = Learner(ROOM_SLOTS, learner_seed)
         learner.load_state({key[len(LEARNER):]: value for key, value in arrays.items() if key.startswith(LEARNER)})
     _two_guts(about)
+    _water_steps(about)
     rules = {**starting_rules(), **about["rules"]}  # a rule born after the save starts at its start value
     if "step_cost" not in about["rules"]:  # saved before the costs were rules (2026-11-27): it keeps the costs it paid
         for name in COST_NAMES:
@@ -214,7 +221,7 @@ def load_world(path: Path, learner_seed: int) -> Tuple[World, Dial, Dict[str, An
         creature.energy, creature.age, creature.lifespan = saved["energy"], saved["age"], saved["lifespan"]
         creature.food_eaten, creature.last_action, creature.intent = saved["food_eaten"], saved["last_action"], saved["intent"]
         creature.intended_vector = tuple(saved["heading"])
-        creature.earned, creature.spent = saved["earned"], saved["spent"]
+        creature.earned, creature.spent, creature.in_water = saved["earned"], saved["spent"], saved["in_water"]
         creature.vision_width, creature.vision_reach = saved["vision_width"], saved["vision_reach"]
         creature.hearing, creature.facing = saved["hearing"], np.array(saved["facing"])
         creature.fear_of_death, creature.love_of_babies = saved["fear_of_death"], saved["love_of_babies"]

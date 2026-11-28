@@ -161,6 +161,7 @@ class Creature:
         self.food_eaten = 0.0
         self.earned = 0.0  # energy it got by eating and hunting, over its life: with `spent`, its own intelligence
         self.spent = 0.0  # energy it used on moving, living, eating at nothing and attacking
+        self.in_water = 0  # the steps of its life it spent in water (with its age: where it really lives)
         self.last_action = "NONE"
         self.intent = "REST"  # display only
         self.intended_vector: Tuple[float, float] = (0.0, 0.0)  # display only: its last move (ahead, left)

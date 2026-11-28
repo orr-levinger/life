@@ -2,7 +2,9 @@
 2026-11-27: "a tree of creatures and how they split into different creatures")."""
 import unittest
 
-from tests.helpers import NO_FOOD, add, make_world
+from src.species import facts
+from src.terrain import Obstacle, Terrain
+from tests.helpers import NO_FOOD, add, cap, make_world
 
 
 def herd(w, n=20):
@@ -17,6 +19,22 @@ def drift(creatures):
 
 
 class TestSpecies(unittest.TestCase):
+    def test_a_creature_counts_its_steps_in_water(self):
+        """Where it really lives (the owner, 2026-11-28: "Actually also activity")."""
+        w = make_world(NO_FOOD)
+        w.terrain = Terrain([Obstacle("pond", (cap(20.0, 10.0, 3.0),))], [], w.radius)
+        swimmer, walker = add(w, 20, 10, energy=80.0), add(w, 5, 5, energy=80.0)
+        swimmer.gills = 1.0
+        for _ in range(5):
+            w.step()
+        self.assertEqual((swimmer.in_water, walker.in_water), (5, 0))
+
+    def test_a_species_says_its_share_in_water(self):
+        w = make_world(NO_FOOD)
+        a, b = add(w, 1, 1), add(w, 3, 3)
+        (a.age, a.in_water), (b.age, b.in_water) = (100, 80), (300, 20)
+        self.assertAlmostEqual(facts([a, b], w)["in_water"], 0.25)  # its members' steps in water over all their steps
+
     def test_a_baby_is_in_its_parents_species(self):
         w = make_world(NO_FOOD)
         parent = add(w, 0.0, 0.0, energy=100.0)

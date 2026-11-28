@@ -90,6 +90,17 @@ class TestSaves(unittest.TestCase):
             for gene in ("grass_gut", "meat_gut", "gills", "lungs"):
                 self.assertTrue(0.0 <= getattr(c, gene) <= 1.0, gene)
 
+    def test_a_save_from_before_has_no_water_steps(self):
+        world, _, _ = load_world(Path(__file__).parent / "data" / "before_guts" / "save.npz", learner_seed=0)
+        self.assertTrue(world.creatures)
+        self.assertEqual({c.in_water for c in world.creatures}, {0})  # counted from its load on
+        world.creatures[0].in_water = 7
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.npz"
+            save_world(path, world, Dial(), {})
+            loaded, _, _ = load_world(path, learner_seed=0)
+        self.assertEqual(loaded.creatures[0].in_water, 7)  # a save of today keeps it
+
     def test_learners_keep_what_they_learned(self):
         learner = Learner(MAX_CREATURES, 0)
         world = make_world(learner=learner, species="learner", seed=1)

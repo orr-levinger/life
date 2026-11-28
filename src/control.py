@@ -39,6 +39,7 @@ class Control:
     rules: Optional[Dict[str, float]] = None  # the owner's rule changes (only the changed rules); None: none
     edit: Optional[Dict] = None  # the owner's latest change to a creature's genes: {seq, id, genes}; None: none
     follow: Optional[int] = None  # the creature the owner follows: the world sends what it sees (its pixels, its ears)
+    place: Optional[Dict] = None  # the owner's latest creature to place: {seq, spot, genes, brain}; None: none
 
     def watched(self, now: float) -> bool:
         return self.watch_until is not None and now < self.watch_until
@@ -104,9 +105,12 @@ def read_control(folder: Path) -> Optional[Control]:
     follow = raw.get("follow")  # optional: a control file without it follows no one
     if follow is not None and (isinstance(follow, bool) or not isinstance(follow, int)):
         raise ValueError(f"{path}: follow must be a creature's id or null, not {follow!r}")
+    place = raw.get("place")  # optional: a control file without it places no one
+    if place is not None and not (isinstance(place, dict) and set(place) == {"seq", "spot", "genes", "brain"}):
+        raise ValueError(f"{path}: place must be {{seq, spot, genes, brain}}, not {place!r}")
     return Control(raw["mode"], settings, bool(raw["stop"]), raw["watch_until"], watch_speed_from(raw["watch_speed"]),
                    bool(raw["paused"]), raw["hunters"], None if rules is None else {k: float(v) for k, v in rules.items()},
-                   edit, follow)
+                   edit, follow, place)
 
 
 def write_control(folder: Path, control: Control) -> None:
@@ -117,7 +121,7 @@ def write_control(folder: Path, control: Control) -> None:
     write_json(folder / CONTROL_FILE, {"mode": control.mode, "settings": settings, "stop": control.stop,
                                        "watch_until": control.watch_until, "watch_speed": control.watch_speed,
                                        "paused": control.paused, "hunters": control.hunters, "rules": control.rules,
-                                       "edit": control.edit, "follow": control.follow})
+                                       "edit": control.edit, "follow": control.follow, "place": control.place})
 
 
 def write_json(path: Path, data: object) -> None:

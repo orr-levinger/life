@@ -16,7 +16,7 @@ from .sphere import arc, exp_map, local_frame, random_point, walk
 from .food import Food
 from .policies import Action, decide_all
 from .senses import Senses, display_intent, perceived, sense_all
-from .species import SpeciesBook
+from .species import FIRST, MIN_SPENT, SpeciesBook
 from .rules import EDITABLE_GENES, Rules, gene_limits, starting_rules
 from .terrain import Terrain
 from .settings import Settings
@@ -28,6 +28,13 @@ Observer = Callable[[Creature, Senses, Action], None]
 INHERIT = ("learned", "inborn")
 FOOD_SPOT_TRIES = 50  # tries for a food spot by the pond edges' thickness
 FREE_SPOT_TRIES = 1000  # tries to find a newcomer a spot that no obstacle covers
+BODY_GENES = ("vision_width", "vision_reach", "hearing", "fear_of_death", "love_of_babies", "learns_from_others",
+              "grass_gut", "meat_gut", "calls", "kin", "gills", "lungs", "stealth", "armour", "eye_pixels", "mutations",
+              "mutation_size")  # a newcomer's genes besides its size and brain, in the order the soup draws them
+
+
+class PlaceRefused(Exception):
+    """Why the owner's creature cannot be placed there, in plain words."""
 GENES = ("size", "vision_width", "vision_reach", "hearing", "fear", "love", "learns", "learning_speed",
          "layers", "neurons", "weights", "mutations", "mutation_size", "grass_gut", "meat_gut", "calls", "kin", "gills",
          "lungs", "stealth", "armour",
@@ -72,6 +79,7 @@ class World:
         self.deaths: Counter = Counter()
         self.births = 0
         self.newcomers = 0
+        self.placed: Optional[Dict[str, Any]] = None  # the owner's last creature to place: {seq, id} or {seq, why}
         self.calls: List[Tuple[Creature, int, float]] = []  # the last step's calls: caller, kind, volume
         self.total_bites = 0
         self.energy_earned = 0.0  # by eating and hunting
@@ -153,27 +161,73 @@ class World:
         if self.species == "learner":
             neurons = [whole("neurons") for _ in range(whole("layers"))]  # every layer its own count
             slot = self.learner.newcomer(self.np_rng, drawn("learning_speed"), neurons, r["learn_spread"])
-        energy = self.rng.uniform(r["newcomer_energy_low"], r["newcomer_energy_high"])
-        newcomer = Creature(self.next_id(), spot, size, energy, self.species, brain, slot=slot, rules=r)
-        newcomer.facing = local_frame(spot)[0] if self.rng.random() < 0.5 else -local_frame(spot)[1]  # any way
-        newcomer.lifespan = self._lifespan(size)
-        newcomer.vision_width = self.rng.uniform(r["gene.vision_width.new_low"], r["gene.vision_width.new_high"])
-        newcomer.vision_reach = self.rng.uniform(r["gene.vision_reach.new_low"], r["gene.vision_reach.new_high"])
-        newcomer.hearing = self.rng.uniform(r["gene.hearing.new_low"], r["gene.hearing.new_high"])
-        newcomer.fear_of_death, newcomer.love_of_babies = drawn("fear"), drawn("love")
-        newcomer.learns_from_others = drawn("learns")
-        newcomer.grass_gut, newcomer.meat_gut = drawn("grass_gut"), drawn("meat_gut")
-        newcomer.calls = whole("calls")
-        newcomer.kin = drawn("kin")
-        newcomer.gills, newcomer.lungs = drawn("gills"), drawn("lungs")
-        newcomer.stealth = drawn("stealth")
-        newcomer.armour = drawn("armour")
-        newcomer.eye_pixels = whole("eye_pixels")
-        newcomer.mutations, newcomer.mutation_size = whole("mutations"), drawn("mutation_size")
-        self._brain_size(newcomer)
-        self.creatures.append(newcomer)
+        newcomer = self._arrive(spot, size, brain, slot)
+        self._set_up(newcomer, {
+            "vision_width": drawn("vision_width"), "vision_reach": drawn("vision_reach"), "hearing": drawn("hearing"),
+            "fear_of_death": drawn("fear"), "love_of_babies": drawn("love"), "learns_from_others": drawn("learns"),
+            "grass_gut": drawn("grass_gut"), "meat_gut": drawn("meat_gut"), "calls": whole("calls"),
+            "kin": drawn("kin"), "gills": drawn("gills"), "lungs": drawn("lungs"), "stealth": drawn("stealth"),
+            "armour": drawn("armour"), "eye_pixels": whole("eye_pixels"), "mutations": whole("mutations"),
+            "mutation_size": drawn("mutation_size")})
         self.newcomers += 1
         return newcomer
+
+    def _arrive(self, spot: np.ndarray, size: float, brain: Optional[Brain], slot: Optional[int]) -> Creature:
+        """A newcomer's body at `spot`: a newcomer's energy, facing any way, a lifespan by its size."""
+        r = self.rules
+        energy = self.rng.uniform(r["newcomer_energy_low"], r["newcomer_energy_high"])
+        creature = Creature(self.next_id(), spot, size, energy, self.species, brain, slot=slot, rules=r)
+        creature.facing = local_frame(spot)[0] if self.rng.random() < 0.5 else -local_frame(spot)[1]  # any way
+        creature.lifespan = self._lifespan(size)
+        return creature
+
+    def _set_up(self, creature: Creature, genes: Dict[str, Any]) -> None:
+        """Its genes (`BODY_GENES`) and brain size; then it is in the world."""
+        for gene in BODY_GENES:
+            setattr(creature, gene, int(genes[gene]) if gene in ("calls", "eye_pixels", "mutations") else float(genes[gene]))
+        self._brain_size(creature)
+        self.creatures.append(creature)
+
+    def place(self, spot: Any, genes: Dict[str, Any], brain: Dict[str, Any]) -> Creature:
+        """The owner's creature (the owner, 2026-11-27: "spawn it if I wish in map where ever I click"): at the point
+        of the ball `spot` points to, with `genes` (checked by rules.check_genes) and a new brain, the smartest's or a
+        chosen creature's copied exactly (its size then the brain's own). Lives as a newcomer does, but is not counted
+        as one (Auto reads newcomers as "nearly died out"). Raises PlaceRefused where it cannot live."""
+        r = self.rules
+        p = np.asarray(spot, dtype=float)
+        p = p / np.linalg.norm(p)
+        size = float(genes["size"])
+        if len(self.creatures) >= r["room"] or (self.species == "learner" and not self.learner.has_room()):
+            raise PlaceRefused("the world is full: there is no room for one more")
+        if self.terrain.blocked(p, size * r["body_radius"], swims=True):
+            raise PlaceRefused("there is a rock there")
+        if float(genes["gills"]) == 0 and self.terrain.blocked(p, size * r["body_radius"]):
+            raise PlaceRefused("that is water, and it has no gills")
+        model = None
+        if brain["kind"] == "smartest":
+            model = self.smartest()
+            if model is None:
+                raise PlaceRefused("no creature has lived long enough yet to tell which is the smartest")
+        elif brain["kind"] == "creature":
+            model = next((c for c in self.creatures if c.id == brain["id"]), None)
+            if model is None:
+                raise PlaceRefused("that creature is no longer alive")
+        lr, slot, network = float(genes["learning_speed"]), None, None
+        if self.species == "learner":
+            slot = (self.learner.newcomer(self.np_rng, lr, [int(n) for n in genes["neurons"]], r["learn_spread"])
+                    if model is None else self.learner.baby(model.slot, self.np_rng, lr, "learned", [], self.rng, r))
+        elif self.species == "brain":
+            network = Brain.random(self.np_rng) if model is None else model.brain
+        creature = self._arrive(p, size, network, slot)
+        creature.species = FIRST if model is None else model.species
+        eye = self.rng.randint(round(r["gene.eye_pixels.new_low"]), round(r["gene.eye_pixels.new_high"]))  # a newcomer's eye
+        self._set_up(creature, {**genes, "eye_pixels": eye})
+        return creature
+
+    def smartest(self) -> Optional[Creature]:
+        """The creature that earns the most for each energy it spends (of those that have spent enough to tell)."""
+        tried = [c for c in self.creatures if c.spent >= MIN_SPENT]
+        return max(tried, key=lambda c: c.earned / c.spent) if tried else None
 
     def _free_spot(self, radius: float) -> np.ndarray:
         """A random spot anywhere on the planet where a body of `radius` touches no obstacle."""

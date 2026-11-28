@@ -41,7 +41,7 @@ from .terrain import make_terrain
 from .scoreboard import ROW_KEYS, Scoreboard, Value, migrate_scoreboard, read_rows
 from .report import Reporter, knob_changes
 from .rules import COST_NAMES, ROOM_SLOTS, starting_rules
-from .world import INHERIT, World
+from .world import INHERIT, PlaceRefused, World
 
 DEFAULT_STEPS = 100000
 PAUSE_LOOK = 0.25  # seconds between two looks at the control file while paused
@@ -141,6 +141,7 @@ def world_now(world: World) -> Dict[str, Any]:
         "food": len(world.foods), "births": world.births, "deaths": sum(world.deaths.values()), "time": time.time(),
         "rules": dict(world.rules), "season": world.season(),
         "genes": {key: _spread([getattr(c, key) for c in alive if key != "neurons" or c.layers]) for key in GENE_TILES},
+        "placed": world.placed,  # the owner's last creature to place: {seq, id} or {seq, why}
     }
 
 
@@ -163,12 +164,14 @@ def _format(row: Dict[str, Value]) -> str:
 class _Knobs:
     """Who turns the knobs: the owner's settings from the control file are applied once each, in Manual."""
 
-    def __init__(self, control: Control) -> None:
+    def __init__(self, control: Control, reporter: Reporter) -> None:
         self.control = control
+        self.reporter = reporter
         self._applied = None
         self._applied_hunters = None
         self._applied_rules = None
         self._applied_edit = None
+        self._applied_place = None
 
     def take(self, control: Control, dial: Dial, world: World) -> bool:
         """Takes the newest control: the owner's rule changes reach the world at once (in either mode); returns whether
@@ -181,6 +184,9 @@ class _Knobs:
         if control.edit is not None and control.edit["seq"] != self._applied_edit:
             self._applied_edit = control.edit["seq"]  # each change once (applying it again would change nothing)
             world.edit_genes(control.edit["id"], control.edit["genes"])
+        if control.place is not None and control.place["seq"] != self._applied_place:
+            self._applied_place = control.place["seq"]  # each once: a second read would place another
+            self._place(world, control.place)
         if control.mode != "manual" or control.settings is None:
             self._applied = None  # back in Auto: the same settings sent again later are a new choice
             if control.mode == "auto" and control.hunters is not None and control.hunters != self._applied_hunters:
@@ -193,6 +199,18 @@ class _Knobs:
         self._applied = control.settings
         dial.set(control.settings)
         return True
+
+    def _place(self, world: World, place: Dict[str, Any]) -> None:
+        """The owner's creature placed, or why not: kept for the page (`now.json`) and in the report."""
+        try:
+            creature = world.place(place["spot"], place["genes"], place["brain"])
+        except PlaceRefused as refused:
+            world.placed = {"seq": place["seq"], "why": str(refused)}
+            self.reporter.event("place_refused", step=world.step_count, why=str(refused))
+            return
+        world.placed = {"seq": place["seq"], "id": creature.id}
+        self.reporter.event("placed", step=world.step_count, id=creature.id, spot=[float(x) for x in creature.p],
+                            genes=place["genes"], brain=place["brain"])
 
 
 def _resumed_from(args: argparse.Namespace) -> Optional[Dict[str, Any]]:
@@ -257,7 +275,7 @@ def _run(args: argparse.Namespace, reporter: Reporter) -> Path:
         (out / "water.png").write_bytes(world.terrain.water.picture())  # the page draws the seas, lakes and rivers from it
     if control.settings is not None:  # the world starts from the settings the page asked for, in either mode
         dial.set(control.settings)
-    knobs = _Knobs(control)
+    knobs = _Knobs(control, reporter)
     knobs.take(control, dial, world)
     world.set_settings(dial.settings, round(dial.level, 2))
 

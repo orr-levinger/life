@@ -6,12 +6,16 @@ Asked by the owner on 2026-11-28, looking at the creatures and the Make tab:
 2. Then, testing on the Mac: "lungs has 0 affect on look"; "gills 1 should have 0 legs and more aquatic face";
    "neurons in layer 2 and neurons layer 2 same cahnges too look"; "grass gus 0 affect on look"; "armore 1 should be
    full body armore"; "care for kin 0 affect"; "hears how far at max ears still to small and un notecable".
+3. "Approve" to this design (2026-11-28).
 
 The mockups (round 1 and round 2, now on the left and proposed on the right, one gene per row) were sent with this
 design; this document says what they show.
 
-Nothing in the world changes: no rule, nothing a creature does or pays. The body maker (`src/static/beasts.js`) changes,
-and the world's view file sends each brain layer's neuron count (today it sends their sum).
+Nothing in the world changes: no rule, nothing a creature does or pays, no file it writes. Only the body maker
+(`src/static/beasts.js`) and the pages that call it change. Each creature's brain layers' neuron counts are already in
+the world's view file (`brain`, written by `src/evolve.py`; found while planning, 2026-11-28: this design first said
+the world would have to add them). A species' picture has only its typical neurons in all and its typical layers, so
+it shows them shared evenly over its layers.
 
 ## Colour: from the genes
 
@@ -67,7 +71,7 @@ on a half-size world; the plan says the limit.
 - Tests (the page's files as served): the body maker reads lungs, grass gut and each brain layer; the coat's colour
   comes from the genes (`coatOf` and `markOf`); legs are gone at gills 1; the steps are tenths; the picture frames the
   body.
-- A test of the world's view file: each creature's brain layers' neuron counts are in it.
+- A test that the body maker reads each layer from a creature's `brain` (as the view file has it), and a species' even share.
 - A gallery page beside the body maker (`/static/gallery.html`, as today) shows each gene low, middle and high: the
   owner's check.
 - On a half-size check world: the herd in colours; a swimmer without legs; a frame's drawing time against before.

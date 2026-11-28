@@ -22,7 +22,8 @@ Nothing in the world changes: no rule, no save, no file the world writes. Only t
 ## How the name is made: three Latin words
 
 As zoologists name a subspecies (*Panthera tigris altaica*): the first word (the genus) says its body plan; the
-second and third say the four genes that set it apart most, two genes in each word. Seven genes make every name.
+second and third say the four genes that set it apart most, two genes in each word. Nine genes make every name
+(both guts, gills, lungs and size in the first word; four more in the other two).
 
 **The first word: what it eats + where it lives and how big it is.**
 
@@ -50,7 +51,7 @@ moved; a gene that went up gives its up word, one that went down its down word.
 
 Each word joins two genes: the first's root, an "o", and the second's whole word (the "o" is left out before a
 vowel). The second word is genes 1 and 2; the third word genes 3 and 4. For example fear of death up (spin-) and
-hearing up (auritus) make *spinoauritus*; neurons up (cerebr-) and learning speed down (lentus) make *cerebrolentus*.
+hearing up (auritus) make *spinauritus*; neurons up (cerebr-) and learning speed down (lentus) make *cerebrolentus*.
 
 | Gene | Up: root, word | Down: root, word |
 |---|---|---|
@@ -71,13 +72,13 @@ hearing up (auritus) make *spinoauritus*; neurons up (cerebr-) and learning spee
 | neurons | cerebr-, cerebrosus | simplic-, simplex |
 | layers | profund-, profundus | plan-, planus |
 
-For example: *Phytotherium spinoauritus cerebrolentus*: a mid-size plant eater on land whose fear of death rose
+For example: *Phytotherium spinauritus cerebrolentus*: a mid-size plant eater on land whose fear of death rose
 most, then its hearing, then its neurons, while its learning slowed. *Sarcocetus loricoccultus vocosimplex*: a big
 meat eater in water, armoured and stealthy, calling more, with fewer neurons.
 
 **Never twice.** Two species share a name only when they eat the same, live in the same place, are the same size
 class and the same four genes moved most, in the same order and the same way. Then the later one gets a number
-after its name: *Phytotherium spinoauritus cerebrolentus II*.
+after its name: *Phytotherium spinauritus cerebrolentus II*.
 
 The words are Latin roots joined the way animal names are; Latin grammar between the words (matching endings) is
 not followed.
@@ -108,7 +109,7 @@ move as it gets harder, so measuring by them would change old names; fixed range
   "species ${" and no "first life" words left), each of the 16 genes has both roots and both words, the six endings and
   three starts are there.
 - A test that runs the naming on a small hand-made tree of species (a first life, two daughters with set genes, and a
-  third daughter whose seven genes match the second's) and checks the four names: three words each, the joined
+  third daughter whose nine genes match the second's) and checks the four names: three words each, the joined
   words as the table makes them, and the number II on the third daughter.
 - On a half-size check world on this box: the tree, the card, "Alive now" and Make show Latin names; a screenshot;
   the browser pane closed.

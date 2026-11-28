@@ -2,7 +2,9 @@
 
 Asked by the owner on 2026-11-28: "Species 16 is a boring name. The system should generate cool names based on the
 genes and use some common way to name animals… Just not species number." Then, choosing between Latin and English
-names: "Latin". Then: "Names should be generated only when a new species is created." Then "Approve" to this design.
+names: "Latin". Then: "Names should be generated only when a new species is created." Then, on two species that
+could share a name: "if we use few genes for the name, we need to add more genes for the name. We need to make it
+more complex."
 
 Nothing in the world changes: no rule, no save, no file the world writes. Only the page changes.
 
@@ -17,9 +19,10 @@ Nothing in the world changes: no rule, no save, no file the world writes. Only t
 - A name is never given twice in one world. Species are named in the order they were born (by their number); a later
   species never changes an earlier one's name.
 
-## How the name is made: two Latin words
+## How the name is made: three Latin words
 
-The first word (the genus) says its body plan; the second (the species name) says what sets it apart.
+As zoologists name a subspecies (*Panthera tigris altaica*): the first word (the genus) says its body plan; the
+second and third say the four genes that set it apart most, two genes in each word. Seven genes make every name.
 
 **The first word: what it eats + where it lives and how big it is.**
 
@@ -40,38 +43,44 @@ The first word (the genus) says its body plan; the second (the species name) say
 
 For example: *Phytotherium*, *Sarcoichthys*, *Pantobatrachus*.
 
-**The second word: the gene it differs most in from its parent species at its parent's birth.** Each gene is measured
-as a share of its whole range (learning speed on a log scale, as the Make slider). "First life" has no parent: its
-genes are measured from the middle of each range. A gene that went up gives its high word; one that went down gives
-its low word.
+**The second and third words: the four genes it differs most in from its parent species at its parent's birth.**
+Each gene is measured as a share of its whole range (learning speed on a log scale, as the Make slider). "First
+life" has no parent: its genes are measured from the middle of each range. The genes are ranked by how far they
+moved; a gene that went up gives its up word, one that went down its down word.
 
-| Gene | Up | Down |
+Each word joins two genes: the first's root, an "o", and the second's whole word (the "o" is left out before a
+vowel). The second word is genes 1 and 2; the third word genes 3 and 4. For example fear of death up (spin-) and
+hearing up (auritus) make *spinoauritus*; neurons up (cerebr-) and learning speed down (lentus) make *cerebrolentus*.
+
+| Gene | Up: root, word | Down: root, word |
 |---|---|---|
-| size | giganteus | pumilus |
-| stealth | occultus | conspicuus |
-| armour | loricatus | nudus |
-| vision width | circumspectus | angustus |
-| vision reach | oculatus | myops |
-| hearing | auritus | surdus |
-| calls | vocalis | tacitus |
-| care for kin | collaris | solitarius |
-| fear of death | spinosus | audax |
-| love of babies | pius | incuriosus |
-| learns from others | docilis | indocilis |
-| learning speed | velox | lentus |
-| mutations | mutabilis | constans |
-| mutation size | varius | fidelis |
-| neurons | cerebrosus | simplex |
-| layers | profundus | planus |
+| size | gigant-, giganteus | pumil-, pumilus |
+| stealth | occult-, occultus | conspic-, conspicuus |
+| armour | loric-, loricatus | nud-, nudus |
+| vision width | circum-, circumspectus | angust-, angustus |
+| vision reach | ocul-, oculatus | myop-, myops |
+| hearing | aur-, auritus | surd-, surdus |
+| calls | voc-, vocalis | tacit-, tacitus |
+| care for kin | collar-, collaris | solit-, solitarius |
+| fear of death | spin-, spinosus | aud-, audax |
+| love of babies | pi-, pius | incuri-, incuriosus |
+| learns from others | docil-, docilis | indocil-, indocilis |
+| learning speed | veloc-, velox | lent-, lentus |
+| mutations | mutabil-, mutabilis | const-, constans |
+| mutation size | vari-, varius | fidel-, fidelis |
+| neurons | cerebr-, cerebrosus | simplic-, simplex |
+| layers | profund-, profundus | plan-, planus |
 
-For example: *Sarcosaurus spinosus* (a big meat eater whose fear of death rose most), *Phytomys auritus* (a small plant
-eater whose hearing rose most).
+For example: *Phytotherium spinoauritus cerebrolentus*: a mid-size plant eater on land whose fear of death rose
+most, then its hearing, then its neurons, while its learning slowed. *Sarcocetus loricoccultus vocosimplex*: a big
+meat eater in water, armoured and stealthy, calling more, with fewer neurons.
 
-**Never twice.** When the name is already taken in this world, the gene it differs second most in gives the second
-word, then the third, and so on; if every one is taken, the name gets a number: *Phytotherium auritus II*.
+**Never twice.** Two species share a name only when they eat the same, live in the same place, are the same size
+class and the same four genes moved most, in the same order and the same way. Then the later one gets a number
+after its name: *Phytotherium spinoauritus cerebrolentus II*.
 
-The words are Latin roots in the way animals are named; the grammar of the two words is not matched (a Latin endings
-rule), which the owner did not ask for.
+The words are Latin roots joined the way animal names are; Latin grammar between the words (matching endings) is
+not followed.
 
 ## Where the name shows
 
@@ -84,7 +93,7 @@ world", so a species can still be matched to the world's events.
 
 The names are made in one function on the page (`latinName`), next to `lives()` and `eats()`, which already say land
 or water and what it eats, so the name and the card always agree. One table on the page holds, for each of the 16
-genes, its two words and the range it is measured by. The ranges are fixed: the world's starting ranges of today
+genes, its two roots, its two words and the range it is measured by. The ranges are fixed: the world's starting ranges of today
 (for example size 0.5 to 2, hearing 0 to 4, fear of death 0.1 to 100, from `starting_rules()`). A world's own ranges
 move as it gets harder, so measuring by them would change old names; fixed ranges keep every name as it was given.
 
@@ -96,11 +105,11 @@ move as it gets harder, so measuring by them would change old names; fixed range
 ## How it is proven
 
 - Tests (the page's files as served): `latinName` exists, every species name on the page comes from it (no
-  "species ${" and no "first life" words left), each of the 16 genes has both words, the six endings and three starts
-  are there.
-- A test that runs the naming on a small hand-made tree of species (a first life, two daughters with set genes, one
-  daughter that would get a name already taken) and checks the four names, including the next gene's word for the
-  taken one.
+  "species ${" and no "first life" words left), each of the 16 genes has both roots and both words, the six endings and
+  three starts are there.
+- A test that runs the naming on a small hand-made tree of species (a first life, two daughters with set genes, and a
+  third daughter whose seven genes match the second's) and checks the four names: three words each, the joined
+  words as the table makes them, and the number II on the third daughter.
 - On a half-size check world on this box: the tree, the card, "Alive now" and Make show Latin names; a screenshot;
   the browser pane closed.
 - The whole suite under 300 s.

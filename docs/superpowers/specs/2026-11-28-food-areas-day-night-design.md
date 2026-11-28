@@ -5,7 +5,8 @@ food by area"; "the [seas] were getting completely empty of food. So we need to 
 forests, not of trees but of some kind of algae, maybe some random patches of it, which is like the trees"; and:
 "I want to create some kind of seasons ... let's imagine the earth is spinning. Half of it is facing the sun, half of it
 is night ... we have the same amount of food, but half of it is double and half of it is half. So we have a quarter
-and 3 quarters ... I want a full rotation every 10,000 steps." Earlier (point 4): "auto should update the food
+and 3 quarters ... I want a full rotation every 10,000 steps." Then: "the half where it's double the food should be like green, and the
+grass there should look green, and the half where it's quarter the food should be yellowish." Earlier (point 4): "auto should update the food
 qunataty and enery per unit average basd on the area (water, forest, planes)".
 
 **The world rule changes (the owner's, quoted above):** grass is limited per patch of ground instead of over the whole
@@ -44,7 +45,8 @@ side facing the sun grows three quarters of the food. The yearly season of today
   a grass spot in the dark is kept one time in three (the next spot tried instead, so the amount stays); a tree or bed
   in the light grows at 1.5 × the rate, in the dark at 0.5 ×.
 - Today's yearly season (food rising and falling over 20,000 steps) is replaced by this.
-- Drawn: the planet lit from the sun's side, its night side darker, turning as the world turns.
+- Drawn (the owner's words above): the rich, lit half's ground green and its grass pieces green; the poor half's
+  ground yellowish and its grass pieces yellowed; the border turning with the world.
 
 ## Food by area (the owner's point 4)
 
@@ -58,5 +60,5 @@ in water by the bed; and the light decides where most of it grows. One "Energy p
   beds grow algae up to their cap, in the water; on a world with the sun fixed, about three quarters of 2,000 grass
   spots land on the lit half; a tree on the dark side grows a third as much as one in the light; the sun's angle after
   2,500 steps is 90°; a save from before loads with beds, the patch knob and no yearly season.
-- On a half-size check world: grass on the plains, algae in a sea, the night side darker and moving.
+- On a half-size check world: grass on the plains, algae in a sea, the green half and the yellow half, moving.
 - The whole suite under 300 s.

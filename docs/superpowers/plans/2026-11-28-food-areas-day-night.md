@@ -72,17 +72,18 @@ beds and algae), `src/static/planet.js` (beds as dark weed under the water; alga
 planet's axis by `2π × step / day_steps`; `lit(p)`; `spawn_food`: a grass spot in the dark kept with odds
 `(1 − day_share) / day_share`, else the next spot; a tree or bed's rate × `2 × day_share` lit, `2 × (1 − day_share)`
 dark; `season()` and its callers removed), `src/saves.py` (the yearly rules dropped from a save), `src/evolve.py` (the
-view's `"sun"`), `src/static/planet.js` (the sunlight from the view's sun), `src/viewer.html` (the season tile, if
+view's `"sun"`), `src/static/planet.js` (the ground green on the lit half and yellowish on the other, by the
+view's sun; grass pieces green or yellowed the same way), `src/viewer.html` (the season tile, if
 any, says day and night). Tests: `tests/test_seasons.py` (rewritten for day and night), `tests/test_saves.py`,
 `tests/test_viewer.py`.
 
 - [ ] Step 1: tests first: `test_the_sun_turns` (90° after 2,500 steps); `test_the_lit_half_grows_three_quarters`
   (2,000 grass spots with the sun fixed: 0.75 ± 0.03 on the lit half); `test_a_tree_in_the_dark_grows_a_third`
   (fruit over 2,000 steps: dark ÷ lit ≈ 1/3); `test_a_save_from_before_has_no_year` (test_saves);
-  `test_the_planet_is_lit_from_the_sun` (test_viewer). Run → FAIL.
+  `test_the_rich_half_is_green` (test_viewer: `planet.js` colours the ground and the grass by the view's `sun`). Run → FAIL.
 - [ ] Step 2: the changes. Run `tests.test_seasons tests.test_saves tests.test_viewer tests.test_terrain
   tests.test_world_rules` → OK; `grep -rn "season_depth\|year_steps" src tests` → nothing.
-- [ ] Step 3: on a half-size check world: grass on the plains, algae in a sea, the night side darker and moving;
+- [ ] Step 3: on a half-size check world: grass on the plains, algae in a sea, the green half and the yellow half moving;
   screenshots to the owner; stop the world and its viewer; close the browser pane.
 - [ ] Step 4: `python scripts/run_tests.py` → OK under 300 s; commit "Day and night"; push to `evolve-from-scratch`.
 
@@ -93,7 +94,7 @@ any, says day and night). Tests: `tests/test_seasons.py` (rewritten for day and 
 | 1 | Grass by patch | Task 1 Step 2's command | `OK` |
 | 2 | Algae beds | Task 2 Step 2's command | `OK` |
 | 3 | Day and night | Task 3 Step 2's command | `OK`; no yearly season left |
-| 4 | The owner sees it | Task 3 Step 3's screenshots | plains grass, sea algae, a moving night |
+| 4 | The owner sees it | Task 3 Step 3's screenshots | plains grass, sea algae, the green and yellow halves |
 | 5 | Everything else works | `python scripts/run_tests.py` | `OK in … s (limit 300 s)` |
 | 6 | Pushed | `git ls-remote origin evolve-from-scratch` | the last commit's hash |
 
